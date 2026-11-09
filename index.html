@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>html,body{margin:0;padding:0}[hidden]{display:none!important}</style>
 </head>
@@ -28,6 +28,7 @@
   color-scheme:dark;
 }
 [hidden]{display:none!important}
+html,body,button,input,.tbtn,.card,.shop,.mapui,.editor{touch-action:manipulation}
 html,body{height:100%;overflow:hidden;margin:0}
 body{background:var(--sea);color:var(--paper);font-family:var(--body);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #game,#ov{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;display:block}
@@ -2477,6 +2478,7 @@ function shotDolly(p0,p1,l0,l1,d,fov,who,text){return{d,fov:fov||50,who,text,f:t
 function behindPlayer(dist,h,side){const c=player.car,a=c?c.a:player.yaw,P=plPt(0);return[P[0]-Math.cos(a)*dist-Math.sin(a)*(side||0),P[1]+h,P[2]-Math.sin(a)*dist+Math.cos(a)*(side||0)];}
 function towards(from,to,k){return[from[0]+(to[0]-from[0])*k,from[1]+(to[1]-from[1])*k,from[2]+(to[2]-from[2])*k];}
 function startCut(shots,onEnd,opts){
+  try{resetTouch();}catch(e){}
   if(!shots||!shots.length){if(onEnd)onEnd();return;}opts=opts||{};
   CS={shots,i:0,t:0,onEnd,skip:opts.skip!=null?opts.skip:35};document.body.classList.add('cine');
   const el=$('cut');el.hidden=false;if(opts.bars!==false)requestAnimationFrame(()=>el.classList.add('on'));
@@ -2694,10 +2696,21 @@ cv.addEventListener('pointermove',e=>{
   else if(e.pointerId===lookP.id){look((e.clientX-lookP.x)*.007,(e.clientY-lookP.y)*.007);lookP.x=e.clientX;lookP.y=e.clientY;}
 });
 function ptrEnd(e){if(e.pointerId===joy.id){joy.active=false;joy.id=null;joy.x=joy.y=0;joyBase.style.display='none';}if(e.pointerId===lookP.id)lookP.id=null;}
-cv.addEventListener('pointerup',ptrEnd);cv.addEventListener('pointercancel',ptrEnd);
+cv.addEventListener('pointerup',ptrEnd);cv.addEventListener('pointercancel',ptrEnd);cv.addEventListener('lostpointercapture',ptrEnd);
+/* never let a stick or button stay pressed: when no finger is on the screen, release everything */
+function resetTouch(){joy.active=false;joy.id=null;joy.x=joy.y=0;joyBase.style.display='none';lookP.id=null;
+  fireHeld=false;brakeHeld=false;upHeld=false;wheelieHeld=false;for(const b of document.querySelectorAll('.tbtn.down'))b.classList.remove('down');}
+const allUp=e=>{if(!e.touches||e.touches.length===0)resetTouch();};
+document.addEventListener('touchend',allUp,{passive:true});document.addEventListener('touchcancel',allUp,{passive:true});
+addEventListener('blur',resetTouch);document.addEventListener('visibilitychange',()=>{if(document.hidden)resetTouch();});
+/* no double-tap or pinch zoom inside the game */
+let lastTE=0;
+document.addEventListener('touchend',e=>{const n=performance.now(),t=e.target;if(n-lastTE<350&&!(t&&t.closest&&t.closest('input,textarea,select,a')))e.preventDefault();lastTE=n;},{passive:false});
+document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
+for(const ev of ['gesturestart','gesturechange'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
 function holdBtn(el,down,up){
   el.addEventListener('pointerdown',e=>{e.preventDefault();initAudio();el.classList.add('down');try{el.setPointerCapture(e.pointerId)}catch(_){}if(S.started&&!S.paused)down();});
-  const u=()=>{el.classList.remove('down');if(up)up();};el.addEventListener('pointerup',u);el.addEventListener('pointercancel',u);
+  const u=()=>{el.classList.remove('down');if(up)up();};el.addEventListener('pointerup',u);el.addEventListener('pointercancel',u);el.addEventListener('lostpointercapture',u);
 }
 holdBtn($('fireBtn'),()=>{fireHeld=true;player.fired=false;},()=>{fireHeld=false;});
 holdBtn($('brakeBtn'),()=>{brakeHeld=true;},()=>{brakeHeld=false;});
@@ -3338,7 +3351,7 @@ function prerenderMap(){mapBg.width=W*BMS;mapBg.height=H*BMS;const c=mapBg.getCo
   c.setLineDash([]);
 }
 function mapFit(){const r=BM.getBoundingClientRect(),dpr=Math.min(2,DPR||1);BM.width=Math.max(1,Math.round(r.width*dpr));BM.height=Math.max(1,Math.round(r.height*dpr));return{w:r.width,h:r.height,dpr};}
-function openMap(){if(!S.started||S.shopOpen||CS)return;if(S.wheel)closeWheel();S.mapOpen=true;fireHeld=false;player.aim=false;$('mapUI').hidden=false;
+function openMap(){try{resetTouch();}catch(e){}if(!S.started||S.shopOpen||CS)return;if(S.wheel)closeWheel();S.mapOpen=true;fireHeld=false;player.aim=false;$('mapUI').hidden=false;
   if(locked){try{document.exitPointerLock()}catch(e){}}
   const P=playerPos();MAPV.cx=P.x;MAPV.cy=P.y;MAPV.z=1.6;blip(600,.05,'triangle',.04);requestAnimationFrame(drawMap);}
 function closeMap(){S.mapOpen=false;$('mapUI').hidden=true;}
@@ -3525,12 +3538,12 @@ function renderShop(){
     list.appendChild(b);
   }
 }
-function openShop(kind){S.shopKind=kind||'guns';S.shopOpen=true;S.paused=true;fireHeld=false;player.aim=false;if(locked){try{document.exitPointerLock()}catch(e){}}renderShop();$('shop').hidden=false;}
+function openShop(kind){try{resetTouch();}catch(e){}S.shopKind=kind||'guns';S.shopOpen=true;S.paused=true;fireHeld=false;player.aim=false;if(locked){try{document.exitPointerLock()}catch(e){}}renderShop();$('shop').hidden=false;}
 function closeShop(){if(!S.shopOpen)return;S.shopOpen=false;$('shop').hidden=true;S.paused=false;if(!touchMode)tryLock();}
 $('shopClose').addEventListener('click',closeShop);
 
 /* ---------- Loop ---------- */
-function togglePause(){
+function togglePause(){try{resetTouch();}catch(e){}
   if(!S.started||S.shopOpen)return;S.paused=!S.paused;$('start').hidden=!S.paused;
   $('goBtn').textContent=S.paused?'Weiterspielen':'Losfahren';$('pauseBtn').textContent=S.paused?'Weiter':'Pause';
   fireHeld=false;player.aim=false;if(S.paused&&locked){try{document.exitPointerLock()}catch(e){}}
