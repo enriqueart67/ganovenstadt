@@ -2732,7 +2732,7 @@ function look(dx,dy){
   if(player.car)player.look=clamp(player.look+dx,-2.4,2.4);
   else{player.yaw+=dx*f;player.pitch=clamp(player.pitch-dy*f,-1.35,1.35);player.lookDX=clamp((player.lookDX||0)+dx,-60,60);player.lookDY=clamp((player.lookDY||0)+dy,-60,60);}
 }
-document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===cv;if(locked)lockWorked=true;else{fireHeld=false;player.aim=false;if(S.started&&!S.paused&&!S.wheel&&lockWorked&&!touchMode)togglePause();}});
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===cv;if(locked)lockWorked=true;else{fireHeld=false;player.aim=false;if(S.started&&!S.paused&&!S.wheel&&!S.codeOpen&&!S.mapOpen&&lockWorked&&!touchMode)togglePause();}});
 function tryLock(){try{const r=cv.requestPointerLock&&cv.requestPointerLock();if(r&&r.catch)r.catch(()=>{});}catch(e){}}
 let mouseDrag=null,mouseIn=false,lastTouch=-1e9;
 const busyUI=()=>!S.started||S.paused||S.wheel||S.shopOpen||S.mapOpen||S.editor;
@@ -3726,12 +3726,12 @@ const CODES={'1122':()=>{const c=spawnTank();closeCodes();setTimeout(()=>{if(!CS
 function openCodes(){try{resetTouch();}catch(e){}if(!S.started||S.shopOpen||CS)return;if(S.mapOpen)closeMap();if(S.wheel)closeWheel();
   if(locked){try{document.exitPointerLock()}catch(e){}}fireHeld=false;player.aim=false;S.codeOpen=true;$('codeUI').hidden=false;$('codeMsg').textContent='';$('codeIn').value='';
   setTimeout(()=>{try{$('codeIn').focus();}catch(e){}},50);}
-function closeCodes(){S.codeOpen=false;$('codeUI').hidden=true;try{$('codeIn').blur();}catch(e){}}
+function closeCodes(){S.codeOpen=false;$('codeUI').hidden=true;try{$('codeIn').blur();}catch(e){}if(S.started&&!S.paused&&!touchMode){try{tryLock();}catch(e){}}}
 function submitCode(){const v=String($('codeIn').value||'').trim(),f=CODES[v],msg=$('codeMsg');
   if(!v){msg.textContent='Gib zuerst einen Code ein.';return;}
   if(f){blip(880,.08,'triangle',.05);setTimeout(()=>blip(1320,.1,'triangle',.05),90);msg.className='codemsg ok';msg.textContent=f()||'Code aktiviert!';}
   else{blip(160,.15,'square',.05);msg.className='codemsg bad';msg.textContent='Falscher Code. Versuch es nochmal.';$('codeIn').select();}}
-$('codeBtn').addEventListener('click',openCodes);$('codeOk').addEventListener('click',submitCode);$('codeX').addEventListener('click',closeCodes);
+$('codeBtn').addEventListener('click',openCodes);$('codeX').addEventListener('click',closeCodes);
 for(const t of ['keydown','keyup','keypress'])$('codeUI').addEventListener(t,e=>{e.stopPropagation();if(t==='keydown'){if(e.key==='Enter')submitCode();else if(e.key==='Escape')closeCodes();}});
 $('codeUI').addEventListener('pointerdown',e=>{if(e.target===$('codeUI'))closeCodes();});
 for(const b of document.querySelectorAll('#codeUI .kp button'))b.addEventListener('click',()=>{const i=$('codeIn'),k=b.dataset.k;if(k==='del')i.value=i.value.slice(0,-1);else if(k==='ok')submitCode();else if(i.value.length<12)i.value+=k;});
