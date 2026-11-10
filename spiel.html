@@ -93,6 +93,8 @@ body{background:var(--sea);color:var(--paper);font-family:var(--body);-webkit-us
 #auxBtn{right:calc(130px + env(safe-area-inset-right,0px));bottom:calc(110px + env(safe-area-inset-bottom,0px));width:62px;height:62px;font-size:11px}
 #jumpBtn{right:calc(130px + env(safe-area-inset-right,0px));bottom:calc(184px + env(safe-area-inset-bottom,0px));width:62px;height:62px;font-size:12px}
 #ammoBtn{right:calc(204px + env(safe-area-inset-right,0px));bottom:calc(110px + env(safe-area-inset-bottom,0px));width:62px;height:62px;font-size:11px;border-color:rgba(242,193,78,.8)}
+#nukeBtn{right:calc(204px + env(safe-area-inset-right,0px));bottom:calc(36px + env(safe-area-inset-bottom,0px));width:62px;height:62px;font-size:11px;border-color:rgba(182,255,58,.85);color:#d8ff6a}
+#touch.veh #nukeBtn{right:calc(212px + env(safe-area-inset-right,0px))}
 #shopBtn{left:50%;right:auto;transform:translateX(-50%);bottom:calc(28% + env(safe-area-inset-bottom,0px));border-radius:4px;padding:11px 22px;border-color:var(--sun);color:var(--sun);font-family:var(--display);font-weight:500;font-size:16px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 #shopBtn.down{transform:translateX(-50%) scale(.96)}
 .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,6,10,.8);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px;overflow:auto}
@@ -229,6 +231,7 @@ body{background:var(--sea);color:var(--paper);font-family:var(--body);-webkit-us
     <button id="auxBtn" class="tbtn" type="button">Nachladen</button>
     <button id="ammoBtn" class="tbtn" type="button">+Muni</button>
     <button id="jumpBtn" class="tbtn" type="button">Sprung</button>
+    <button id="nukeBtn" class="tbtn" type="button" hidden>Bombe</button>
     <button id="shopBtn" class="tbtn" type="button" hidden>Waffenladen</button>
   </div>
 </div>
@@ -289,6 +292,7 @@ body{background:var(--sea);color:var(--paper);font-family:var(--body);-webkit-us
       <kbd>V</kbd><span>Im Auto: Verfolgerkamera oder Cockpit</span>
       <kbd>I</kbd><span>Waffe genauer ansehen, auch Tippen auf die Waffenanzeige</span>
       <kbd>B</kbd><span>Munition für die aktuelle Waffe kaufen (überall)</span>
+      <kbd>N</kbd><span>Mit Code: Atombombe legen, nochmal drücken zum Zünden</span>
       <kbd>Q</kbd><span>Auf Roller und Motorrad: Wheelie</span>
       <span class="lbl">Tablet und Handy</span>
       <kbd>Links</kbd><span>Daumen ziehen zum Laufen und Fahren</span>
@@ -2745,6 +2749,7 @@ addEventListener('keydown',e=>{
   if(k==='r')startReload();
   if(k==='i')startInspect();
   if(k==='b'&&S.started&&!S.paused&&!player.car)quickAmmo();
+  if(k==='n'&&S.started&&!S.paused&&!CS)nukeKitUse();
   if(k==='q')nextWeapon();
   if(k==='tab'){e.preventDefault();S.wheel?closeWheel():openWheel();}
   if(k>='1'&&k<='9')setWeapon(ORDER[+k-1]);
@@ -2820,6 +2825,7 @@ function holdBtn(el,down,up){
 holdBtn($('fireBtn'),()=>{fireHeld=true;player.fired=false;S.fireLatch=true;},()=>{fireHeld=false;});
 holdBtn($('brakeBtn'),()=>{brakeHeld=true;},()=>{brakeHeld=false;});
 holdBtn($('ammoBtn'),()=>{if(!player.car)quickAmmo();});
+holdBtn($('nukeBtn'),()=>{if(!CS)nukeKitUse();});
 holdBtn($('actBtn'),toggleCar);
 holdBtn($('weapBtn'),()=>{S.wheel?closeWheel():openWheel();});
 holdBtn($('jumpBtn'),()=>{const c=player.car;if(c){if(c.mesh&&c.mesh.G&&c.mesh.G.two)wheelieHeld=true;else upHeld=true;}else jump();},()=>{upHeld=false;wheelieHeld=false;});
@@ -3562,7 +3568,7 @@ function updateHud(){
   if(c&&c.wh>.3)prompt='Wheelie! '+((c.whT||0)/60).toFixed(1)+' s';
   setText('prompt',prompt);setHidden('prompt',!prompt);
   setText('actBtn',c?'Raus':'Rein');
-  {const v=!!c;if(S._veh!==v){S._veh=v;$('touch').classList.toggle('veh',v);}}setHidden('fireBtn',!!c&&!c.armed);setHidden('ammoBtn',!!c);setHidden('brakeBtn',!c);setHidden('weapBtn',!!c);{const two=!!(c&&c.mesh&&c.mesh.G&&c.mesh.G.two);setHidden('jumpBtn',!!c&&!c.fly&&!two);setText('jumpBtn',c?(two?'Wheelie':'Hoch'):'Sprung');}setText('brakeBtn',c&&c.fly?'Runter':'Bremse');
+  {const v=!!c;if(S._veh!==v){S._veh=v;$('touch').classList.toggle('veh',v);}}setHidden('fireBtn',!!c&&!c.armed);setHidden('nukeBtn',!S.nukeKit);setText('nukeBtn',NBOMBS.length?'Zünden':'Bombe');setHidden('ammoBtn',!!c);setHidden('brakeBtn',!c);setHidden('weapBtn',!!c);{const two=!!(c&&c.mesh&&c.mesh.G&&c.mesh.G.two);setHidden('jumpBtn',!!c&&!c.fly&&!two);setText('jumpBtn',c?(two?'Wheelie':'Hoch'):'Sprung');}setText('brakeBtn',c&&c.fly?'Runter':'Bremse');
   {const sh=nearShop(),ce=nearClubExit(),cd=nearClubDoor();setHidden('shopBtn',!(sh||ce||cd)||!S.started||S.paused);if(ce)setText('shopBtn','Club verlassen');else if(cd)setText('shopBtn','Nachtclub');else if(sh)setText('shopBtn',sh.kind==='cars'?'Autohaus':sh.kind==='scooters'?'E-Roller':'Waffenladen');}
   setText('auxBtn',c?'Sicht':player.weap==='sniper'?'Zoom':'Nachladen');
   $('hurt').style.opacity=S.hurt.toFixed(2);
@@ -3750,7 +3756,21 @@ function updateNukes(dt){
     n.sky.scale.setScalar(10+t*2.4);n.sky.position.y=18+t*.25;n.sky.material.opacity=Math.max(0,.5-t/150);n.sky.visible=t<150;
     if(t>760){scene.remove(n.g);n.g.traverse(o=>{if(o.geometry&&o.geometry!==geoSph)o.geometry.dispose();if(o.material)o.material.dispose();});NUKES.splice(i,1);}}}
 /* code panel */
-const CODES={'8888':()=>{const c=spawnTank();closeCodes();setTimeout(()=>{if(!CS&&!player.car){player.x=c.x;player.y=c.y+30;toggleCar();}},60);
+/* Code 4444: Atombomben-Leger. Erst legen, weglaufen, dann zünden. */
+const NBOMBS=[];
+function nukeKitUse(){if(!S.nukeKit)return;
+  if(NBOMBS.length){const L=NBOMBS.splice(0);L.forEach((b,i)=>setTimeout(()=>{scene.remove(b.g);nukeBlast(b.x,b.y,b.alt);},i*450));blip(1800,.12,'square',.06);return;}
+  const P=playerPos(),a=player.car?player.car.a+Math.PI:player.yaw,d=player.car?70:14,x=P.x+Math.cos(a)*d,y=P.y+Math.sin(a)*d,ok=tileAt(x,y)!==BUILD,bx=ok?x:P.x,by=ok?y:P.y,gy=groundY(bx,by);
+  const g=new THREE.Group(),yl=lam('#f2c14e',.5,.3),dk=lam('#26282a',.7,.3);
+  const body=new THREE.Mesh(geoCyl,yl);body.scale.set(.42,1.1,.42);body.position.y=.55;body.castShadow=true;g.add(body);
+  for(const yy of [.12,.98]){const r=new THREE.Mesh(geoCyl,dk);r.scale.set(.46,.12,.46);r.position.y=yy;g.add(r);}
+  const lamp=new THREE.Mesh(geoSph,new THREE.MeshBasicMaterial({color:C('#ff3b30')}));lamp.scale.setScalar(.13);lamp.position.y=1.22;g.add(lamp);
+  const ant=new THREE.Mesh(geoCyl,dk);ant.scale.set(.02,.5,.02);ant.position.set(.2,1.35,0);g.add(ant);
+  g.position.set(bx*SC,gy,by*SC);scene.add(g);NBOMBS.push({x:bx,y:by,alt:gy+.5,g,lamp,t:0});
+  blip(700,.08,'square',.05);toast('Atombombe gelegt! Lauf mindestens 100 Meter weg oder steig in den Panzer, dann drück nochmal zum Zünden.');}
+function updateNBombs(dt){for(const b of NBOMBS){b.t+=dt;b.lamp.visible=(b.t%40)<20;}}
+const CODES={'4444':()=>{S.nukeKit=true;closeCodes();toast('Code 4444: Atombomben-Leger! Taste N oder Knopf „Bombe“: legen. Nochmal drücken: zünden.');return 'Atombomben-Leger aktiviert!';},
+'8888':()=>{const c=spawnTank();closeCodes();setTimeout(()=>{if(!CS&&!player.car){player.x=c.x;player.y=c.y+30;toggleCar();}},60);
   toast('Code 8888: Unzerstörbarer Panzer mit Atom-Granaten! Einsteigen mit E, schießen mit Feuer.');return 'Panzer kommt!';}};
 function openCodes(){try{resetTouch();}catch(e){}if(!S.started||S.shopOpen||CS)return;if(S.mapOpen)closeMap();if(S.wheel)closeWheel();
   if(locked){try{document.exitPointerLock()}catch(e){}}fireHeld=false;player.aim=false;S.codeOpen=true;$('codeUI').hidden=false;$('codeMsg').textContent='';$('codeIn').value='';
@@ -3784,7 +3804,7 @@ function frame(now){
   if(prPending){prPending=false;renderer.setPixelRatio(PR);}
   const raw=now-last,dt=Math.min(2.5,raw/16.667);last=now;
   if(!S.paused&&!S.mapOpen&&!S.codeOpen)update((S.wheel?dt*.2:dt)*(BC?BC.ts:1));
-  updateCamera(dt);updateSun();syncWorld(dt);updateCull(false);updateLock(dt);updateNukes(S.paused||S.codeOpen?0:dt);
+  updateCamera(dt);updateSun();syncWorld(dt);updateCull(false);updateLock(dt);updateNBombs(dt);updateNukes(S.paused||S.codeOpen?0:dt);
   if(!S.paused&&!S.mapOpen)updateTOD(dt);applyTOD(false);
   if(!vmScene.environment&&scene.environment)vmScene.environment=scene.environment;
   _cq.copy(camera.quaternion).invert();vmSun.position.copy(LDIR).applyQuaternion(_cq).multiplyScalar(5);vmSun.color.copy(sun.color);vmSun.intensity=.25+sun.intensity*.65;
