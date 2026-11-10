@@ -87,6 +87,7 @@ body{background:var(--sea);color:var(--paper);font-family:var(--body);-webkit-us
 .tbtn.down{transform:scale(.94);background:rgba(255,255,255,.22)}
 #fireBtn,#brakeBtn{right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(36px + env(safe-area-inset-bottom,0px));width:96px;height:96px;font-size:15px}
 #fireBtn{border-color:rgba(224,72,72,.85)}
+#touch.veh #fireBtn{right:calc(126px + env(safe-area-inset-right,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:76px;height:76px;font-size:14px;background:rgba(150,30,30,.5)}
 #actBtn{right:calc(30px + env(safe-area-inset-right,0px));bottom:calc(150px + env(safe-area-inset-bottom,0px));width:72px;height:72px}
 #weapBtn{right:calc(130px + env(safe-area-inset-right,0px));bottom:calc(36px + env(safe-area-inset-bottom,0px));width:62px;height:62px;font-size:12px}
 #auxBtn{right:calc(130px + env(safe-area-inset-right,0px));bottom:calc(110px + env(safe-area-inset-bottom,0px));width:62px;height:62px;font-size:11px}
@@ -2745,7 +2746,7 @@ cv.addEventListener('mousedown',e=>{
   if(busyUI()||performance.now()-lastTouch<800)return;initAudio();mouseIn=true;
   if(!locked)tryLock();
   if(e.button===2){player.aim=!player.car;return;}
-  if(e.button===0){fireHeld=true;player.fired=false;}
+  if(e.button===0){fireHeld=true;player.fired=false;S.fireLatch=true;}
 });
 addEventListener('mousemove',e=>{
   if(busyUI()||performance.now()-lastTouch<800)return;
@@ -2789,7 +2790,7 @@ function holdBtn(el,down,up){
   el.addEventListener('pointerdown',e=>{e.preventDefault();initAudio();el.classList.add('down');try{el.setPointerCapture(e.pointerId)}catch(_){}if(S.started&&!S.paused)down();});
   const u=()=>{el.classList.remove('down');if(up)up();};el.addEventListener('pointerup',u);el.addEventListener('pointercancel',u);el.addEventListener('lostpointercapture',u);
 }
-holdBtn($('fireBtn'),()=>{fireHeld=true;player.fired=false;},()=>{fireHeld=false;});
+holdBtn($('fireBtn'),()=>{fireHeld=true;player.fired=false;S.fireLatch=true;},()=>{fireHeld=false;});
 holdBtn($('brakeBtn'),()=>{brakeHeld=true;},()=>{brakeHeld=false;});
 holdBtn($('ammoBtn'),()=>{if(!player.car)quickAmmo();});
 holdBtn($('actBtn'),toggleCar);
@@ -2826,7 +2827,8 @@ function playerControl(dt){
   if(player.cool>0)player.cool-=dt;
   if(player.inspect>0){player.inspect-=dt;if(player.aim)player.inspect=0;}
   if(player.reload>0){player.reload-=dt;if(player.reload<=0){const w=WEAP[player.weap],st=player.inv[player.weap];if(st&&st!==true){const n=Math.min(w.mag-st.mag,st.res);st.mag+=n;st.res-=n;blip(420,.06,'square',.04);}}}
-  if(player.car&&player.car.armed){const c=player.car;c.fireCd=Math.max(0,(c.fireCd||0)-dt);if(fireHeld)vehicleFire(c);}
+  if(!player.car||CS)S.fireLatch=false;
+  if(player.car&&player.car.armed){const c=player.car;c.fireCd=Math.max(0,(c.fireCd||0)-dt);if(fireHeld||S.fireLatch)vehicleFire(c);S.fireLatch=false;}
   else if(fireHeld){const w=WEAP[player.weap];if(w.auto||!player.fired){tryFire();player.fired=true;}}
 }
 
@@ -3533,7 +3535,7 @@ function updateHud(){
   if(c&&c.wh>.3)prompt='Wheelie! '+((c.whT||0)/60).toFixed(1)+' s';
   setText('prompt',prompt);setHidden('prompt',!prompt);
   setText('actBtn',c?'Raus':'Rein');
-  setHidden('fireBtn',!!c&&!c.armed);setHidden('ammoBtn',!!c);setHidden('brakeBtn',!c);setHidden('weapBtn',!!c);{const two=!!(c&&c.mesh&&c.mesh.G&&c.mesh.G.two);setHidden('jumpBtn',!!c&&!c.fly&&!two);setText('jumpBtn',c?(two?'Wheelie':'Hoch'):'Sprung');}setText('brakeBtn',c&&c.fly?'Runter':'Bremse');
+  {const v=!!c;if(S._veh!==v){S._veh=v;$('touch').classList.toggle('veh',v);}}setHidden('fireBtn',!!c&&!c.armed);setHidden('ammoBtn',!!c);setHidden('brakeBtn',!c);setHidden('weapBtn',!!c);{const two=!!(c&&c.mesh&&c.mesh.G&&c.mesh.G.two);setHidden('jumpBtn',!!c&&!c.fly&&!two);setText('jumpBtn',c?(two?'Wheelie':'Hoch'):'Sprung');}setText('brakeBtn',c&&c.fly?'Runter':'Bremse');
   {const sh=nearShop(),ce=nearClubExit(),cd=nearClubDoor();setHidden('shopBtn',!(sh||ce||cd)||!S.started||S.paused);if(ce)setText('shopBtn','Club verlassen');else if(cd)setText('shopBtn','Nachtclub');else if(sh)setText('shopBtn',sh.kind==='cars'?'Autohaus':sh.kind==='scooters'?'E-Roller':'Waffenladen');}
   setText('auxBtn',c?'Sicht':player.weap==='sniper'?'Zoom':'Nachladen');
   $('hurt').style.opacity=S.hurt.toFixed(2);
