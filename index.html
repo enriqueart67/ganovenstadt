@@ -1932,11 +1932,37 @@ function throwGrenade(o,d){const m=new THREE.Mesh(GREN_G,lam('#3d5a2a',.6,0));m.
   projs.push({type:'gren',x:o.x+d.x*.6,y:o.y+d.y*.6-.1,z:o.z+d.z*.6,vx:d.x*15+player.vx*PX*.5,vy:d.y*15+3,vz:d.z*15+player.vy*PX*.5,t:150,m});}
 function fireRocket(o,d){const m=new THREE.Mesh(ROCK_G,lam('#4a5a3a',.5,.3));m.quaternion.setFromUnitVectors(_z,d);scene.add(m);
   projs.push({type:'rocket',x:o.x+d.x*1.2,y:o.y+d.y*1.2-.1,z:o.z+d.z*1.2,vx:d.x*48,vy:d.y*48,vz:d.z*48,t:240,m});}
+/* guided missiles: the jet locks the best target in front of its nose */
+function tgPos(t){return t===heli?[heli.x*SC,heli.alt,heli.y*SC]:[t.x*SC,(t.alt||0)+(t.model?1:1.2),t.y*SC];}
+function tgOk(t){if(!t)return false;if(t===heli)return !!heli&&heli.state!=='down';if(t.model)return t.kind!=='wreck'&&cars.indexOf(t)>=0;return t.state!=='down'&&(enemies.indexOf(t)>=0||cops.indexOf(t)>=0);}
+function jetTarget(c){const ca=Math.cos(c.a),sa=Math.sin(c.a),p=c.jp||0,fx=ca*Math.cos(p),fy=Math.sin(p),fz=sa*Math.cos(p),ox=c.x*SC,oy=(c.alt||0)+1,oz=c.y*SC;
+  let best=null,bs=1e9;const tryT=(t,bonus)=>{const q=tgPos(t),dx=q[0]-ox,dy=q[1]-oy,dz=q[2]-oz,d=Math.hypot(dx,dy,dz);if(d<25||d>750)return;
+    const ang=Math.acos(clamp((dx*fx+dy*fy+dz*fz)/d,-1,1));if(ang>.6)return;const sc=ang+d/1500-bonus;if(sc<bs){bs=sc;best=t;}};
+  for(const o of cars)if(o!==c&&o.kind!=='wreck'&&!o.god)tryT(o,o.cop||o.kind==='cop'?.25:o.fly?.2:0);
+  if(heli&&heli.state!=='down')tryT(heli,.35);
+  for(const e of enemies)if(e.state!=='down')tryT(e,.15);
+  return best;}
+function homeStep(p,h){if(!tgOk(p.tg)){p.tg=null;return;}
+  const q=tgPos(p.tg),dx=q[0]-p.x,dy=q[1]-p.y,dz=q[2]-p.z,d=Math.hypot(dx,dy,dz)||1,sp=Math.hypot(p.vx,p.vy,p.vz)||1,k=Math.min(1,(5+500/d)*h);
+  let ux=p.vx/sp+(dx/d-p.vx/sp)*k,uy=p.vy/sp+(dy/d-p.vy/sp)*k,uz=p.vz/sp+(dz/d-p.vz/sp)*k;const ul=Math.hypot(ux,uy,uz)||1;ux/=ul;uy/=ul;uz/=ul;
+  const ns=Math.min(150,sp+70*h);p.vx=ux*ns;p.vy=uy*ns;p.vz=uz*ns;_hd.set(ux,uy,uz);p.m.quaternion.setFromUnitVectors(_z,_hd);}
+const _hd=new THREE.Vector3();let LOCKM=null,lockT=0;
+function updateLock(dt){const c=player.car;
+  if(!c||!c.jet||CS||c.kind!=='player'){if(LOCKM)LOCKM.visible=false;S.jetTg=null;return;}
+  if((lockT-=dt)<=0){lockT=6;const t=jetTarget(c);if(t&&t!==S.jetTg)blip(1100,.04,'square',.03);S.jetTg=t;}
+  if(!S.jetTg||!tgOk(S.jetTg)){if(LOCKM)LOCKM.visible=false;return;}
+  if(!LOCKM){const m=new THREE.MeshBasicMaterial({color:C('#ff3b30'),transparent:true,opacity:.95,depthTest:false,depthWrite:false,fog:false,side:THREE.DoubleSide});
+    LOCKM=new THREE.Group();const ring=new THREE.Mesh(new THREE.RingGeometry(.82,1,4),m);ring.rotation.z=Math.PI/4;LOCKM.add(ring);
+    for(let i=0;i<4;i++){const b=new THREE.Mesh(new THREE.PlaneGeometry(.5,.09),m);const a=i*Math.PI/2;b.position.set(Math.cos(a)*1.5,Math.sin(a)*1.5,0);b.rotation.z=a;LOCKM.add(b);}
+    LOCKM.traverse(o=>{o.renderOrder=999;o.frustumCulled=false;});scene.add(LOCKM);}
+  const q=tgPos(S.jetTg);LOCKM.visible=true;LOCKM.position.set(q[0],q[1],q[2]);LOCKM.quaternion.copy(camera.quaternion);
+  const d=Math.hypot(q[0]-camera.position.x,q[1]-camera.position.y,q[2]-camera.position.z);LOCKM.scale.setScalar(Math.max(2.2,d*.035));LOCKM.rotation.z+=0;}
 function updateProjs(dt){
   const h=dt/60;
   for(let k=projs.length-1;k>=0;k--){
     const p=projs[k];let bang=false;
     if(p.type==='gren'||p.type==='nuke')p.vy-=9.81*h;
+    if(p.tg)homeStep(p,h);
     const nx=p.x+p.vx*h,ny=p.y+p.vy*h,nz=p.z+p.vz*h,px=nx/SC,pz=nz/SC;
     const solid=px<0||pz<0||px>W*T||pz>H*T||(tileAt(px,pz)===BUILD&&ny<heightAt(px,pz));
     const gy=groundY(px,pz);
@@ -1952,6 +1978,7 @@ function updateProjs(dt){
       for(const q of cops)if(q.state!=='down'&&Math.hypot(q.x-px,q.y-pz)<7&&ny<2.1)bang=true;
       for(const q of enemies)if(q.state!=='down'&&Math.hypot(q.x-px,q.y-pz)<7&&ny<2.1)bang=true;
       if(heli&&heli.state!=='down'&&Math.hypot(heli.x-px,heli.y-pz,(heli.alt-ny)/SC)<26)bang=true;
+      if(p.tg&&tgOk(p.tg)){const q=tgPos(p.tg);if(Math.hypot(q[0]-nx,q[1]-ny,q[2]-nz)<3.5)bang=true;}
       puff(p.x,p.y,p.z,(rand()-.5)*.01,.01,(rand()-.5)*.01,40,.35,'#bdb6ad',.02);
       if(rand()<.5)puff(p.x,p.y,p.z,0,0,0,6,.25,'#ffb23e',0);
     }
@@ -3723,8 +3750,8 @@ function updateNukes(dt){
     n.sky.scale.setScalar(10+t*2.4);n.sky.position.y=18+t*.25;n.sky.material.opacity=Math.max(0,.5-t/150);n.sky.visible=t<150;
     if(t>760){scene.remove(n.g);n.g.traverse(o=>{if(o.geometry&&o.geometry!==geoSph)o.geometry.dispose();if(o.material)o.material.dispose();});NUKES.splice(i,1);}}}
 /* code panel */
-const CODES={'1122':()=>{const c=spawnTank();closeCodes();setTimeout(()=>{if(!CS&&!player.car){player.x=c.x;player.y=c.y+30;toggleCar();}},60);
-  toast('Code 1122: Unzerstörbarer Panzer mit Atom-Granaten! Einsteigen mit E, schießen mit Feuer.');return 'Panzer kommt!';}};
+const CODES={'8888':()=>{const c=spawnTank();closeCodes();setTimeout(()=>{if(!CS&&!player.car){player.x=c.x;player.y=c.y+30;toggleCar();}},60);
+  toast('Code 8888: Unzerstörbarer Panzer mit Atom-Granaten! Einsteigen mit E, schießen mit Feuer.');return 'Panzer kommt!';}};
 function openCodes(){try{resetTouch();}catch(e){}if(!S.started||S.shopOpen||CS)return;if(S.mapOpen)closeMap();if(S.wheel)closeWheel();
   if(locked){try{document.exitPointerLock()}catch(e){}}fireHeld=false;player.aim=false;S.codeOpen=true;$('codeUI').hidden=false;$('codeMsg').textContent='';$('codeIn').value='';
   setTimeout(()=>{try{$('codeIn').focus();}catch(e){}},50);}
@@ -3757,7 +3784,7 @@ function frame(now){
   if(prPending){prPending=false;renderer.setPixelRatio(PR);}
   const raw=now-last,dt=Math.min(2.5,raw/16.667);last=now;
   if(!S.paused&&!S.mapOpen&&!S.codeOpen)update((S.wheel?dt*.2:dt)*(BC?BC.ts:1));
-  updateCamera(dt);updateSun();syncWorld(dt);updateCull(false);updateNukes(S.paused||S.codeOpen?0:dt);
+  updateCamera(dt);updateSun();syncWorld(dt);updateCull(false);updateLock(dt);updateNukes(S.paused||S.codeOpen?0:dt);
   if(!S.paused&&!S.mapOpen)updateTOD(dt);applyTOD(false);
   if(!vmScene.environment&&scene.environment)vmScene.environment=scene.environment;
   _cq.copy(camera.quaternion).invert();vmSun.position.copy(LDIR).applyQuaternion(_cq).multiplyScalar(5);vmSun.color.copy(sun.color);vmSun.intensity=.25+sun.intensity*.65;
@@ -4098,7 +4125,9 @@ function vehicleFire(c){if(!c.armed||c.kind!=='player'||(c.fireCd||0)>0)return;
   const ca=Math.cos(c.a),sa=Math.sin(c.a),pitch=c.jet?c.jp:-.08,side=c.side=-(c.side||1);
   const d=new THREE.Vector3(ca*Math.cos(pitch),Math.sin(pitch),sa*Math.cos(pitch)).normalize();
   const ahead=c.jet?9:3.4,lat=c.jet?3.1:2.4,X=c.x*SC+ca*ahead-sa*lat*side,Z=c.y*SC+sa*ahead+ca*lat*side,Y=(c.alt||0)+1.5-(c.jet?.5:.55);
-  fireRocket(new THREE.Vector3(X,Y,Z),d);const p=projs[projs.length-1];if(p){p.vx+=c.vx*PX;p.vz+=c.vy*PX;p.vy+=(c.vh||0);}
+  fireRocket(new THREE.Vector3(X,Y,Z),d);const p=projs[projs.length-1];if(p){const cp=Math.cos(pitch),ux=ca*cp,uy=Math.sin(pitch),uz=sa*cp;
+    p.x=X+ux*1.2;p.y=Y+uy*1.2-.1;p.z=Z+uz*1.2;p.vx=ux*48+c.vx*PX;p.vz=uz*48+c.vy*PX;p.vy=uy*48+(c.vh||0);
+    if(c.jet){const tg=jetTarget(c);if(tg){p.tg=tg;p.t=420;p.own=c;blip(1500,.05,'square',.04);}}}
   gunshot('rpg');MP.fireN++;c.fireCd=c.jet?12:20;}
 function spawnMilAircraft(kind){const P=MILPADS[kind==='jet'?'jet':'heli'];
   const c=makeCar(kind==='jet'?'jet':'aheli',P.x,P.y,P.a,kind==='jet'?'#7d848c':'#4b5338','parked');c.mil=true;cars.push(c);return c;}
