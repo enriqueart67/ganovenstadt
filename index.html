@@ -2735,7 +2735,7 @@ let fireHeld=false,locked=false,lockWorked=false,touchMode=false,brakeHeld=false
 function jump(){if(!player.car&&player.z<=0&&player.stun<=0&&S.freeze<=0){player.vz=4.6;}}
 addEventListener('keydown',e=>{
   if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
-  const k=e.key.toLowerCase();
+  const k=e.key.toLowerCase();if(touchMode)disableTouch();
   if(S.editor){if(k==='escape')closeEditor();return;}
   if(BC){if([' ','enter','escape','e'].includes(k)){e.preventDefault();endBC();}return;}
   if(CS){if([' ','enter','escape','e'].includes(k)){e.preventDefault();skipCut();}return;}
@@ -2791,6 +2791,8 @@ const joy={active:false,id:null,ox:0,oy:0,x:0,y:0};
 const lookP={id:null,x:0,y:0};
 const joyBase=$('joyBase'),joyKnob=$('joyKnob');
 function enableTouch(){if(touchMode)return;touchMode=true;$('touch').hidden=false;}
+function disableTouch(){if(!touchMode||performance.now()-lastTouch<1500)return;try{resetTouch();}catch(e){}touchMode=false;$('touch').hidden=true;}
+addEventListener('pointermove',e=>{if(touchMode&&e.pointerType==='mouse'&&(e.movementX||e.movementY))disableTouch();});
 if(matchMedia('(pointer: coarse)').matches)enableTouch();
 cv.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse')return;lastTouch=performance.now();enableTouch();initAudio();
