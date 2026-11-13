@@ -529,20 +529,15 @@ pub fn paint_landscape(p: &Painter, r: Rect, t: f32, scene_name: &str) {
 }
 
 // ------------------------------------------------------------------ Logo
-/// Laedt den Falken im Sturzflug (transparentes PNG) als Textur mit Mipmaps.
+/// Laedt das Icon (Falke im Sturzflug, schwarzes Abzeichen) als Textur mit Mipmaps.
 pub fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
-    let img = image::load_from_memory(include_bytes!("../assets/logo/falcon.png")).expect("Logo").to_rgba8();
+    let img = image::load_from_memory(include_bytes!("../assets/logo/logo.png")).expect("Logo").to_rgba8();
     let ci = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
     let opts = egui::TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..egui::TextureOptions::LINEAR };
-    ctx.load_texture("falke", ci, opts)
+    ctx.load_texture("logo", ci, opts)
 }
 
-/// Schwarzes Abzeichen mit dem Falken (wie das Fenster-Symbol).
-pub fn logo(p: &Painter, pal: &Pal, rect: Rect, tex: &egui::TextureHandle) {
-    let r = (rect.width() * 0.22).min(pal.r.max(4.0) * 2.0);
-    p.rect_filled(rect, r, Color32::BLACK);
-    if !pal.light {
-        p.rect_stroke(rect, r, Stroke::new(1.0_f32, pal.border));
-    }
+/// Zeichnet das Icon (bringt sein eigenes schwarzes Abzeichen mit).
+pub fn logo(p: &Painter, _pal: &Pal, rect: Rect, tex: &egui::TextureHandle) {
     p.image(tex.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
 }
