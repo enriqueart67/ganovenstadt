@@ -1,26 +1,38 @@
-# ⛏ Ganovenstadt-Launcher
+# Ganovenstadt-Launcher (Rust)
 
-Ein eigener Minecraft-Launcher in Python mit grafischer Oberfläche.
+Ein schneller Minecraft-Launcher, geschrieben in **Rust**, mit eigener Oberfläche (egui).
+
+## Warum ist er schnell?
+- **Startet sofort**: eine einzige kleine Programmdatei (~10 MB), kein Python, kein Java, kein Electron.
+- **Lädt parallel**: bis zu 64 Dateien gleichzeitig über HTTP/2. Spiel, Bibliotheken,
+  Assets und Java werden in einem Rutsch geholt.
+- **Schnellstart**: Ist eine Version schon komplett installiert, wird gar nichts mehr
+  geprüft oder geladen und Minecraft startet direkt. (Mit dem Haken **„Reparieren“**
+  werden alle Dateien einmal per Prüfsumme kontrolliert.)
+- **Optimierte Java-Einstellungen** (G1-Garbage-Collector wie im offiziellen Launcher)
+  für weniger Ruckler.
 
 ## Funktionen
-- Alle Minecraft-Versionen (Releases, optional Snapshots)
-- Modloader: **Fabric, Quilt, Forge, NeoForge** (oder Vanilla)
-- Lädt Spiel, Bibliotheken, Assets **und die passende Java-Version** automatisch herunter
-- **Microsoft-Login** (Sitzung wird beim Start automatisch erneuert)
+- Alle Minecraft-Versionen (Releases, optional Snapshots), auch uralte
+- Modloader: **Fabric** und **Quilt** (oder Vanilla)
+- Passende **Java-Version wird automatisch** heruntergeladen
+- **Microsoft-Login**, die Sitzung wird beim Start automatisch erneuert
 - Ohne Account: offizieller **Demo-Modus**
-- Einstellbar: Arbeitsspeicher (RAM), Fenstergröße, Spielordner, eigener Java-Pfad, JVM-Argumente
-- Fortschrittsbalken und Live-Log der Spielausgabe
+- Einstellbar: Arbeitsspeicher, Fenstergröße, Spielordner, Java-Pfad, JVM-Argumente
+- Live-Log der Spielausgabe, funktioniert offline mit installierten Versionen
 
-## Installation
-Du brauchst **Python 3.10 oder neuer** (unter Windows bei der Installation „Add to PATH“ anhaken).
+## Fertige Programmdatei holen (ohne Rust)
+Auf GitHub unter **Actions → „Launcher bauen“** den neuesten Lauf öffnen und unten bei
+*Artifacts* **Ganovenstadt-Launcher-Windows** (bzw. Linux/macOS) herunterladen.
+
+## Selbst bauen
+[Rust installieren](https://rustup.rs), dann:
 
 ```bash
 cd launcher
-pip install -r requirements.txt
-python launcher.py
+cargo build --release
 ```
-
-Unter Linux muss eventuell noch tkinter installiert werden: `sudo apt install python3-tk`.
+Die Datei liegt dann unter `target/release/ganovenstadt-launcher(.exe)`.
 
 ## Microsoft-Login einrichten (einmalig)
 Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
@@ -33,11 +45,8 @@ Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 5. Die **Anwendungs-ID (Client-ID)** kopieren und im Launcher unter
    **Einstellungen → Azure Client-ID** einfügen
 6. Neue Apps muss Mojang einmalig für die Minecraft-API freischalten:
-   <https://aka.ms/mce-reviewappid> (Formular ausfüllen, dauert ein paar Tage)
-
-Danach auf **„Mit Microsoft anmelden“** klicken – der Browser öffnet sich, nach der
-Anmeldung bist du im Launcher eingeloggt.
+   <https://aka.ms/mce-reviewappid> (Formular, dauert ein paar Tage)
 
 ## Speicherorte
-- Einstellungen & Login: `~/.ganovenstadt-launcher/`
-- Spieldateien (Standard): `~/.ganovenstadt-launcher/minecraft/` – getrennt vom offiziellen Launcher.
+- Einstellungen, Login & Java: `~/.ganovenstadt-launcher/`
+- Spieldateien (Standard): `~/.ganovenstadt-launcher/minecraft/`

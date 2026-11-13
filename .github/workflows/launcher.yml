@@ -1,0 +1,37 @@
+name: Launcher bauen
+
+on:
+  push:
+    paths: ["launcher/**", ".github/workflows/launcher.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            file: ganovenstadt-launcher.exe
+            name: Windows
+          - os: ubuntu-latest
+            file: ganovenstadt-launcher
+            name: Linux
+          - os: macos-latest
+            file: ganovenstadt-launcher
+            name: macOS
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+      - run: cargo test --release
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ganovenstadt-Launcher-${{ matrix.name }}
+          path: launcher/target/release/${{ matrix.file }}
