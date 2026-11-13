@@ -5,11 +5,19 @@ import com.google.gson.JsonPrimitive;
 
 /** Auswahl aus festen Moeglichkeiten (Klick schaltet weiter). */
 public final class ModeSetting extends Setting<String> {
-    public final String[] modes;
+    public String[] modes;
 
     public ModeSetting(String id, String name, String def, String... modes) {
         super(id, name, def);
         this.modes = modes;
+    }
+
+    /** Auswahl neu setzen (z. B. neu hochgeladene Umhänge); unbekannter Wert fällt auf den Standard zurück. */
+    public void setModes(String... m) {
+        modes = m;
+        boolean ok = false;
+        for (String x : m) if (x.equals(value)) ok = true;
+        if (!ok) value = def;
     }
 
     public boolean is(String m) {

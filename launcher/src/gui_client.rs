@@ -7,6 +7,7 @@ use crate::theme::{self, Pal};
 
 impl App {
     pub(super) fn client_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
+        let mut import: Option<std::path::PathBuf> = None;
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
             super::header(ui, pal, "Client-Mods", "Eingebaute Extras im Spiel – eingestellt wird alles im Mod-Menü im Spiel");
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
@@ -44,6 +45,34 @@ impl App {
                             ui.label(RichText::new(format!("– {what}")).color(pal.muted).size(12.5));
                         });
                     }
+                });
+                let (cape_path, cape_msg) = (&mut self.cape_path, &mut self.cape_msg);
+                card(ui, pal, "Cosmetics – eigene Umhänge aus Fotos", |ui| {
+                    ui.label(RichText::new("Ziehe ein Bild (PNG, JPG, WEBP …) einfach hier in das Fenster – oder gib den Pfad ein. Peregrine schneidet es passend zu und macht daraus einen HD-Umhang (auch für die Elytra). Im Spiel: Mod-Menü › Cosmetics › Umhang › Design „Foto: …“.").color(pal.muted).size(12.5));
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(cape_path).hint_text("C:\\Users\\…\\Bild.png").desired_width(360.0));
+                        if ui.button("Hinzufügen").clicked() && !cape_path.trim().is_empty() {
+                            import = Some(std::path::PathBuf::from(cape_path.trim().trim_matches('"')));
+                            cape_path.clear();
+                        }
+                    });
+                    if let Some(m) = cape_msg.as_ref() {
+                        ui.label(RichText::new(m).color(theme::GOOD).size(12.5));
+                    }
+                    let list = client_mods::custom_capes();
+                    if list.is_empty() {
+                        ui.label(RichText::new("Noch keine eigenen Umhänge.").color(pal.muted).size(12.5));
+                    }
+                    for name in list {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(format!("⚑  {name}")).color(pal.text));
+                            if ui.small_button("Entfernen").clicked() {
+                                let _ = std::fs::remove_file(client_mods::capes_dir().join(format!("{name}.png")));
+                                *cape_msg = None;
+                            }
+                        });
+                    }
+                    ui.label(RichText::new("Hinweis: Umhänge und Emotes siehst nur du (dafür bräuchte es einen eigenen Cosmetics-Server).").color(pal.muted).size(11.5));
                 });
                 let capture = &mut self.key_capture;
                 card(ui, pal, "Tasten", |ui| {
@@ -111,5 +140,8 @@ impl App {
                 });
             });
         });
+        if let Some(p) = import {
+            self.import_cape(&p);
+        }
     }
 }

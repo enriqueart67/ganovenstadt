@@ -1,5 +1,6 @@
 package de.peregrine.client.mixin;
 
+import de.peregrine.client.CustomCapes;
 import de.peregrine.client.Modules;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -21,8 +22,17 @@ public class AbstractClientPlayerMixin {
         if (mc.player == null || (Object) this != mc.player) return;
         PlayerSkin skin = cir.getReturnValue();
         if (skin == null) return;
-        String name = Modules.CAPE.design.get().toLowerCase().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue");
-        Identifier tex = Identifier.fromNamespaceAndPath("peregrine", "textures/cape/" + name + ".png");
+        String design = Modules.CAPE.design.get();
+        Identifier tex;
+        String name;
+        if (CustomCapes.isCustom(design)) {
+            tex = CustomCapes.texture(design);
+            if (tex == null) return;
+            name = tex.getPath();
+        } else {
+            name = design.toLowerCase().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue");
+            tex = Identifier.fromNamespaceAndPath("peregrine", "textures/cape/" + name + ".png");
+        }
         ClientAsset.ResourceTexture cape = new ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath("peregrine", "cape/" + name), tex);
         cir.setReturnValue(new PlayerSkin(skin.body(), cape, Modules.CAPE.elytra.on() ? cape : skin.elytra(), skin.model(), skin.secure()));
     }

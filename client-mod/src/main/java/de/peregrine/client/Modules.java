@@ -439,14 +439,157 @@ public final class Modules {
         }
     }
 
+    // ================================================================== Neue HUD-Anzeigen
+    private static int countItems(Minecraft mc, net.minecraft.world.item.Item... items) {
+        if (mc.player == null) return 0;
+        var inv = mc.player.getInventory();
+        int n = 0;
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack st = inv.getItem(i);
+            for (var it : items) if (st.is(it)) n += st.getCount();
+        }
+        return n;
+    }
+
+    public static final class Saturation extends TextHud {
+        Saturation() {
+            super("saturation", "Sättigung", "Versteckte Sättigung deines Hungers", false, 0.005, 0.86);
+        }
+
+        protected List<String[]> lines(Minecraft mc, boolean p) {
+            if (mc.player == null) return List.of();
+            float s = mc.player.getFoodData().getSaturationLevel();
+            return List.<String[]>of(new String[]{"Sättigung", String.format("%.1f", s).replace('.', ',')});
+        }
+    }
+
+    public static final class Arrows extends TextHud {
+        Arrows() {
+            super("arrows", "Pfeil-Zähler", "Wie viele Pfeile du dabei hast", false, 0.90, 0.80);
+        }
+
+        protected List<String[]> lines(Minecraft mc, boolean p) {
+            int n = countItems(mc, net.minecraft.world.item.Items.ARROW, net.minecraft.world.item.Items.SPECTRAL_ARROW, net.minecraft.world.item.Items.TIPPED_ARROW);
+            return List.<String[]>of(new String[]{"Pfeile", String.valueOf(n)});
+        }
+    }
+
+    public static final class Totems extends TextHud {
+        Totems() {
+            super("totems", "Totem-Zähler", "Wie viele Totems der Unsterblichkeit du hast", false, 0.90, 0.86);
+        }
+
+        protected List<String[]> lines(Minecraft mc, boolean p) {
+            int n = countItems(mc, net.minecraft.world.item.Items.TOTEM_OF_UNDYING);
+            return List.<String[]>of(new String[]{"Totems", String.valueOf(n)});
+        }
+    }
+
+    public static final class Biome extends TextHud {
+        Biome() {
+            super("biome", "Biom", "In welchem Biom du gerade bist", false, 0.005, 0.92);
+        }
+
+        protected List<String[]> lines(Minecraft mc, boolean p) {
+            if (mc.player == null || mc.level == null) return List.of();
+            String id = mc.level.getBiome(mc.player.blockPosition()).getRegisteredName();
+            String name = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+            name = name.replace('_', ' ');
+            if (!name.isEmpty()) name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+            return List.<String[]>of(new String[]{"Biom", name});
+        }
+    }
+
+    public static final class Session extends TextHud {
+        private long start;
+
+        Session() {
+            super("session", "Spielzeit", "Wie lange du schon in dieser Welt/auf diesem Server bist", false, 0.005, 0.98);
+        }
+
+        @Override
+        public void tick(Minecraft mc) {
+            if (mc.level == null) start = 0;
+            else if (start == 0) start = System.currentTimeMillis();
+        }
+
+        protected List<String[]> lines(Minecraft mc, boolean p) {
+            long s = start == 0 ? 0 : (System.currentTimeMillis() - start) / 1000;
+            return List.<String[]>of(new String[]{"Zeit", String.format("%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)});
+        }
+    }
+
+    public static final class Packs extends TextHud {
+        Packs() {
+            super("packs", "Ressourcenpakete", "Zeigt, welche Ressourcenpakete aktiv sind", false, 0.80, 0.02);
+        }
+
+        protected List<String[]> lines(Minecraft mc, boolean p) {
+            List<String[]> l = new ArrayList<>();
+            for (var pack : mc.getResourcePackRepository().getSelectedPacks()) {
+                String id = pack.getId();
+                // nur echte Ressourcenpakete (Ordner resourcepacks) und die eingebauten Zusatzpakete – keine Mods
+                if (!(id.startsWith("file/") || id.equals("programmer_art") || id.equals("high_contrast"))) continue;
+                l.add(new String[]{"", pack.getTitle().getString()});
+            }
+            if (l.isEmpty()) l.add(new String[]{"Pakete", "keine"});
+            return l;
+        }
+    }
+
+    // ================================================================== Neue Funktionen
+    public static final class Freelook extends Module {
+        public final BoolSetting thirdPerson = add(new BoolSetting("third", "Dabei in die Ansicht von hinten wechseln", true));
+        public final BoolSetting invert = add(new BoolSetting("invert", "Maus umkehren (hoch/runter)", false));
+
+        Freelook() {
+            super("freelook", "Freelook", "Umsehen, ohne dich zu drehen – Taste (Links-Alt) halten", Category.PVP, true);
+        }
+    }
+
+    public static final class ChatTime extends Module {
+        public final ModeSetting format = add(new ModeSetting("format", "Format", "HH:mm", "HH:mm", "HH:mm:ss"));
+
+        ChatTime() {
+            super("chattime", "Chat-Zeitstempel", "Uhrzeit vor jeder Chat-Nachricht", Category.OTHER, false);
+        }
+    }
+
+    public static final class AutoGG extends Module {
+        public final ModeSetting text = add(new ModeSetting("text", "Nachricht", "gg", "gg", "GG", "gg wp", "Good Game"));
+        private static final String[] TRIGGERS = {"won the game", "winner", "victory", "hat gewonnen", "gewinner", "1st killer", "#1", "you won", "du hast gewonnen", "game over"};
+        private long last;
+
+        AutoGG() {
+            super("autogg", "Auto-GG", "Schreibt „gg“ in den Chat, wenn eine Runde vorbei ist", Category.OTHER, false);
+        }
+
+        public void onMessage(String msg) {
+            if (!enabled) return;
+            String m = msg.toLowerCase();
+            boolean hit = false;
+            for (String t : TRIGGERS) if (m.contains(t)) hit = true;
+            if (!hit || System.currentTimeMillis() - last < 15000) return;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.getConnection() == null || mc.getCurrentServer() == null) return; // nur auf Servern
+            last = System.currentTimeMillis();
+            mc.getConnection().sendChat(text.get());
+        }
+    }
+
     // ================================================================== Cosmetics
     public static final class Cape extends Module {
         public static final String[] DESIGNS = {"Falke", "Nacht", "Papier", "Flamme", "Ozean", "Galaxie", "Regenbogen", "Kristall"};
-        public final ModeSetting design = add(new ModeSetting("design", "Design", "Falke", DESIGNS));
+        public final ModeSetting design = add(new ModeSetting("design", "Design", "Falke", CustomCapes.allDesigns()));
         public final BoolSetting elytra = add(new BoolSetting("elytra", "Auch auf der Elytra", true));
 
         Cape() {
-            super("cape", "Umhang", "Eigener Umhang (F5 zum Ansehen) – sehen nur Peregrine-Spieler auf deinem PC", Category.COSMETICS, true);
+            super("cape", "Umhang", "Eigener Umhang oder eigenes Foto (im Launcher hochladen) – F5 zum Ansehen", Category.COSMETICS, true);
+        }
+
+        /** Neu im Launcher hochgeladene Bilder in die Auswahl übernehmen. */
+        public void refresh() {
+            design.setModes(CustomCapes.allDesigns());
         }
     }
 
@@ -499,12 +642,22 @@ public final class Modules {
     public static final NoWeather NO_WEATHER = new NoWeather();
     public static final ToggleSprint TOGGLE_SPRINT = new ToggleSprint();
     public static final ToggleSneak TOGGLE_SNEAK = new ToggleSneak();
+    public static final Saturation SATURATION = new Saturation();
+    public static final Arrows ARROWS = new Arrows();
+    public static final Totems TOTEMS = new Totems();
+    public static final Biome BIOME = new Biome();
+    public static final Session SESSION = new Session();
+    public static final Packs PACKS = new Packs();
+    public static final Freelook FREELOOK = new Freelook();
+    public static final ChatTime CHAT_TIME = new ChatTime();
+    public static final AutoGG AUTO_GG = new AutoGG();
     public static final Cape CAPE = new Cape();
     public static final EmoteModule EMOTES = new EmoteModule();
     public static final Style STYLE = new Style();
 
     public static final List<Module> ALL = List.of(
             FPS, CPS, COORDS, KEYSTROKES, ARMOR, POTIONS, CLOCK, PING, SERVER, SPEED, DAYS, MEMORY, REACH, COMBO,
+            SATURATION, ARROWS, TOTEMS, BIOME, SESSION, PACKS, FREELOOK, CHAT_TIME, AUTO_GG,
             CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, EMOTES, STYLE);
 
     public static List<HudModule> huds() {

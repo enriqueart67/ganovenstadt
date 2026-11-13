@@ -9,7 +9,10 @@
     "GameRendererMixin",
     "LevelMixin",
     "AbstractClientPlayerMixin",
-    "PlayerModelMixin"
+    "PlayerModelMixin",
+    "EntityTurnMixin",
+    "CameraRotationMixin",
+    "ChatComponentMixin"
   ],
   "injectors": {
     "defaultRequire": 1

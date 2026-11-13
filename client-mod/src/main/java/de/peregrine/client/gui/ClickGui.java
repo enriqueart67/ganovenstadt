@@ -59,7 +59,10 @@ public final class ClickGui extends Screen {
             Map.entry("memory", "▤"), Map.entry("reach", "↔"), Map.entry("combo", "✚"), Map.entry("potions", "⚗"),
             Map.entry("armor", "⛨"), Map.entry("keystrokes", "⬆"), Map.entry("crosshair", "✛"), Map.entry("nohurtcam", "♥"),
             Map.entry("zoom", "🔍"), Map.entry("fullbright", "☀"), Map.entry("noweather", "☂"), Map.entry("togglesprint", "➜"),
-            Map.entry("togglesneak", "⇣"), Map.entry("style", "🎨"), Map.entry("cape", "⚑"), Map.entry("emotes", "☺"));
+            Map.entry("togglesneak", "⇣"), Map.entry("style", "🎨"), Map.entry("cape", "⚑"), Map.entry("emotes", "☺"),
+            Map.entry("saturation", "🍖"), Map.entry("arrows", "➹"), Map.entry("totems", "☥"), Map.entry("biome", "♣"),
+            Map.entry("session", "⌛"), Map.entry("packs", "▤"), Map.entry("freelook", "👁"), Map.entry("chattime", "🕑"),
+            Map.entry("autogg", "✌"));
 
     // Farben aus dem Launcher-Design (bei jedem Öffnen neu geladen)
     private final Theme t = Theme.load();
@@ -69,6 +72,7 @@ public final class ClickGui extends Screen {
 
     public ClickGui() {
         super(Component.literal("Peregrine Client"));
+        Modules.CAPE.refresh(); // neu hochgeladene Foto-Umhänge anzeigen
     }
 
     @Override
@@ -343,7 +347,8 @@ public final class ClickGui extends Screen {
                 round(g, rx, y + 3, w, 16, hov ? OFF_HOVER : OFF);
                 g.text(font, "‹", rx + 6, y + 7, MUTED, false);
                 g.text(font, "›", rx + w - 10, y + 7, MUTED, false);
-                g.text(font, md.get(), rx + (w - font.width(md.get())) / 2, y + 7, TEXT, false);
+                String mv = font.plainSubstrByWidth(md.get(), w - 24);
+                g.text(font, mv, rx + (w - font.width(mv)) / 2, y + 7, TEXT, false);
                 if (y >= top) {
                     hits.add(new Hit(rx, y + 3, w / 2, 16, () -> {
                         md.cycle(-1);

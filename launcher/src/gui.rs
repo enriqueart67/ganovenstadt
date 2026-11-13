@@ -52,6 +52,8 @@ pub struct App {
     prof: ProfilesUi,
     prism_check: Option<(Instant, String)>,
     key_capture: Option<String>,
+    cape_path: String,
+    cape_msg: Option<String>,
 }
 
 impl App {
@@ -85,6 +87,8 @@ impl App {
             prof: ProfilesUi::new(),
             prism_check: None,
             key_capture: None,
+            cape_path: String::new(),
+            cape_msg: None,
         };
         app.load_versions();
         app.refresh_login();
@@ -211,6 +215,16 @@ impl App {
                 Err(e) => h.error(format!("{e:#}")),
             }
         });
+    }
+
+    fn import_cape(&mut self, path: &std::path::Path) {
+        match client_mods::import_cape(path) {
+            Ok(name) => {
+                self.h.log(format!("[Cosmetics] Umhang „{name}“ hochgeladen – im Spiel unter Cosmetics › Umhang › Design „Foto: {name}“ wählen."));
+                self.cape_msg = Some(format!("„{name}“ hinzugefügt – im Spiel unter Umhang › Design wählen."));
+            }
+            Err(e) => self.h.error(format!("{e:#}")),
+        }
     }
 
     fn h_ctx(&self) -> egui::Context {
@@ -1336,8 +1350,13 @@ impl eframe::App for App {
         }
         // Bild ins Fenster gezogen -> als Hintergrund verwenden
         if let Some(path) = ctx.input(|i| i.raw.dropped_files.first().and_then(|f| f.path.clone())) {
-            self.cfg.look.background = "Bild".into();
-            self.cfg.look.image_path = path.to_string_lossy().into_owned();
+            if self.page == Page::Client {
+                // Auf der Seite Client-Mods: Foto als Umhang hochladen
+                self.import_cape(&path);
+            } else {
+                self.cfg.look.background = "Bild".into();
+                self.cfg.look.image_path = path.to_string_lossy().into_owned();
+            }
         }
         let pal = Pal::from(&self.cfg.look);
         let t = if self.cfg.look.animations { self.started.elapsed().as_secs_f32() } else { 0.0 };

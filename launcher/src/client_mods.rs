@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 24] = [
+pub const MODULES: [(&str, &str, &str); 33] = [
     ("HUD", "FPS", "Bilder pro Sekunde"),
     ("HUD", "CPS", "Klicks pro Sekunde (links | rechts)"),
     ("HUD", "Koordinaten", "X, Y, Z und Himmelsrichtung"),
@@ -45,6 +45,15 @@ pub const MODULES: [(&str, &str, &str); 24] = [
     ("HUD", "Arbeitsspeicher", "RAM-Verbrauch"),
     ("HUD", "Reichweite", "Abstand deines letzten Treffers"),
     ("HUD", "Combo-Zähler", "Treffer in Folge"),
+    ("HUD", "Sättigung", "Versteckte Sättigung deines Hungers"),
+    ("HUD", "Pfeil-Zähler", "Pfeile im Inventar"),
+    ("HUD", "Totem-Zähler", "Totems der Unsterblichkeit im Inventar"),
+    ("HUD", "Biom", "Aktuelles Biom"),
+    ("HUD", "Spielzeit", "Wie lange du schon spielst"),
+    ("HUD", "Ressourcenpakete", "Aktive Ressourcenpakete"),
+    ("PvP", "Freelook", "Umsehen ohne dich zu drehen (Links-Alt halten)"),
+    ("Sonstiges", "Chat-Zeitstempel", "Uhrzeit vor Chat-Nachrichten"),
+    ("Sonstiges", "Auto-GG", "Schreibt „gg“ am Rundenende"),
     ("PvP", "Fadenkreuz", "Eigene Form, Größe, Farbe"),
     ("PvP", "Kein Schadens-Wackeln", "Kamera wackelt nicht bei Treffern"),
     ("Grafik", "Zoom", "Taste C, Stärke einstellbar, weich"),
@@ -85,12 +94,13 @@ pub const TURBO: [(&str, &str, &str); 5] = [
     ("entityculling", "Entity Culling", "verdeckte Tiere/Truhen werden nicht gezeichnet"),
 ];
 /// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
-pub const KEYS: [(&str, &str, &str); 5] = [
+pub const KEYS: [(&str, &str, &str); 6] = [
     ("key.peregrine.menu", "Mod-Menü öffnen", "key.keyboard.right.shift"),
     ("key.peregrine.zoom", "Zoom (halten)", "key.keyboard.c"),
     ("key.peregrine.fullbright", "Fullbright an/aus", "key.keyboard.g"),
     ("key.peregrine.sprint", "Auto-Sprint an/aus", "key.keyboard.v"),
     ("key.peregrine.emote", "Emote-Rad", "key.keyboard.b"),
+    ("key.peregrine.freelook", "Freelook (halten)", "key.keyboard.left.alt"),
 ];
 
 /// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).
@@ -215,6 +225,91 @@ pub fn jvm_arg() -> String {
     format!("-Dperegrine.home={}", shared_dir().display())
 }
 
+/// Ordner der eigenen Umhänge (Fotos), wird von der Client-Mod gelesen.
+pub fn capes_dir() -> std::path::PathBuf {
+    shared_dir().join("capes")
+}
+
+/// Namen der hochgeladenen Umhänge.
+pub fn custom_capes() -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(capes_dir())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.strip_suffix(".png").map(String::from)
+        })
+        .collect();
+    v.sort_by_key(|n| n.to_lowercase());
+    v
+}
+
+/// Bild so zuschneiden, dass es das Seitenverhältnis w:h hat (mittig), und skalieren.
+fn fit(img: &image::RgbaImage, w: u32, h: u32) -> image::RgbaImage {
+    let (iw, ih) = img.dimensions();
+    let target = w as f32 / h as f32;
+    let (cw, ch) = if iw as f32 / ih as f32 > target {
+        (((ih as f32) * target).round().max(1.0) as u32, ih)
+    } else {
+        (iw, ((iw as f32) / target).round().max(1.0) as u32)
+    };
+    let crop = image::imageops::crop_imm(img, (iw - cw) / 2, (ih - ch) / 2, cw, ch).to_image();
+    image::imageops::resize(&crop, w, h, image::imageops::FilterType::Lanczos3)
+}
+
+/// Macht aus einem Foto eine Umhang-Textur (HD, 1024×512 im Minecraft-Umhang-Layout inkl. Elytra)
+/// und speichert sie unter capes/<name>.png. Gibt den Namen zurück.
+pub fn import_cape(src: &Path) -> Result<String> {
+    let img = image::open(src).map_err(|e| anyhow::anyhow!("Bild konnte nicht gelesen werden: {e}"))?.to_rgba8();
+    const S: u32 = 16; // 16 Pixel pro Minecraft-Texel
+    let mut out = image::RgbaImage::new(64 * S, 32 * S);
+    let face = fit(&img, 10 * S, 16 * S);
+    // Durchschnittsfarbe für Ränder/Seiten
+    let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);
+    for p in face.pixels() {
+        r += p[0] as u64;
+        g += p[1] as u64;
+        b += p[2] as u64;
+        n += 1;
+    }
+    let avg = image::Rgba([(r / n.max(1)) as u8, (g / n.max(1)) as u8, (b / n.max(1)) as u8, 255]);
+    let rect = |out: &mut image::RgbaImage, x: u32, y: u32, w: u32, h: u32, c: image::Rgba<u8>| {
+        for yy in y..y + h {
+            for xx in x..x + w {
+                out.put_pixel(xx, yy, c);
+            }
+        }
+    };
+    // Umhang: Ober-/Unterkante, Seiten, Außen- und Innenseite
+    rect(&mut out, S, 0, 20 * S, S, avg);
+    rect(&mut out, 0, S, S, 16 * S, avg);
+    rect(&mut out, 11 * S, S, S, 16 * S, avg);
+    image::imageops::overlay(&mut out, &face, S as i64, S as i64);
+    let inner = image::imageops::flip_horizontal(&face);
+    image::imageops::overlay(&mut out, &inner, (12 * S) as i64, S as i64);
+    // Elytra-Bereich (x 22..46, y 0..22)
+    let ely = fit(&img, 24 * S, 22 * S);
+    image::imageops::overlay(&mut out, &ely, (22 * S) as i64, 0);
+
+    let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Umhang".into());
+    let mut base: String = stem.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_')).take(24).collect();
+    base = base.trim().to_string();
+    if base.is_empty() {
+        base = "Umhang".into();
+    }
+    let dir = capes_dir();
+    std::fs::create_dir_all(&dir)?;
+    let mut name = base.clone();
+    let mut i = 2;
+    while dir.join(format!("{name}.png")).exists() {
+        name = format!("{base} {i}");
+        i += 1;
+    }
+    out.save(dir.join(format!("{name}.png")))?;
+    Ok(name)
+}
+
 pub const TURBO_MARKER: &str = ".peregrine-turbo.json";
 
 /// Ergebnis der Vorbereitung vor dem Spielstart.
@@ -282,6 +377,18 @@ mod tests {
         let t = std::fs::read_to_string(dir.join("options.txt")).unwrap();
         assert!(t.contains("key_key.peregrine.zoom:key.keyboard.x") && t.contains("fov:0.0") && !t.contains("keyboard.c"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cape_import() {
+        let tmp = std::env::temp_dir().join(format!("pc-cape-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("Mein Foto!.png");
+        image::RgbaImage::from_pixel(300, 200, image::Rgba([10, 200, 30, 255])).save(&src).unwrap();
+        let out = fit(&image::open(&src).unwrap().to_rgba8(), 160, 256);
+        assert_eq!(out.dimensions(), (160, 256));
+        assert_eq!(out.get_pixel(80, 128)[1], 200);
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

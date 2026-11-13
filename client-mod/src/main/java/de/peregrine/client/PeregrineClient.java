@@ -25,7 +25,7 @@ public final class PeregrineClient implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Peregrine");
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("peregrine", "main"));
 
-    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey;
+    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey;
 
     @Override
     public void onInitializeClient() {
@@ -35,6 +35,10 @@ public final class PeregrineClient implements ClientModInitializer {
         fullbrightKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.fullbright", InputConstants.KEY_G, CATEGORY));
         sprintKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.sprint", InputConstants.KEY_V, CATEGORY));
         emoteKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.emote", InputConstants.KEY_B, CATEGORY));
+        freelookKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.freelook", InputConstants.KEY_LALT, CATEGORY));
+        net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
+            if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
+        });
 
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("peregrine", "hud"), (g, dt) -> {
             if (HudEditor.active) return;
@@ -81,6 +85,7 @@ public final class PeregrineClient implements ClientModInitializer {
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
         Zoom.setHeld(zoomKey.isDown());
+        FreelookState.update(mc, freelookKey.isDown());
         while (fullbrightKey.consumeClick()) toggle(mc, Modules.FULLBRIGHT);
         while (sprintKey.consumeClick()) toggle(mc, Modules.TOGGLE_SPRINT);
         for (Module m : Modules.ALL) m.tick(mc);
