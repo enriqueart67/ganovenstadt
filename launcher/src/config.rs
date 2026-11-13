@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-pub const LAUNCHER_NAME: &str = "Skyrush";
+pub const LAUNCHER_NAME: &str = "Peregrine Client";
 pub const LAUNCHER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn base_dir() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".skyrush")
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".peregrine")
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]

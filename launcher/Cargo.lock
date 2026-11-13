@@ -2186,6 +2186,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "peregrine"
+version = "2.0.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "dirs",
+ "eframe",
+ "futures",
+ "hex",
+ "open",
+ "rand 0.8.8",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tokio",
+ "url",
+ "zip",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2818,28 +2840,6 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
-
-[[package]]
-name = "skyrush"
-version = "2.0.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "dirs",
- "eframe",
- "futures",
- "hex",
- "open",
- "rand 0.8.8",
- "reqwest",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "tokio",
- "url",
- "zip",
-]
 
 [[package]]
 name = "slab"

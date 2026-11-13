@@ -1,4 +1,4 @@
-name: Skyrush bauen
+name: Peregrine Client bauen
 
 on:
   push:
@@ -11,13 +11,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            file: skyrush.exe
+            file: peregrine.exe
             name: Windows
           - os: ubuntu-latest
-            file: skyrush
+            file: peregrine
             name: Linux
           - os: macos-latest
-            file: skyrush
+            file: peregrine
             name: macOS
     runs-on: ${{ matrix.os }}
     defaults:
@@ -33,5 +33,5 @@ jobs:
       - run: cargo build --release
       - uses: actions/upload-artifact@v4
         with:
-          name: Skyrush-${{ matrix.name }}
+          name: Peregrine-Client-${{ matrix.name }}
           path: launcher/target/release/${{ matrix.file }}

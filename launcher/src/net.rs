@@ -14,7 +14,7 @@ const PARALLEL: usize = 64;
 
 pub fn client() -> Client {
     Client::builder()
-        .user_agent(concat!("skyrush/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("peregrine/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(300))
         .pool_max_idle_per_host(PARALLEL)

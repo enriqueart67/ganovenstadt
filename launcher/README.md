@@ -1,4 +1,4 @@
-# SKYRUSH – Minecraft-Launcher (Rust)
+# Peregrine Client – Minecraft-Launcher (Rust)
 
 Ein schneller Minecraft-Launcher, geschrieben in **Rust**, mit modernem Design:
 rahmenloses Fenster, Seitenleiste, animierte Block-Landschaft (komplett im Code gezeichnet),
@@ -24,8 +24,8 @@ Verlaufs-Buttons und Karten-Einstellungen.
 - Live-Log der Spielausgabe, funktioniert offline mit installierten Versionen
 
 ## Fertige Programmdatei holen (ohne Rust)
-Auf GitHub unter **Actions → „Skyrush bauen“** den neuesten Lauf öffnen und unten bei
-*Artifacts* **Skyrush-Windows** (bzw. Linux/macOS) herunterladen.
+Auf GitHub unter **Actions → „Peregrine Client bauen“** den neuesten Lauf öffnen und unten bei
+*Artifacts* **Peregrine-Client-Windows** (bzw. Linux/macOS) herunterladen.
 
 ## Selbst bauen
 [Rust installieren](https://rustup.rs), dann:
@@ -34,7 +34,7 @@ Auf GitHub unter **Actions → „Skyrush bauen“** den neuesten Lauf öffnen u
 cd launcher
 cargo build --release
 ```
-Die Datei liegt dann unter `target/release/skyrush(.exe)`.
+Die Datei liegt dann unter `target/release/peregrine(.exe)`.
 
 ## Microsoft-Login einrichten (einmalig)
 Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
@@ -50,8 +50,8 @@ Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
    <https://aka.ms/mce-reviewappid> (Formular, dauert ein paar Tage)
 
 ## Speicherorte
-- Einstellungen, Login & Java: `~/.skyrush/`
-- Spieldateien (Standard): `~/.skyrush/minecraft/`
+- Einstellungen, Login & Java: `~/.peregrine/`
+- Spieldateien (Standard): `~/.peregrine/minecraft/`
 
 ## Lizenzen
 Schriftart **Poppins** (SIL Open Font License, siehe `assets/fonts/OFL.txt`).

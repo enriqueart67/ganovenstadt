@@ -1,5 +1,5 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-//! Skyrush – ein schneller Minecraft-Launcher in Rust.
+//! Peregrine Client – ein schneller Minecraft-Launcher in Rust.
 mod auth;
 mod config;
 mod gui;

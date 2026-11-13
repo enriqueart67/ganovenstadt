@@ -156,9 +156,9 @@ impl App {
         let p = ui.painter();
         let logo = Rect::from_center_size(pos2(r.left() + 38.0, r.center().y), vec2(24.0, 24.0));
         theme::gradient_rrect(p, logo, 7.0, ACCENT_A, ACCENT_B);
-        p.text(logo.center(), Align2::CENTER_CENTER, "S", font(14.0, "bold"), Color32::WHITE);
-        let end = p.text(pos2(r.left() + 62.0, r.center().y), Align2::LEFT_CENTER, "SKYRUSH", font(13.0, "bold"), TEXT);
-        p.text(pos2(end.right() + 6.0, r.center().y), Align2::LEFT_CENTER, "LAUNCHER", font(13.0, "medium"), MUTED);
+        p.text(logo.center(), Align2::CENTER_CENTER, "P", font(14.0, "bold"), Color32::WHITE);
+        let end = p.text(pos2(r.left() + 62.0, r.center().y), Align2::LEFT_CENTER, "PEREGRINE", font(13.0, "bold"), TEXT);
+        p.text(pos2(end.right() + 6.0, r.center().y), Align2::LEFT_CENTER, "CLIENT", font(13.0, "medium"), MUTED);
 
         let mut x = r.right();
         for (kind, cmd) in [(Icon::Close, 0), (Icon::Maximize, 1), (Icon::Minimize, 2)] {
@@ -243,8 +243,8 @@ impl App {
             p.galley(pos2(pill.left() + 20.0, pill.top() + 6.0), g, Color32::WHITE);
             y = pill.bottom() + 14.0;
         }
-        let tr = p.text(pos2(hero.left() + 42.0, y), Align2::LEFT_TOP, "SKYRUSH", font(60.0, "bold"), Color32::WHITE);
-        p.text(pos2(hero.left() + 46.0, tr.bottom() - 6.0), Align2::LEFT_TOP, "MINECRAFT  LAUNCHER", font(15.0, "semibold"), Color32::from_rgb(255, 170, 210));
+        let tr = p.text(pos2(hero.left() + 42.0, y), Align2::LEFT_TOP, "PEREGRINE", font(60.0, "bold"), Color32::WHITE);
+        p.text(pos2(hero.left() + 46.0, tr.bottom() - 6.0), Align2::LEFT_TOP, "CLIENT  ·  MINECRAFT LAUNCHER", font(15.0, "semibold"), Color32::from_rgb(255, 170, 210));
         p.text(
             pos2(hero.left() + 46.0, tr.bottom() + 22.0),
             Align2::LEFT_TOP,
