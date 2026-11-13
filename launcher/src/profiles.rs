@@ -13,8 +13,14 @@ pub struct Profile {
     pub name: String,
     pub version: String,
     pub loader: String,
+    /// Feste Fabric-/Quilt-Version (bei Modpacks), sonst die neueste stabile.
+    #[serde(default)]
+    pub loader_version: Option<String>,
     #[serde(default)]
     pub mods: Vec<InstalledMod>,
+    /// Bild (z. B. vom Modpack).
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 fn file() -> PathBuf {
@@ -67,9 +73,6 @@ pub fn dir(game_dir: &str, p: &Profile) -> PathBuf {
     Path::new(game_dir).join("instances").join(&p.id)
 }
 
-pub fn mods_dir(game_dir: &str, p: &Profile) -> PathBuf {
-    dir(game_dir, p).join("mods")
-}
 
 #[cfg(test)]
 mod tests {
@@ -77,7 +80,7 @@ mod tests {
 
     #[test]
     fn ids() {
-        let p = |id: &str| Profile { id: id.into(), name: String::new(), version: String::new(), loader: String::new(), mods: vec![] };
+        let p = |id: &str| Profile { id: id.into(), name: String::new(), version: String::new(), loader: String::new(), loader_version: None, mods: vec![], icon: None };
         assert_eq!(new_id("Meine Mods!", &[]), "meine-mods");
         assert_eq!(new_id("Größte Welt", &[]), "groesste-welt");
         assert_eq!(new_id("Meine Mods", &[p("meine-mods")]), "meine-mods-2");

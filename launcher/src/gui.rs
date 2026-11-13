@@ -152,7 +152,7 @@ impl App {
             Some(p) => self.play_profile(p),
             None => {
                 let (v, l) = (self.cfg.version.clone(), self.cfg.loader.clone());
-                self.launch(v, l, None);
+                self.launch(v, l, None, None);
             }
         }
     }
@@ -163,10 +163,10 @@ impl App {
         }
         let dir = profiles::dir(&self.cfg.game_dir, &p);
         self.h.log(format!("[Launcher] Profil „{}“ ({} {})", p.name, p.loader, p.version));
-        self.launch(p.version, p.loader, Some(dir));
+        self.launch(p.version, p.loader, p.loader_version, Some(dir));
     }
 
-    fn launch(&mut self, version: String, loader: String, run_dir: Option<std::path::PathBuf>) {
+    fn launch(&mut self, version: String, loader: String, loader_version: Option<String>, run_dir: Option<std::path::PathBuf>) {
         config::save_config(&self.cfg);
         self.saved = self.cfg.clone();
         let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), self.cfg.clone(), self.repair);
@@ -175,7 +175,7 @@ impl App {
         h.set_busy(true);
         self.rt.spawn(async move {
             let res = async {
-                let id = install::prepare(&h, &client, &cfg, &version, &loader, repair).await?;
+                let id = install::prepare(&h, &client, &cfg, &version, &loader, loader_version.as_deref(), repair).await?;
                 let (java, args) = launch::build(&cfg, &id, account.as_ref(), run_dir.as_deref())?;
                 h.log(format!("[Launcher] Starte {id} mit {}", java.display()));
                 h.status(format!("{id} läuft"));
@@ -268,7 +268,7 @@ impl App {
         let mut y = r.top() + 12.0;
         for (page, kind, tip) in [
             (Page::Home, Icon::Home, "Start"),
-            (Page::Profiles, Icon::Grid, "Profile & Mods"),
+            (Page::Profiles, Icon::Grid, "Profile & Inhalte"),
             (Page::Look, Icon::Brush, "Aussehen"),
             (Page::Console, Icon::Console, "Konsole"),
             (Page::Settings, Icon::Settings, "Einstellungen"),
@@ -901,14 +901,6 @@ impl App {
                     field(ui, pal, "Redirect-URI", &mut c.redirect_uri, "");
                 });
                 let repair = &mut self.repair;
-                card(ui, pal, "CurseForge", |ui| {
-                    ui.label(RichText::new("Für die Mod-Suche auf CurseForge brauchst du einen kostenlosen API-Key von console.curseforge.com (Modrinth geht ohne).").color(pal.muted).size(12.5));
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 4.0;
-                        ui.label(RichText::new("CurseForge API-Key").color(pal.muted).size(12.0));
-                        ui.add(egui::TextEdit::singleline(&mut c.cf_api_key).password(true).hint_text("$2a$10$…").desired_width(440.0).margin(vec2(10.0, 6.0)));
-                    });
-                });
                 card(ui, pal, "Wartung", |ui| {
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, repair);

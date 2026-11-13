@@ -343,7 +343,7 @@ async fn java_jobs(ui: &Ui, client: &Client, component: &str) -> Result<(Vec<Job
 }
 
 // ------------------------------------------------------------------ Modloader
-async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str) -> Result<String> {
+async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str, pinned: Option<&str>) -> Result<String> {
     let base = match loader {
         "Fabric" => "https://meta.fabricmc.net/v2",
         "Quilt" => "https://meta.quiltmc.org/v3",
@@ -357,7 +357,11 @@ async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str) -> R
         .find(|e| e["loader"]["stable"].as_bool() == Some(true))
         .or_else(|| arr.iter().find(|e| !e["loader"]["version"].as_str().unwrap_or("").contains("beta")))
         .unwrap_or(&arr[0]);
-    let lv = pick["loader"]["version"].as_str().context("Loader-Version fehlt")?;
+    // Modpacks geben eine feste Loader-Version vor, sonst die neueste stabile
+    let lv = match pinned {
+        Some(v) => v,
+        None => pick["loader"]["version"].as_str().context("Loader-Version fehlt")?,
+    };
     let profile = get_json(client, &format!("{base}/versions/loader/{mc}/{lv}/profile/json")).await?;
     let id = profile["id"].as_str().context("Profil-ID fehlt")?.to_string();
     let p = version_json_path(gd, &id);
@@ -367,15 +371,16 @@ async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str) -> R
 }
 
 // ------------------------------------------------------------------ Hauptablauf
-fn marker(gd: &Path, version: &str, loader: &str) -> PathBuf {
-    gd.join("versions").join(version).join(format!(".ready-{}", loader.to_lowercase()))
+fn marker(gd: &Path, version: &str, loader: &str, pinned: Option<&str>) -> PathBuf {
+    let suffix = pinned.map(|v| format!("-{v}")).unwrap_or_default();
+    gd.join("versions").join(version).join(format!(".ready-{}{suffix}", loader.to_lowercase()))
 }
 
 /// Stellt sicher, dass alles da ist, und liefert die startbare Versions-ID.
 /// Wurde die Version schon komplett installiert, geht das sofort (keine Pruefung).
-pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, loader: &str, repair: bool) -> Result<String> {
+pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, loader: &str, loader_version: Option<&str>, repair: bool) -> Result<String> {
     let gd = PathBuf::from(&cfg.game_dir);
-    let mark = marker(&gd, version, loader);
+    let mark = marker(&gd, version, loader, loader_version);
     if !repair {
         if let Ok(id) = std::fs::read_to_string(&mark) {
             if version_json_path(&gd, id.trim()).exists() {
@@ -396,7 +401,7 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
         version.to_string()
     } else {
         ui.status(format!("Installiere {loader} …"));
-        install_loader(client, &gd, version, loader).await?
+        install_loader(client, &gd, version, loader, loader_version).await?
     };
     let json = load_merged(&gd, &launch_id)?;
     let libdir = gd.join("libraries");
