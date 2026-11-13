@@ -149,7 +149,7 @@ impl App {
         let found = self.h.lock().prism.clone();
         if found.is_none() && !prism::can_install() {
             self.h.error(format!(
-                "Prism Launcher wurde nicht gefunden. Installiere ihn von {} (der Browser wird geöffnet) oder trage unter Einstellungen › Start über Prism den Pfad ein.",
+                "Die Anmeldung braucht auf diesem System eine Zusatzkomponente. Bitte von {} installieren (der Browser wird geöffnet).",
                 prism::DOWNLOAD_URL
             ));
             let _ = open::that(prism::DOWNLOAD_URL);
@@ -163,7 +163,7 @@ impl App {
                     Some(p) => p,
                     None => {
                         let p = prism::install(&h).await?;
-                        h.log("[Prism] Prism Launcher installiert (nur für die Anmeldung und den Spielstart).");
+                        h.log("[Anmeldung] Bereit.");
                         p
                     }
                 };
@@ -190,7 +190,7 @@ impl App {
             if self.cfg.use_prism {
                 self.open_prism();
             } else {
-                self.h.error("Für den direkten Microsoft-Login brauchst du eine eigene Azure Client-ID (Einstellungen › Microsoft-Login). Oder schalte unter Einstellungen „Start über Prism Launcher“ ein.");
+                self.h.error("Für den direkten Microsoft-Login brauchst du eine eigene Azure Client-ID (Einstellungen › Microsoft-Login). Oder schalte unter Einstellungen › Anmeldung „Einfache Anmeldung“ ein.");
                 self.page = Page::Settings;
             }
             return;
@@ -264,7 +264,7 @@ impl App {
                 None => String::new(),
             };
             if loader != "Vanilla" && loader != "Fabric" && loader != "Quilt" {
-                h.error(format!("{loader} wird über Prism nicht unterstützt."));
+                h.error(format!("{loader} wird nicht unterstützt."));
                 return;
             }
             h.set_busy(true);
@@ -286,8 +286,8 @@ impl App {
                     let id = prism::instance_id(&key);
                     let pack = prism::pack_json(&version, &loader, lv.as_deref())?;
                     prism::write_instance(&pr, &id, &name, &game, &pack, &cfg, java.as_deref())?;
-                    h.log(format!("[Prism] Starte {name} über Prism Launcher (Konto: {})", acc.unwrap_or_default()));
-                    h.log("[Prism] Beim ersten Start lädt Prism die Spieldateien – das dauert einmalig etwas.");
+                    h.log(format!("[Launcher] Starte {} (Konto: {})", name.trim_start_matches("Peregrine · "), acc.unwrap_or_default()));
+                    h.log("[Launcher] Beim ersten Start einer Version werden die Spieldateien geladen – das dauert einmalig etwas.");
                     prism::launch(&pr, &id, &game, h.clone())?;
                     h.status(format!("{version} läuft"));
                     anyhow::Ok(())
@@ -435,7 +435,7 @@ impl App {
         // Konto
         let label = match (account, &prism_acc) {
             (Some(a), _) => a.name.to_uppercase(),
-            (None, Some(n)) => format!("{}  ·  PRISM", n.to_uppercase()),
+            (None, Some(n)) => n.to_uppercase(),
             (None, None) => "ANMELDEN".to_string(),
         };
         let g = ui.painter().layout_no_wrap(label.clone(), font(11.5, "monom"), pal.text);
@@ -443,9 +443,9 @@ impl App {
         let resp = ui.interact(ar, Id::new("acct"), Sense::click()).on_hover_text(if account.is_some() {
             "Klicken zum Abmelden"
         } else if prism_acc.is_some() {
-            "Angemeldet über den Prism Launcher – klicken, um Prism zu öffnen (Konto wechseln)"
+            "Angemeldet – klicken, um das Konto zu wechseln"
         } else if self.cfg.use_prism && self.cfg.client_id.is_empty() {
-            "Mit Microsoft anmelden (Anmeldefenster von Prism, schließt sich danach von selbst)"
+            "Mit Microsoft anmelden (nur einmal nötig)"
         } else {
             "Mit Microsoft anmelden"
         });
@@ -618,7 +618,7 @@ impl App {
         let prism_acc = if account.is_none() && self.cfg.use_prism { self.h.lock().prism_account.clone() } else { None };
         let konto = match (account, &prism_acc) {
             (Some(a), _) => (a.name.clone(), pal.text),
-            (None, Some(n)) => (format!("{n} · Prism"), pal.text),
+            (None, Some(n)) => (n.clone(), pal.text),
             (None, None) => ("Gast · Demo".into(), pal.accent),
         };
         let mut rows: Vec<(&str, String, Color32)> = vec![
@@ -1099,26 +1099,22 @@ impl App {
                     let s = self.h.lock();
                     (s.prism.clone(), s.prism_account.clone())
                 };
-                card(ui, pal, "Start über Prism Launcher", |ui| {
-                    ui.label(RichText::new("Die Anmeldung und der Spielstart laufen über den Prism Launcher. Peregrine lädt ihn beim ersten Anmelden selbst herunter, öffnet ihn nur für die Anmeldung und schließt ihn danach wieder. Profile, Mods und Client-Mods bleiben in Peregrine.").color(pal.muted).size(12.5));
+                card(ui, pal, "Anmeldung", |ui| {
+                    ui.label(RichText::new("Du meldest dich nur ein einziges Mal mit deinem Microsoft-Konto an – danach startet Minecraft immer direkt mit deinem Konto.").color(pal.muted).size(12.5));
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut c.use_prism);
-                        ui.label("Über Prism Launcher starten");
+                        ui.label("Einfache Anmeldung");
                     });
                     let (txt, col) = match (&prism_found, &prism_acc) {
-                        (None, _) if prism::can_install() => ("Prism wird beim ersten Anmelden automatisch geladen".to_string(), WARN),
-                        (None, _) => ("Prism nicht gefunden".to_string(), BAD),
-                        (Some(_), None) => ("Prism gefunden – noch nicht angemeldet".to_string(), WARN),
+                        (None, _) if prism::can_install() => ("Noch nicht angemeldet".to_string(), WARN),
+                        (None, _) => ("Zusatzkomponente fehlt".to_string(), BAD),
+                        (Some(_), None) => ("Noch nicht angemeldet".to_string(), WARN),
                         (Some(_), Some(n)) => (format!("Angemeldet als {n}"), GOOD),
                     };
                     ui.label(RichText::new(txt).color(col).font(font(14.0, "medium")));
-                    if let Some(p) = &prism_found {
-                        ui.label(RichText::new(p.exe.to_string_lossy()).color(pal.muted).size(11.5));
-                    }
-                    field(ui, pal, "Pfad zu prismlauncher.exe (leer = automatisch suchen)", &mut c.prism_path, "automatisch");
                     ui.horizontal(|ui| {
                         if prism_found.is_none() && !prism::can_install() {
-                            if ui.button("Prism herunterladen").clicked() {
+                            if ui.button("Herunterladen").clicked() {
                                 let _ = open::that(prism::DOWNLOAD_URL);
                             }
                         } else if ui.button(if prism_acc.is_some() { "Konto wechseln" } else { "Jetzt anmelden" }).clicked() {
