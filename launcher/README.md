@@ -22,7 +22,8 @@ Ein schneller Minecraft-Launcher, geschrieben in **Rust** – mit cleanem Design
 - **Design teilen**: als Code kopieren und bei Freunden einfügen; Zurücksetzen mit einem Klick
 
 ## Funktionen
-- Alle Minecraft-Versionen (Releases, optional Snapshots), auch uralte
+- **Alle Minecraft-Versionen**: Releases (auch die neuen Jahres-Versionen wie 26.1), Snapshots
+  sowie die uralten Beta- und Alpha-Versionen – mit Suchfeld und Filtern
 - Modloader: **Fabric** und **Quilt** (oder Vanilla)
 - Passende **Java-Version wird automatisch** heruntergeladen
 - **Microsoft-Login**, die Sitzung wird beim Start automatisch erneuert

@@ -42,14 +42,26 @@ pub fn installed(game_dir: &str) -> Vec<VersionEntry> {
     if let Ok(rd) = std::fs::read_dir(Path::new(game_dir).join("versions")) {
         for e in rd.flatten() {
             let id = e.file_name().to_string_lossy().into_owned();
-            if e.path().join(format!("{id}.json")).exists() {
-                out.push(VersionEntry { id, kind: "release".into(), url: String::new(), sha1: String::new() });
+            let Ok(data) = std::fs::read(e.path().join(format!("{id}.json"))) else { continue };
+            // Typ (release, snapshot, old_beta, old_alpha) aus der Versionsdatei lesen;
+            // Fabric/Quilt-Profile ueberspringen – die werden ueber den Loader-Schalter gewaehlt
+            let v: Value = serde_json::from_slice(&data).unwrap_or(Value::Null);
+            if v.get("inheritsFrom").is_some() {
+                continue;
             }
+            let kind = v["type"].as_str().unwrap_or("release").to_string();
+            out.push(VersionEntry { id, kind, url: String::new(), sha1: String::new() });
         }
     }
     // nach Versionsnummer sortieren (1.21 > 1.8)
     let key = |id: &str| -> Vec<u32> { id.split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse().ok()).collect() };
-    out.sort_by(|a, b| key(&b.id).cmp(&key(&a.id)));
+    // Releases/Snapshots zuerst, dann Beta, dann Alpha – jeweils neueste oben
+    let group = |k: &str| match k {
+        "old_beta" => 1,
+        "old_alpha" => 2,
+        _ => 0,
+    };
+    out.sort_by(|a, b| group(&a.kind).cmp(&group(&b.kind)).then(key(&b.id).cmp(&key(&a.id))));
     out
 }
 
@@ -578,6 +590,34 @@ mod tests {
         assert!(joined.contains("1.21.jar"));
         assert!(!joined.contains("${"), "{joined}");
         println!("{joined}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn installed_types() {
+        let dir = std::env::temp_dir().join(format!("gl-inst-{}", std::process::id()));
+        for (id, j) in [
+            ("1.21.4", json!({"type":"release"})),
+            ("26.1", json!({"type":"release"})),
+            ("26.2-snapshot-3", json!({"type":"snapshot"})),
+            ("b1.7.3", json!({"type":"old_beta"})),
+            ("a1.2.6", json!({"type":"old_alpha"})),
+            ("1.8.9", json!({"type":"release"})),
+            ("fabric-loader-0.16-1.21.4", json!({"inheritsFrom":"1.21.4"})),
+        ] {
+            let p = version_json_path(&dir, id);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, j.to_string()).unwrap();
+        }
+        let list = installed(&dir.to_string_lossy());
+        let ids: Vec<&str> = list.iter().map(|v| v.id.as_str()).collect();
+        assert_eq!(ids[0], "26.2-snapshot-3");
+        assert_eq!(ids[1], "26.1");
+        assert!(ids.iter().position(|i| *i == "1.21.4") < ids.iter().position(|i| *i == "1.8.9"));
+        assert!(!ids.iter().any(|i| i.starts_with("fabric")));
+        assert_eq!(list.iter().find(|v| v.id == "b1.7.3").unwrap().kind, "old_beta");
+        assert_eq!(&ids[ids.len() - 2..], &["b1.7.3", "a1.2.6"]);
+        assert_eq!(list.iter().find(|v| v.id == "a1.2.6").unwrap().kind, "old_alpha");
         let _ = std::fs::remove_dir_all(dir);
     }
 

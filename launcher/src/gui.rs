@@ -37,6 +37,8 @@ pub struct App {
     bg_tex: Option<(String, egui::TextureHandle)>,
     bg_err: Option<(String, String)>,
     import_text: String,
+    version_search: String,
+    focus_search: u8,
     logo: egui::TextureHandle,
 }
 
@@ -62,6 +64,8 @@ impl App {
             bg_tex: None,
             bg_err: None,
             import_text: String::new(),
+            version_search: String::new(),
+            focus_search: 0,
             logo: theme::load_logo(&cc.egui_ctx),
         };
         app.load_versions();
@@ -399,11 +403,14 @@ impl App {
         p.rect_stroke(vc, pal.r, Stroke::new(1.0_f32, if self.version_open { pal.accent } else { pal.border }));
         p.text(pos2(vc.left() + 14.0, vc.top() + 17.0), Align2::LEFT_CENTER, "Version", font(11.5, "medium"), pal.muted);
         let shown = if self.cfg.version.is_empty() { "Lädt …".to_string() } else { self.cfg.version.clone() };
-        p.text(pos2(vc.left() + 14.0, vc.top() + 41.0), Align2::LEFT_CENTER, shown, font(19.0, "semibold"), pal.text);
+        let size = if shown.chars().count() > 9 { 14.5 } else { 19.0 };
+        p.with_clip_rect(Rect::from_min_max(vc.min, pos2(vc.right() - 34.0, vc.bottom())))
+            .text(pos2(vc.left() + 14.0, vc.top() + 41.0), Align2::LEFT_CENTER, shown, font(size, "semibold"), pal.text);
         icon(p, pos2(vc.right() - 20.0, vc.center().y), 15.0, pal.muted, Icon::Chevron);
         if vresp.clicked() {
             self.version_open = !self.version_open;
             self.just_opened = true;
+            self.focus_search = 3;
         }
 
         let lx = vc.right() + 14.0;
@@ -475,7 +482,7 @@ impl App {
     }
 
     fn version_popup(&mut self, ui: &mut egui::Ui, pal: &Pal, vc: Rect, hero: Rect) {
-        let popup_h = 360.0_f32.min(vc.top() - hero.top() - 16.0);
+        let popup_h = 440.0_f32.min(vc.top() - hero.top() - 8.0);
         let area = egui::Area::new(Id::new("verpopup"))
             .order(egui::Order::Foreground)
             .fixed_pos(pos2(vc.left(), vc.top() - popup_h - 8.0))
@@ -487,20 +494,58 @@ impl App {
                     .shadow(egui::epaint::Shadow { offset: vec2(0.0, 8.0), blur: 24.0, spread: 0.0, color: alpha(Color32::BLACK, 120) })
                     .inner_margin(10.0)
                     .show(ui, |ui| {
-                        ui.set_width(240.0);
+                        ui.set_width(300.0);
                         ui.set_height(popup_h - 20.0);
+                        ui.spacing_mut().item_spacing.y = 8.0;
+                        let all = self.h.lock().versions.clone();
+                        let query = self.version_search.trim().to_lowercase();
+                        let shown: Vec<&install::VersionEntry> = all
+                            .iter()
+                            .filter(|v| {
+                                if !query.is_empty() {
+                                    return v.id.to_lowercase().contains(&query);
+                                }
+                                match v.kind.as_str() {
+                                    "release" => self.cfg.show_releases,
+                                    "snapshot" => self.cfg.show_snapshots,
+                                    _ => self.cfg.show_old,
+                                }
+                            })
+                            .collect();
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Versionen").font(font(14.0, "semibold")));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                theme::toggle(ui, pal, &mut self.cfg.show_snapshots);
-                                ui.label(RichText::new("Snapshots").color(pal.muted).size(12.0));
+                                ui.label(RichText::new(format!("{} von {}", shown.len(), all.len())).color(pal.muted).size(11.5));
                             });
                         });
-                        let versions = self.h.lock().versions.clone();
-                        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                            ui.spacing_mut().item_spacing.y = 2.0;
-                            for v in versions.iter().filter(|v| self.cfg.show_snapshots || v.kind == "release") {
-                                let (rr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
+                        let search = ui.add(
+                            egui::TextEdit::singleline(&mut self.version_search)
+                                .hint_text("Suchen … z. B. 26.1, 1.8.9, b1.7")
+                                .desired_width(f32::INFINITY)
+                                .margin(vec2(10.0, 6.0)),
+                        );
+                        if self.focus_search > 0 {
+                            search.request_focus();
+                            self.focus_search -= 1;
+                        }
+                        if search.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            if let Some(v) = shown.iter().find(|v| v.kind == "release").or(shown.first()) {
+                                self.cfg.version = v.id.clone();
+                                self.version_open = false;
+                            }
+                        }
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            chip(ui, pal, "Releases", &mut self.cfg.show_releases);
+                            chip(ui, pal, "Snapshots", &mut self.cfg.show_snapshots);
+                            chip(ui, pal, "Beta & Alpha", &mut self.cfg.show_old);
+                        });
+                        let row_h = 30.0;
+                        let mut picked = None;
+                        egui::ScrollArea::vertical().auto_shrink([false; 2]).show_rows(ui, row_h, shown.len(), |ui, range| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            for v in &shown[range] {
+                                let (rr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
                                 let sel = v.id == self.cfg.version;
                                 let p = ui.painter();
                                 if sel {
@@ -509,15 +554,28 @@ impl App {
                                     p.rect_filled(rr, pal.r, pal.surface2);
                                 }
                                 p.text(pos2(rr.left() + 10.0, rr.center().y), Align2::LEFT_CENTER, &v.id, font(13.0, "medium"), if sel { pal.accent } else { pal.text });
-                                if v.kind != "release" {
-                                    p.text(pos2(rr.right() - 10.0, rr.center().y), Align2::RIGHT_CENTER, "Snapshot", font(10.5, "medium"), WARN);
+                                let tag = match v.kind.as_str() {
+                                    "release" => None,
+                                    "snapshot" => Some(("Snapshot", WARN)),
+                                    "old_beta" => Some(("Beta", pal.muted)),
+                                    "old_alpha" => Some(("Alpha", pal.muted)),
+                                    _ => Some(("Sonstige", pal.muted)),
+                                };
+                                if let Some((t, c)) = tag {
+                                    p.text(pos2(rr.right() - 10.0, rr.center().y), Align2::RIGHT_CENTER, t, font(10.5, "medium"), c);
                                 }
                                 if resp.clicked() {
-                                    self.cfg.version = v.id.clone();
-                                    self.version_open = false;
+                                    picked = Some(v.id.clone());
                                 }
                             }
                         });
+                        if shown.is_empty() {
+                            ui.label(RichText::new(if all.is_empty() { "Versionsliste wird geladen …" } else { "Keine Version gefunden." }).color(pal.muted));
+                        }
+                        if let Some(id) = picked {
+                            self.cfg.version = id;
+                            self.version_open = false;
+                        }
                     });
             });
         if area.response.clicked_elsewhere() && !self.just_opened {
@@ -864,6 +922,21 @@ fn segmented(ui: &mut egui::Ui, pal: &Pal, id: &str, options: &[&str], value: &m
     let w = options.iter().map(|o| ui.fonts(|f| f.layout_no_wrap(o.to_string(), font(12.5, "medium"), Color32::WHITE).size().x)).fold(0.0_f32, f32::max) + 28.0;
     let (rect, _) = ui.allocate_exact_size(vec2(w * options.len() as f32 + 6.0, 32.0), Sense::hover());
     segmented_at(ui, pal, rect, id, options, value);
+}
+
+fn chip(ui: &mut egui::Ui, pal: &Pal, label: &str, on: &mut bool) {
+    let g = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font(11.5, "medium"), Color32::WHITE));
+    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 24.0), Sense::click());
+    if resp.clicked() {
+        *on = !*on;
+    }
+    let p = ui.painter();
+    if *on {
+        pal.fill(p, r, pal.r.min(12.0));
+    } else {
+        p.rect_filled(r, pal.r.min(12.0), if resp.hovered() { theme::lerp_color(pal.surface2, pal.text, 0.08) } else { pal.surface2 });
+    }
+    p.text(r.center(), Align2::CENTER_CENTER, label, font(11.5, "medium"), if *on { pal.on_accent } else { pal.muted });
 }
 
 fn swatch(ui: &mut egui::Ui, pal: &Pal, rgb: theme::Rgb, selected: bool) -> egui::Response {
