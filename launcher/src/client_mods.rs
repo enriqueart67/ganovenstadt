@@ -60,13 +60,26 @@ pub const MODULES: [(&str, &str, &str); 22] = [
 pub struct ClientMods {
     /// Client-Mods ueberhaupt installieren.
     pub enabled: bool,
+    /// Leistungs-Mods (Sodium & Co.) automatisch installieren.
+    pub turbo: bool,
 }
 
 impl Default for ClientMods {
     fn default() -> Self {
-        Self { enabled: true }
+        Self { enabled: true, turbo: true }
     }
 }
+
+/// Leistungs-Mods von Modrinth: (Slug, Name, Wirkung).
+pub const TURBO: [(&str, &str, &str); 6] = [
+    ("sodium", "Sodium", "neuer Grafik-Motor – meist 2–4× mehr FPS"),
+    ("lithium", "Lithium", "schnellere Spiel-Logik (Physik, KI, Ticks)"),
+    ("ferrite-core", "FerriteCore", "weniger Arbeitsspeicher"),
+    ("immediatelyfast", "ImmediatelyFast", "schnelleres Zeichnen von HUD, Text und Items"),
+    ("entityculling", "Entity Culling", "verdeckte Tiere/Truhen werden nicht gezeichnet"),
+    ("moreculling", "More Culling", "verdeckte Blockseiten werden nicht gezeichnet"),
+];
+pub const TURBO_MARKER: &str = ".peregrine-turbo.json";
 
 /// Ergebnis der Vorbereitung vor dem Spielstart.
 pub enum Prepared {

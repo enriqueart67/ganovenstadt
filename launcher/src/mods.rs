@@ -250,6 +250,24 @@ async fn save(dest: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Neueste passende Datei eines Mods (ohne Abhängigkeiten): (Dateiname, URL, SHA1).
+pub async fn pick_file(client: &Client, id: &str, mc: &str, loader: &str) -> Result<Option<(String, String, Option<String>)>> {
+    let Some(v) = latest_version(client, id, Kind::Mod, Some(mc), loader).await? else { return Ok(None) };
+    let files = v["files"].as_array().cloned().unwrap_or_default();
+    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Version ohne Datei")?;
+    let name = f["filename"].as_str().unwrap_or("").to_string();
+    if !safe_name(&name) {
+        bail!("Ungültiger Dateiname");
+    }
+    Ok(Some((name, f["url"].as_str().unwrap_or("").into(), f["hashes"]["sha1"].as_str().map(String::from))))
+}
+
+/// Datei laden (mit Prüfsumme) und speichern.
+pub async fn download_to(client: &Client, url: &str, sha1: Option<&str>, dest: &Path) -> Result<()> {
+    let bytes = fetch(client, url, sha1).await?;
+    save(dest, &bytes).await
+}
+
 fn safe_name(name: &str) -> bool {
     !name.is_empty() && !name.contains(['/', '\\']) && name != ".." && name != "."
 }

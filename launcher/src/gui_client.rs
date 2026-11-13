@@ -25,6 +25,19 @@ impl App {
                         .size(12.5),
                     );
                 });
+                card(ui, pal, "Turbo – mehr FPS", |ui| {
+                    ui.horizontal(|ui| {
+                        theme::toggle(ui, pal, &mut cm.turbo);
+                        ui.label("Leistungs-Mods automatisch installieren");
+                    });
+                    ui.label(RichText::new("Für Fabric und Quilt. Peregrine lädt die passenden Versionen von Modrinth und hält sie aktuell.").color(pal.muted).size(12.5));
+                    for (_, name, what) in client_mods::TURBO {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(name).color(pal.text));
+                            ui.label(RichText::new(format!("– {what}")).color(pal.muted).size(12.5));
+                        });
+                    }
+                });
                 card(ui, pal, "So geht's", |ui| {
                     for (key, what) in [
                         ("Rechts-Shift", "Mod-Menü öffnen: Module an-/ausschalten, Einstellungen, Suche"),

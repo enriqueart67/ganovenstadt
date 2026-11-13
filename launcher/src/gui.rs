@@ -284,6 +284,8 @@ impl App {
                     h.progress(20, 100);
                     h.status("Bereite Client-Mods vor …");
                     setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
+                    h.progress(25, 100);
+                    setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo).await;
                     h.progress(30, 100);
                     let (key, name) = match &profile_id {
                         Some(pid) => (format!("profil-{pid}"), format!("Peregrine · {label}")),
@@ -317,6 +319,7 @@ impl App {
                 let id = install::prepare(&h, &client, &cfg, &version, &loader, loader_version.as_deref(), repair).await?;
                 let game = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
                 setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
+                setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo).await;
                 let (java, args) = launch::build(&cfg, &id, account.as_ref(), run_dir.as_deref())?;
                 h.log(format!("[Launcher] Starte {id} mit {}", java.display()));
                 h.status(format!("{id} läuft"));
@@ -1411,6 +1414,57 @@ impl eframe::App for App {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         config::save_config(&self.cfg);
+    }
+}
+
+/// Leistungs-Mods (Sodium & Co.) passend zur Minecraft-Version installieren, alte Versionen ersetzen,
+/// beim Ausschalten wieder entfernen. Welche Dateien von Peregrine stammen, steht in mods/.peregrine-turbo.json.
+async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Path, version: &str, loader: &str, on: bool) {
+    use std::collections::BTreeMap;
+    if loader == "Vanilla" {
+        return;
+    }
+    let mods = game.join("mods");
+    let marker = mods.join(client_mods::TURBO_MARKER);
+    // slug -> (Minecraft-Version, Dateiname)
+    let mut have: BTreeMap<String, (String, String)> = std::fs::read(&marker).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default();
+    let before = have.clone();
+    let mut fresh = Vec::new();
+    for (slug, name, _) in client_mods::TURBO {
+        let current = have.get(slug).cloned();
+        if let Some((mc, file)) = &current {
+            let path = mods.join(file);
+            if std::path::Path::new(&format!("{}.disabled", path.display())).exists() {
+                continue; // vom Nutzer abgeschaltet – respektieren
+            }
+            if on && mc == version && path.exists() {
+                continue;
+            }
+            let _ = std::fs::remove_file(&path);
+            have.remove(slug);
+        }
+        if !on {
+            continue;
+        }
+        h.status(format!("Installiere {name} …"));
+        match mods::pick_file(client, slug, version, loader).await {
+            Ok(Some((file, url, sha1))) => match mods::download_to(client, &url, sha1.as_deref(), &mods.join(&file)).await {
+                Ok(()) => {
+                    have.insert(slug.to_string(), (version.to_string(), file));
+                    fresh.push(name);
+                }
+                Err(e) => h.log(format!("[Turbo] {name} konnte nicht geladen werden: {e:#}")),
+            },
+            Ok(None) => h.log(format!("[Turbo] {name} gibt es (noch) nicht für Minecraft {version} – übersprungen.")),
+            Err(e) => h.log(format!("[Turbo] {name}: {e:#}")),
+        }
+    }
+    if have != before {
+        let _ = std::fs::create_dir_all(&mods);
+        let _ = std::fs::write(&marker, serde_json::to_vec_pretty(&have).unwrap_or_default());
+    }
+    if !fresh.is_empty() {
+        h.log(format!("[Turbo] Leistungs-Mods installiert: {}", fresh.join(", ")));
     }
 }
 
