@@ -61,10 +61,11 @@ Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 - Spieldateien (Standard): `~/.peregrine/minecraft/`
 
 ## Logo
-Schlicht schwarz-weiß: der Anfangsbuchstabe des Titels (Standard „P“) auf einem Abzeichen –
-weiß auf dunklem Design, schwarz auf hellem. Ändert sich automatisch mit, wenn du unter
-„Aussehen“ einen anderen Titel einträgst. Das Fenster-Symbol (`assets/logo/icon.png`) wird
-mit `python assets/logo/generate.py` (braucht Pillow) erzeugt.
+Ein Wanderfalke (englisch *Peregrine*, das schnellste Tier der Welt) seitlich im Sturzflug,
+im kantigen Low-Poly-Stil in Schiefergrau mit hellen Federkanten und gelbem Schnabel.
+Er ist Fenster-/Taskleisten-Symbol und Logo in der Titelleiste; auf der Startseite lässt er
+sich unter „Aussehen › Startseite › Logo anzeigen“ zusätzlich groß einblenden. Die Dateien in
+`assets/logo/` werden mit `python assets/logo/generate.py` (braucht Pillow) erzeugt.
 
 ## Lizenzen
 Schriftart **Poppins** (SIL Open Font License, siehe `assets/fonts/OFL.txt`).

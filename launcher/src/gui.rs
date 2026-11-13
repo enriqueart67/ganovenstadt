@@ -37,6 +37,7 @@ pub struct App {
     bg_tex: Option<(String, egui::TextureHandle)>,
     bg_err: Option<(String, String)>,
     import_text: String,
+    logo: egui::TextureHandle,
 }
 
 impl App {
@@ -61,6 +62,7 @@ impl App {
             bg_tex: None,
             bg_err: None,
             import_text: String::new(),
+            logo: theme::load_logo(&cc.egui_ctx),
         };
         app.load_versions();
         app.refresh_login();
@@ -191,8 +193,8 @@ impl App {
         }
         let p = ui.painter();
         p.line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0_f32, pal.border));
-        let logo = Rect::from_center_size(pos2(r.left() + 36.0, r.center().y), vec2(26.0, 26.0));
-        theme::logo(p, pal, logo, &self.cfg.look.title);
+        let logo = Rect::from_center_size(pos2(r.left() + 36.0, r.center().y), vec2(28.0, 28.0));
+        theme::logo(p, pal, logo, &self.logo);
         let end = p.text(pos2(r.left() + 60.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.title, font(13.0, "bold"), pal.text);
         p.text(pos2(end.right() + 6.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.subtitle, font(13.0, "medium"), pal.muted);
 
@@ -339,7 +341,7 @@ impl App {
             if on_image {
                 p.rect_filled(lr.translate(vec2(0.0, 3.0)), lr.width() * 0.22, alpha(Color32::BLACK, 60));
             }
-            theme::logo(p, pal, lr, &look.title);
+            theme::logo(p, pal, lr, &self.logo);
             tx = lr.right() + 22.0;
         }
         let tr = txt(pos2(tx, y), &look.title, font(56.0, "bold"), ht);
