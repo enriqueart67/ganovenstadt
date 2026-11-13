@@ -1429,6 +1429,14 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
     // slug -> (Minecraft-Version, Dateiname)
     let mut have: BTreeMap<String, (String, String)> = std::fs::read(&marker).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default();
     let before = have.clone();
+    // Früher mitgelieferte Mods, die nicht mehr im Paket sind, wieder entfernen
+    for slug in have.keys().cloned().collect::<Vec<_>>() {
+        if !client_mods::TURBO.iter().any(|(s, _, _)| *s == slug) {
+            if let Some((_, file)) = have.remove(&slug) {
+                let _ = std::fs::remove_file(mods.join(file));
+            }
+        }
+    }
     let mut fresh = Vec::new();
     for (slug, name, _) in client_mods::TURBO {
         let current = have.get(slug).cloned();

@@ -71,13 +71,12 @@ impl Default for ClientMods {
 }
 
 /// Leistungs-Mods von Modrinth: (Slug, Name, Wirkung).
-pub const TURBO: [(&str, &str, &str); 6] = [
+pub const TURBO: [(&str, &str, &str); 5] = [
     ("sodium", "Sodium", "neuer Grafik-Motor – meist 2–4× mehr FPS"),
     ("lithium", "Lithium", "schnellere Spiel-Logik (Physik, KI, Ticks)"),
     ("ferrite-core", "FerriteCore", "weniger Arbeitsspeicher"),
     ("immediatelyfast", "ImmediatelyFast", "schnelleres Zeichnen von HUD, Text und Items"),
     ("entityculling", "Entity Culling", "verdeckte Tiere/Truhen werden nicht gezeichnet"),
-    ("moreculling", "More Culling", "verdeckte Blockseiten werden nicht gezeichnet"),
 ];
 pub const TURBO_MARKER: &str = ".peregrine-turbo.json";
 
