@@ -41,7 +41,7 @@ impl Default for Config {
         Self {
             game_dir: base_dir().join("minecraft").to_string_lossy().into_owned(),
             version: String::new(),
-            loader: "Vanilla".into(),
+            loader: "Fabric".into(),
             show_snapshots: false,
             show_releases: true,
             show_old: false,

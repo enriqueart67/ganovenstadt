@@ -243,6 +243,12 @@ impl App {
     }
 
     fn launch(&mut self, version: String, loader: String, loader_version: Option<String>, run_dir: Option<std::path::PathBuf>, profile_id: Option<String>) {
+        // Client-Mods (Mod-Menü, HUD) brauchen Fabric: bei Vanilla automatisch mit Fabric starten
+        let mut loader = loader;
+        if loader == "Vanilla" && self.cfg.client.enabled && client_mods::jar_for(&version).is_some() {
+            self.h.log("[Client-Mods] Vanilla gewählt – starte mit Fabric, damit die Client-Mods (Rechts-Shift) funktionieren.");
+            loader = "Fabric".into();
+        }
         config::save_config(&self.cfg);
         self.saved = self.cfg.clone();
         let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), self.cfg.clone(), self.repair);
