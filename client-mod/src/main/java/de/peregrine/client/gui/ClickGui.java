@@ -2,6 +2,7 @@ package de.peregrine.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import de.peregrine.client.Modules;
+import de.peregrine.client.PeregrineClient;
 import de.peregrine.client.Store;
 import de.peregrine.client.module.Category;
 import de.peregrine.client.module.HudModule;
@@ -20,15 +21,22 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-/** Das Mod-Menue im Spiel (Rechts-Shift): Kategorien, Suche, Modul-Kacheln und Einstellungen. */
+/**
+ * Das Mod-Menü im Spiel: großes Fenster mit Seitenleiste (Kategorien mit Symbolen), Suchleiste,
+ * Modul-Kacheln (Symbol, Name, Beschreibung, An/Aus-Leiste, Zahnrad) und eigener Einstellungsseite.
+ */
 public final class ClickGui extends Screen {
-    private Category category; // null = alle
+    private static Category lastCategory; // merkt sich die Kategorie zwischen dem Öffnen
+    private Category category = lastCategory; // null = alle
     private String search = "";
     private Module open;
-    private double scroll;
+    private double scroll, scrollTarget;
     private NumberSetting dragging;
     private int dragX, dragW;
+    private final long openedAt = System.currentTimeMillis();
+    private long pageAt = System.currentTimeMillis();
 
     private record Hit(int x, int y, int w, int h, Runnable action) {
         boolean in(double mx, double my) {
@@ -42,6 +50,22 @@ public final class ClickGui extends Screen {
     private final List<Hit> hits = new ArrayList<>();
     private final List<Slider> sliders = new ArrayList<>();
 
+    /** Symbole (Unicode) für Kategorien und Module. */
+    private static final Map<Category, String> CAT_ICON = Map.of(
+            Category.HUD, "▣", Category.PVP, "⚔", Category.GRAPHICS, "☀", Category.MOVEMENT, "➜", Category.OTHER, "✦");
+    private static final Map<String, String> MOD_ICON = Map.ofEntries(
+            Map.entry("fps", "⏱"), Map.entry("cps", "🖱"), Map.entry("coords", "⌖"), Map.entry("clock", "⌚"),
+            Map.entry("ping", "📶"), Map.entry("server", "🖧"), Map.entry("speed", "»"), Map.entry("days", "☼"),
+            Map.entry("memory", "▤"), Map.entry("reach", "↔"), Map.entry("combo", "✚"), Map.entry("potions", "⚗"),
+            Map.entry("armor", "⛨"), Map.entry("keystrokes", "⬆"), Map.entry("crosshair", "✛"), Map.entry("nohurtcam", "♥"),
+            Map.entry("zoom", "🔍"), Map.entry("fullbright", "☀"), Map.entry("noweather", "☂"), Map.entry("togglesprint", "➜"),
+            Map.entry("togglesneak", "⇣"), Map.entry("style", "🎨"));
+
+    // Farben (dunkel, Peregrine-Orange als Akzent)
+    private static final int BG = 0xF2101013, SIDE = 0xFF0B0B0D, CARD = 0xFF19191E, CARD_HOVER = 0xFF222229,
+            LINE = 0xFF26262E, TEXT = 0xFFF2F2F5, MUTED = 0xFF8C8C99, MUTED2 = 0xFF5E5E6A,
+            ACCENT = 0xFFFF4F00, ACCENT_DARK = 0xFF7A2A08, OFF = 0xFF2A2A32;
+
     public ClickGui() {
         super(Component.literal("Peregrine Client"));
     }
@@ -53,7 +77,42 @@ public final class ClickGui extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor g, int mx, int my, float pt) {
-        g.fill(0, 0, width, height, 0x88000000);
+        try {
+            extractBlurredBackground(g);
+        } catch (Throwable ignored) {
+            // ältere/neuere Versionen ohne Unschärfe: nur abdunkeln
+        }
+        g.fill(0, 0, width, height, alpha(0x90000000, anim()));
+    }
+
+    /** Öffnen-Animation 0..1 (weich auslaufend). */
+    private float anim() {
+        float t = Math.min(1f, (System.currentTimeMillis() - openedAt) / 180f);
+        return 1f - (1f - t) * (1f - t) * (1f - t);
+    }
+
+    private static int alpha(int argb, float f) {
+        int a = (int) (((argb >>> 24) & 0xFF) * Math.max(0f, Math.min(1f, f)));
+        return (a << 24) | (argb & 0xFFFFFF);
+    }
+
+    /** Rechteck mit abgeschrägten Ecken (wirkt abgerundet). */
+    private static void round(GuiGraphicsExtractor g, int x, int y, int w, int h, int c) {
+        g.fill(x + 1, y, x + w - 1, y + h, c);
+        g.fill(x, y + 1, x + 1, y + h - 1, c);
+        g.fill(x + w - 1, y + 1, x + w, y + h - 1, c);
+    }
+
+    private void scaled(GuiGraphicsExtractor g, String s, int x, int y, float scale, int color, boolean shadow) {
+        g.pose().pushMatrix();
+        g.pose().translate(x, y);
+        g.pose().scale(scale, scale);
+        g.text(font, s, 0, 0, color, shadow);
+        g.pose().popMatrix();
+    }
+
+    private void centered(GuiGraphicsExtractor g, String s, int cx, int y, float scale, int color) {
+        scaled(g, s, cx - (int) (font.width(s) * scale / 2f), y, scale, color, false);
     }
 
     // ------------------------------------------------------------------ Zeichnen
@@ -62,180 +121,258 @@ public final class ClickGui extends Screen {
         extractBackground(g, mx, my, pt);
         hits.clear();
         sliders.clear();
-        int W = Math.min(460, width - 24), H = Math.min(300, height - 24);
-        int x0 = (width - W) / 2, y0 = (height - H) / 2;
-        Ui.panel(g, x0, y0, W, H);
+        scroll += (scrollTarget - scroll) * 0.35;
+        if (Math.abs(scrollTarget - scroll) < 0.5) scroll = scrollTarget;
 
-        // Kopfzeile
-        g.text(font, "PEREGRINE", x0 + 10, y0 + 9, Ui.ACCENT, false);
-        g.text(font, "CLIENT", x0 + 12 + font.width("PEREGRINE"), y0 + 9, Ui.MUTED, false);
-        button(g, mx, my, x0 + W - 22, y0 + 5, 16, 16, "✕", false, this::onClose);
-        g.fill(x0, y0 + 26, x0 + W, y0 + 27, Ui.BORDER);
+        float a = anim();
+        int W = Math.min(620, width - 20), H = Math.min(370, height - 20);
+        int x0 = (width - W) / 2, y0 = (height - H) / 2 + (int) ((1f - a) * 14);
+        g.fill(x0 + 4, y0 + 6, x0 + W + 4, y0 + H + 6, alpha(0x70000000, a)); // Schatten
+        round(g, x0, y0, W, H, BG);
 
-        // Kategorien
-        int sx = x0 + 6, sy = y0 + 34;
+        // ---------- Seitenleiste
+        int sw = 128;
+        round(g, x0, y0, sw, H, SIDE);
+        g.fill(x0 + sw - 1, y0, x0 + sw, y0 + H, LINE);
+        // Logo
+        round(g, x0 + 12, y0 + 12, 22, 22, ACCENT);
+        centered(g, "P", x0 + 23, y0 + 16, 1.4f, 0xFF000000 | 0xFFFFFF);
+        g.text(font, "PEREGRINE", x0 + 40, y0 + 13, TEXT, false);
+        scaled(g, "CLIENT", x0 + 40, y0 + 24, 0.75f, ACCENT, false);
+
+        int sy = y0 + 50;
+        scaled(g, "KATEGORIEN", x0 + 14, sy, 0.7f, MUTED2, false);
+        sy += 12;
+        int by = y0 + H - 50;
+        int rowH = Math.max(14, Math.min(20, (by - 6 - sy) / 6 - 2));
         List<Category> cats = new ArrayList<>();
         cats.add(null);
         cats.addAll(List.of(Category.values()));
         for (Category c : cats) {
-            boolean sel = c == category && open == null;
-            boolean hov = Ui.in(mx, my, sx, sy, 84, 16);
-            if (sel) g.fill(sx, sy, sx + 84, sy + 16, Ui.CARD_HOVER);
-            else if (hov) g.fill(sx, sy, sx + 84, sy + 16, Ui.CARD);
-            if (sel) g.fill(sx, sy + 3, sx + 2, sy + 13, Ui.ACCENT);
-            g.text(font, c == null ? "Alle" : c.label, sx + 8, sy + 4, sel ? Ui.TEXT : Ui.MUTED, false);
-            final Category cc = c;
-            hits.add(new Hit(sx, sy, 84, 16, () -> {
-                category = cc;
+            boolean sel = c == category;
+            boolean hov = Ui.in(mx, my, x0 + 8, sy, sw - 16, rowH);
+            if (sel) round(g, x0 + 8, sy, sw - 16, rowH, CARD_HOVER);
+            else if (hov) round(g, x0 + 8, sy, sw - 16, rowH, CARD);
+            int ty = sy + (rowH - 8) / 2;
+            if (sel) g.fill(x0 + 8, sy + 3, x0 + 10, sy + rowH - 3, ACCENT);
+            String icon = c == null ? "▦" : CAT_ICON.getOrDefault(c, "•");
+            g.text(font, icon, x0 + 16, ty, sel ? ACCENT : MUTED, false);
+            g.text(font, c == null ? "Alle Module" : c.label, x0 + 30, ty, sel ? TEXT : (hov ? TEXT : MUTED), false);
+            long n = Modules.ALL.stream().filter(m -> cc(c, m)).count();
+            String cnt = String.valueOf(n);
+            scaled(g, cnt, x0 + sw - 16 - (int) (font.width(cnt) * 0.75f), ty + 1, 0.75f, MUTED2, false);
+            final Category ca = c;
+            hits.add(new Hit(x0 + 8, sy, sw - 16, rowH, () -> {
+                category = ca;
+                lastCategory = ca;
                 open = null;
-                scroll = 0;
+                scrollTarget = scroll = 0;
+                pageAt = System.currentTimeMillis();
             }));
-            sy += 18;
+            sy += rowH + 2;
         }
-        button(g, mx, my, sx, y0 + H - 44, 84, 18, "HUD bearbeiten", true, () -> Ui.open(new HudEditor(this)));
-        Ui.small(g, font, "Rechts-Shift: Menü", sx + 2, y0 + H - 20, Ui.MUTED);
-        Ui.small(g, font, "C Zoom · G Hell · V Sprint", sx + 2, y0 + H - 11, Ui.MUTED2);
-        g.fill(x0 + 96, y0 + 27, x0 + 97, y0 + H, Ui.BORDER);
+        // unten: HUD-Editor + Hinweis
+        boolean hh = Ui.in(mx, my, x0 + 10, by, sw - 20, 22);
+        round(g, x0 + 10, by, sw - 20, 22, hh ? 0xFFFF6A26 : ACCENT);
+        centered(g, "✎  HUD bearbeiten", x0 + sw / 2, by + 7, 1f, 0xFFFFFFFF);
+        hits.add(new Hit(x0 + 10, by, sw - 20, 22, () -> Ui.open(new HudEditor(this))));
+        long on = Modules.ALL.stream().filter(m -> m.enabled).count();
+        scaled(g, on + " von " + Modules.ALL.size() + " Modulen aktiv", x0 + 12, y0 + H - 20, 0.7f, MUTED, false);
 
-        int cx = x0 + 104, cy = y0 + 34, cw = W - 112, ch = H - 42;
-        if (open == null) grid(g, mx, my, cx, cy, cw, ch);
-        else settings(g, mx, my, cx, cy, cw, ch);
+        // ---------- Inhalt
+        int cx = x0 + sw + 14, cy = y0 + 12, cw = W - sw - 26, ch = H - 24;
+        // Schließen
+        boolean xh = Ui.in(mx, my, x0 + W - 22, y0 + 8, 14, 14);
+        g.text(font, "✕", x0 + W - 19, y0 + 11, xh ? ACCENT : MUTED, false);
+        hits.add(new Hit(x0 + W - 22, y0 + 8, 14, 14, this::onClose));
+
+        if (open == null) grid(g, mx, my, cx, cy, cw - 18, ch);
+        else settings(g, mx, my, cx, cy, cw - 18, ch);
+    }
+
+    private static boolean cc(Category c, Module m) {
+        return c == null || m.category == c;
     }
 
     private void grid(GuiGraphicsExtractor g, int mx, int my, int cx, int cy, int cw, int ch) {
-        // Suchfeld
-        g.fill(cx, cy, cx + cw, cy + 16, Ui.CARD);
-        Ui.border(g, cx, cy, cw, 16, Ui.BORDER);
+        // Überschrift + Suche
+        String title = category == null ? "Alle Module" : category.label;
+        scaled(g, title, cx, cy + 2, 1.5f, TEXT, false);
+        int sw = Math.min(170, cw / 2), sx = cx + cw - sw;
+        boolean sh = Ui.in(mx, my, sx, cy, sw, 18);
+        round(g, sx, cy, sw, 18, sh ? CARD_HOVER : CARD);
+        g.text(font, "⌕", sx + 6, cy + 5, MUTED, false);
         boolean blink = (System.currentTimeMillis() / 500) % 2 == 0;
-        if (search.isEmpty()) g.text(font, "Module suchen …", cx + 6, cy + 4, Ui.MUTED, false);
-        else g.text(font, search + (blink ? "_" : ""), cx + 6, cy + 4, Ui.TEXT, false);
+        if (search.isEmpty()) g.text(font, "Suchen …", sx + 18, cy + 5, MUTED2, false);
+        else g.text(font, font.plainSubstrByWidth(search, sw - 26) + (blink ? "_" : ""), sx + 18, cy + 5, TEXT, false);
 
         List<Module> list = new ArrayList<>();
         String q = search.toLowerCase();
         for (Module m : Modules.ALL) {
-            if (category != null && m.category != category) continue;
+            if (!cc(category, m)) continue;
             if (!q.isEmpty() && !m.name.toLowerCase().contains(q) && !m.description.toLowerCase().contains(q)) continue;
             list.add(m);
         }
-        int top = cy + 22, cols = 2, gap = 6, cardW = (cw - gap) / cols, cardH = 40;
+        int top = cy + 28, cols = cw >= 330 ? 3 : 2, gap = 8;
+        int cardW = (cw - gap * (cols - 1)) / cols, cardH = 82;
         int rows = (list.size() + cols - 1) / cols;
-        int maxScroll = Math.max(0, rows * (cardH + gap) - gap - (ch - 22));
-        scroll = Math.max(0, Math.min(scroll, maxScroll));
+        int maxScroll = Math.max(0, rows * (cardH + gap) - gap - (cy + ch - top));
+        scrollTarget = Math.max(0, Math.min(scrollTarget, maxScroll));
+        float page = Math.min(1f, (System.currentTimeMillis() - pageAt) / 160f);
         g.enableScissor(cx, top, cx + cw, cy + ch);
         for (int i = 0; i < list.size(); i++) {
             Module m = list.get(i);
-            int x = cx + (i % cols) * (cardW + gap), y = top + (i / cols) * (cardH + gap) - (int) scroll;
+            int x = cx + (i % cols) * (cardW + gap);
+            int y = top + (i / cols) * (cardH + gap) - (int) scroll + (int) ((1f - page) * 6);
             if (y + cardH < top || y > cy + ch) continue;
-            boolean hov = Ui.in(mx, my, x, y, cardW, cardH) && my >= top;
-            g.fill(x, y, x + cardW, y + cardH, hov ? Ui.CARD_HOVER : Ui.CARD);
-            if (m.enabled) g.fill(x, y, x + 2, y + cardH, Ui.ACCENT);
-            g.text(font, m.name, x + 8, y + 7, Ui.TEXT, false);
-            Ui.small(g, font, font.plainSubstrByWidth(m.description, (int) ((cardW - 50) / 0.75)), x + 8, y + 20, Ui.MUTED);
-            Ui.small(g, font, m.category.label, x + 8, y + 30, Ui.MUTED2);
-            Ui.toggle(g, x + cardW - 26, y + cardH - 14, m.enabled);
-            boolean hasSettings = !m.settings.isEmpty();
-            if (hasSettings) {
-                boolean gh = Ui.in(mx, my, x + cardW - 20, y + 4, 14, 14);
-                g.text(font, "⚙", x + cardW - 17, y + 6, gh ? Ui.ACCENT : Ui.MUTED, false);
+            boolean hov = Ui.in(mx, my, x, y, cardW, cardH) && my >= top && my < cy + ch;
+            round(g, x, y, cardW, cardH, hov ? CARD_HOVER : CARD);
+            if (m.enabled) {
+                g.fill(x + 1, y, x + cardW - 1, y + 1, ACCENT);
             }
-            if (y >= top - cardH) {
-                // Reihenfolge wichtig: spaeter hinzugefuegte Flaechen werden zuerst geprueft (Zahnrad vor Kachel)
-                int vy = Math.max(y, top);
-                hits.add(new Hit(x, vy, cardW, Math.max(0, y + cardH - vy), () -> {
+            // Symbol
+            int ix = x + cardW / 2 - 13, iy = y + 8;
+            round(g, ix, iy, 26, 26, m.enabled ? ACCENT_DARK : OFF);
+            centered(g, MOD_ICON.getOrDefault(m.id, "•"), x + cardW / 2, iy + 7, 1.4f, m.enabled ? 0xFFFFB38A : MUTED);
+            // Name + Beschreibung
+            centered(g, font.plainSubstrByWidth(m.name, cardW - 10), x + cardW / 2, y + 39, 1f, TEXT);
+            String d = font.plainSubstrByWidth(m.description, (int) ((cardW - 12) / 0.7f));
+            centered(g, d, x + cardW / 2, y + 51, 0.7f, MUTED);
+            // An/Aus-Leiste
+            int bx = x + 6, bw = cardW - 12 - (m.settings.isEmpty() ? 0 : 20), byy = y + cardH - 20;
+            boolean bh = Ui.in(mx, my, bx, byy, bw, 14);
+            round(g, bx, byy, bw, 14, m.enabled ? (bh ? 0xFFFF6A26 : ACCENT) : (bh ? 0xFF34343E : OFF));
+            centered(g, m.enabled ? "AKTIVIERT" : "AUS", bx + bw / 2, byy + 4, 0.75f, m.enabled ? 0xFFFFFFFF : MUTED);
+            boolean visible = y + cardH > top && y < cy + ch;
+            if (visible) {
+                hits.add(new Hit(x, Math.max(y, top), cardW, Math.max(0, Math.min(y + cardH, cy + ch) - Math.max(y, top)), () -> {
                     m.toggle();
                     Store.save();
                 }));
-                if (hasSettings && y + 4 >= top) hits.add(new Hit(x + cardW - 22, y + 2, 20, 18, () -> {
+            }
+            if (!m.settings.isEmpty()) {
+                int gx = x + cardW - 20;
+                boolean gh = Ui.in(mx, my, gx, byy, 14, 14);
+                round(g, gx, byy, 14, 14, gh ? 0xFF34343E : OFF);
+                g.text(font, "⚙", gx + 3, byy + 3, gh ? ACCENT : MUTED, false);
+                if (visible && byy >= top && byy + 14 <= cy + ch) hits.add(new Hit(gx, byy, 14, 14, () -> {
                     open = m;
-                    scroll = 0;
+                    scrollTarget = scroll = 0;
+                    pageAt = System.currentTimeMillis();
                 }));
             }
         }
         g.disableScissor();
-        if (list.isEmpty()) g.text(font, "Kein Modul gefunden.", cx + 4, top + 4, Ui.MUTED, false);
+        if (maxScroll > 0) { // Bildlaufleiste
+            int trackH = cy + ch - top, barH = Math.max(20, trackH * trackH / (trackH + maxScroll));
+            int barY = top + (int) ((trackH - barH) * (scroll / maxScroll));
+            g.fill(cx + cw + 6, top, cx + cw + 8, cy + ch, LINE);
+            g.fill(cx + cw + 6, barY, cx + cw + 8, barY + barH, MUTED2);
+        }
+        if (list.isEmpty()) centered(g, "Kein Modul gefunden.", cx + cw / 2, top + 30, 1f, MUTED);
     }
 
     private void settings(GuiGraphicsExtractor g, int mx, int my, int cx, int cy, int cw, int ch) {
         Module m = open;
-        int bw = font.width("‹ Zurück") + 12;
-        button(g, mx, my, cx, cy, bw, 16, "‹ Zurück", false, () -> {
+        float page = Math.min(1f, (System.currentTimeMillis() - pageAt) / 160f);
+        cx += (int) ((1f - page) * 10);
+        boolean bh = Ui.in(mx, my, cx, cy, 60, 18);
+        round(g, cx, cy, 60, 18, bh ? CARD_HOVER : CARD);
+        g.text(font, "‹ Zurück", cx + 8, cy + 5, bh ? TEXT : MUTED, false);
+        hits.add(new Hit(cx, cy, 60, 18, () -> {
             open = null;
-            scroll = 0;
-        });
-        int rw = font.width("Zurücksetzen") + 12;
-        button(g, mx, my, cx + cw - rw, cy, rw, 16, "Zurücksetzen", false, () -> {
+            scrollTarget = scroll = 0;
+            pageAt = System.currentTimeMillis();
+        }));
+        int rw = font.width("Zurücksetzen") + 16;
+        boolean rh = Ui.in(mx, my, cx + cw - rw, cy, rw, 18);
+        round(g, cx + cw - rw, cy, rw, 18, rh ? CARD_HOVER : CARD);
+        g.text(font, "Zurücksetzen", cx + cw - rw + 8, cy + 5, rh ? TEXT : MUTED, false);
+        hits.add(new Hit(cx + cw - rw, cy, rw, 18, () -> {
             m.reset();
             Store.save();
-        });
-        g.text(font, m.name, cx, cy + 24, Ui.TEXT, true);
-        Ui.small(g, font, m.description, cx, cy + 36, Ui.MUTED);
-        Ui.toggle(g, cx + cw - 24, cy + 25, m.enabled);
-        hits.add(new Hit(cx + cw - 30, cy + 22, 30, 14, () -> {
+        }));
+
+        // Kopf: Symbol, Name, Beschreibung, Schalter
+        int hy = cy + 28;
+        round(g, cx, hy, cw, 44, CARD);
+        round(g, cx + 8, hy + 8, 28, 28, m.enabled ? ACCENT_DARK : OFF);
+        centered(g, MOD_ICON.getOrDefault(m.id, "•"), cx + 22, hy + 16, 1.4f, m.enabled ? 0xFFFFB38A : MUTED);
+        scaled(g, m.name, cx + 44, hy + 10, 1.25f, TEXT, false);
+        scaled(g, font.plainSubstrByWidth(m.description, (int) ((cw - 120) / 0.8f)), cx + 44, hy + 26, 0.8f, MUTED, false);
+        int tx = cx + cw - 60, ty = hy + 14;
+        round(g, tx, ty, 50, 16, m.enabled ? ACCENT : OFF);
+        centered(g, m.enabled ? "AN" : "AUS", tx + 25, ty + 4, 0.85f, m.enabled ? 0xFFFFFFFF : MUTED);
+        hits.add(new Hit(tx, ty, 50, 16, () -> {
             m.toggle();
             Store.save();
         }));
-        int y = cy + 52;
-        g.fill(cx, y - 4, cx + cw, y - 3, Ui.BORDER);
-        g.enableScissor(cx, y - 2, cx + cw, cy + ch);
-        y -= (int) scroll;
+
+        int top = hy + 52;
+        int total = m.settings.size() * 26 + (m instanceof HudModule ? 20 : 0);
+        int maxScroll = Math.max(0, total - (cy + ch - top));
+        scrollTarget = Math.max(0, Math.min(scrollTarget, maxScroll));
+        g.enableScissor(cx, top, cx + cw, cy + ch);
+        int y = top - (int) scroll;
         for (Setting<?> s : m.settings) {
-            g.text(font, s.name, cx + 2, y + 5, Ui.TEXT, false);
-            int rx = cx + cw - 150;
+            boolean rowh = Ui.in(mx, my, cx, y, cw, 22) && my >= top;
+            round(g, cx, y, cw, 22, rowh ? CARD_HOVER : CARD);
+            g.text(font, s.name, cx + 10, y + 7, TEXT, false);
+            int rx = cx + cw - 160;
             if (s instanceof BoolSetting b) {
-                Ui.toggle(g, cx + cw - 24, y + 4, b.on());
-                hits.add(new Hit(cx + cw - 30, y, 30, 16, () -> {
+                int sx = cx + cw - 32;
+                round(g, sx, y + 6, 24, 10, b.on() ? ACCENT : OFF);
+                int kx = b.on() ? sx + 15 : sx + 2;
+                g.fill(kx, y + 7, kx + 7, y + 15, 0xFFFFFFFF);
+                if (y >= top) hits.add(new Hit(cx, y, cw, 22, () -> {
                     b.toggle();
                     Store.save();
                 }));
             } else if (s instanceof NumberSetting n) {
                 int sw = 110;
-                g.fill(rx, y + 7, rx + sw, y + 9, Ui.CARD_HOVER);
+                g.fill(rx, y + 10, rx + sw, y + 12, OFF);
                 int kx = rx + (int) (n.fraction() * sw);
-                g.fill(rx, y + 7, kx, y + 9, Ui.ACCENT);
-                g.fill(kx - 2, y + 3, kx + 2, y + 13, Ui.TEXT);
-                g.text(font, n.text(), rx + sw + 8, y + 5, Ui.MUTED, false);
-                sliders.add(new Slider(rx - 3, y, sw + 6, 16, n));
+                g.fill(rx, y + 10, kx, y + 12, ACCENT);
+                round(g, kx - 3, y + 6, 6, 10, 0xFFFFFFFF);
+                g.text(font, n.text(), rx + sw + 10, y + 7, MUTED, false);
+                if (y >= top) sliders.add(new Slider(rx - 3, y, sw + 6, 22, n));
             } else if (s instanceof ModeSetting md) {
                 int w = 150;
-                boolean hov = Ui.in(mx, my, rx, y, w, 16);
-                g.fill(rx, y, rx + w, y + 16, hov ? Ui.CARD_HOVER : Ui.CARD);
-                g.text(font, "‹", rx + 5, y + 4, Ui.MUTED, false);
-                g.text(font, "›", rx + w - 9, y + 4, Ui.MUTED, false);
-                g.text(font, md.get(), rx + (w - font.width(md.get())) / 2, y + 4, Ui.TEXT, false);
-                hits.add(new Hit(rx, y, w / 2, 16, () -> {
-                    md.cycle(-1);
-                    Store.save();
-                }));
-                hits.add(new Hit(rx + w / 2, y, w - w / 2, 16, () -> {
-                    md.cycle(1);
-                    Store.save();
-                }));
-            } else if (s instanceof ColorSetting c) {
-                int px = rx - 30;
-                for (int col : ColorSetting.PALETTE) {
-                    if (col == c.argb()) g.fill(px - 1, y + 1, px + 12, y + 14, Ui.TEXT);
-                    g.fill(px, y + 2, px + 11, y + 13, col);
-                    final int cc = col;
-                    hits.add(new Hit(px, y + 2, 11, 11, () -> {
-                        c.set(cc);
+                boolean hov = Ui.in(mx, my, rx, y + 3, w, 16);
+                round(g, rx, y + 3, w, 16, hov ? 0xFF34343E : OFF);
+                g.text(font, "‹", rx + 6, y + 7, MUTED, false);
+                g.text(font, "›", rx + w - 10, y + 7, MUTED, false);
+                g.text(font, md.get(), rx + (w - font.width(md.get())) / 2, y + 7, TEXT, false);
+                if (y >= top) {
+                    hits.add(new Hit(rx, y + 3, w / 2, 16, () -> {
+                        md.cycle(-1);
                         Store.save();
                     }));
-                    px += 15;
+                    hits.add(new Hit(rx + w / 2, y + 3, w - w / 2, 16, () -> {
+                        md.cycle(1);
+                        Store.save();
+                    }));
+                }
+            } else if (s instanceof ColorSetting c) {
+                int px = cx + cw - 10 - ColorSetting.PALETTE.length * 14;
+                for (int col : ColorSetting.PALETTE) {
+                    if (col == c.argb()) round(g, px - 1, y + 4, 13, 14, 0xFFFFFFFF);
+                    g.fill(px, y + 5, px + 11, y + 17, col);
+                    final int ccol = col;
+                    if (y >= top) hits.add(new Hit(px, y + 5, 11, 12, () -> {
+                        c.set(ccol);
+                        Store.save();
+                    }));
+                    px += 14;
                 }
             }
-            y += 22;
+            y += 26;
         }
         if (m instanceof HudModule) {
-            Ui.small(g, font, "Position: oben auf „HUD bearbeiten“ klicken und die Anzeige mit der Maus verschieben.", cx + 2, y + 4, Ui.MUTED);
+            scaled(g, "Position: links auf „HUD bearbeiten“ klicken.", cx + 2, y + 4, 0.75f, MUTED, false);
         }
+        if (m.settings.isEmpty()) centered(g, "Dieses Modul hat keine Einstellungen.", cx + cw / 2, top + 10, 1f, MUTED);
         g.disableScissor();
-    }
-
-    private void button(GuiGraphicsExtractor g, int mx, int my, int x, int y, int w, int h, String label, boolean accent, Runnable action) {
-        boolean hov = Ui.in(mx, my, x, y, w, h);
-        g.fill(x, y, x + w, y + h, accent ? (hov ? Ui.ACCENT_HOVER : Ui.ACCENT) : (hov ? Ui.CARD_HOVER : Ui.CARD));
-        g.text(font, label, x + (w - font.width(label)) / 2, y + (h - 8) / 2, Ui.TEXT, false);
-        hits.add(new Hit(x, y, w, h, action));
     }
 
     // ------------------------------------------------------------------ Eingaben
@@ -252,12 +389,12 @@ public final class ClickGui extends Screen {
                     return true;
                 }
             }
-        }
-        for (int i = hits.size() - 1; i >= 0; i--) {
-            Hit h = hits.get(i);
-            if (h.in(mx, my)) {
-                h.action().run();
-                return true;
+            for (int i = hits.size() - 1; i >= 0; i--) {
+                Hit h = hits.get(i);
+                if (h.in(mx, my)) {
+                    h.action().run();
+                    return true;
+                }
             }
         }
         return super.mouseClicked(e, doubleClick);
@@ -284,7 +421,7 @@ public final class ClickGui extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double sx, double sy) {
-        scroll = Math.max(0, scroll - sy * 20);
+        scrollTarget = Math.max(0, scrollTarget - sy * 30);
         return true;
     }
 
@@ -293,16 +430,18 @@ public final class ClickGui extends Screen {
         int k = e.key();
         if (k == InputConstants.KEY_ESCAPE && open != null) {
             open = null;
-            scroll = 0;
+            scrollTarget = scroll = 0;
+            pageAt = System.currentTimeMillis();
             return true;
         }
-        if (k == InputConstants.KEY_RSHIFT) {
+        // Menü-Taste (frei belegbar) schließt das Menü wieder – nicht, während man sucht und sie ein Buchstabe ist
+        if (PeregrineClient.isMenuKey(e) && (search.isEmpty() || !Character.isLetterOrDigit(k))) {
             onClose();
             return true;
         }
         if (k == InputConstants.KEY_BACKSPACE && open == null && !search.isEmpty()) {
             search = search.substring(0, search.length() - 1);
-            scroll = 0;
+            scrollTarget = scroll = 0;
             return true;
         }
         return super.keyPressed(e);
@@ -312,7 +451,7 @@ public final class ClickGui extends Screen {
     public boolean charTyped(CharacterEvent e) {
         if (open == null && e.isAllowedChatCharacter() && search.length() < 24) {
             search += e.codepointAsString();
-            scroll = 0;
+            scrollTarget = scroll = 0;
             return true;
         }
         return super.charTyped(e);

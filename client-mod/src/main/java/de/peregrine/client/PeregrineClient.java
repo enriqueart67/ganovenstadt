@@ -67,6 +67,11 @@ public final class PeregrineClient implements ClientModInitializer {
         LOG.info("Peregrine Client geladen – Menü mit Rechts-Shift");
     }
 
+    /** Ist das die (frei belegbare) Taste für das Mod-Menü? */
+    public static boolean isMenuKey(net.minecraft.client.input.KeyEvent e) {
+        return menuKey != null && menuKey.matches(e);
+    }
+
     private static void onTick(Minecraft mc) {
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
         Zoom.setHeld(zoomKey.isDown());
@@ -78,6 +83,6 @@ public final class PeregrineClient implements ClientModInitializer {
     private static void toggle(Minecraft mc, Module m) {
         m.toggle();
         Store.save();
-        if (mc.player != null) mc.player.sendOverlayMessage(Component.literal("§9[Peregrine]§r " + m.name + ": " + (m.enabled ? "§aan" : "§caus")));
+        if (mc.player != null) mc.player.sendOverlayMessage(Component.literal("§6[Peregrine]§r " + m.name + ": " + (m.enabled ? "§aan" : "§caus")));
     }
 }
