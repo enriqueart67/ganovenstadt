@@ -1,8 +1,6 @@
 # Peregrine Client – Minecraft-Launcher (Rust)
 
-Ein schneller Minecraft-Launcher, geschrieben in **Rust**, mit modernem Design:
-rahmenloses Fenster, Seitenleiste, animierte Block-Landschaft (komplett im Code gezeichnet),
-Verlaufs-Buttons und Karten-Einstellungen.
+Ein schneller Minecraft-Launcher, geschrieben in **Rust** – mit cleanem Design, das du komplett anpassen kannst.
 
 ## Warum ist er schnell?
 - **Startet sofort**: eine einzige kleine Programmdatei (~10 MB), kein Python, kein Java, kein Electron.
@@ -13,6 +11,15 @@ Verlaufs-Buttons und Karten-Einstellungen.
   werden alle Dateien einmal per Prüfsumme kontrolliert.)
 - **Optimierte Java-Einstellungen** (G1-Garbage-Collector wie im offiziellen Launcher)
   für weniger Ruckler.
+
+## Aussehen anpassen (Seite „Aussehen“)
+- **Farbschemas**: Graphit, OLED, Mitternacht, Hell – oder jede einzelne Farbe selbst wählen
+- **Akzentfarbe** aus Vorlagen oder per Farbwähler, optional mit Farbverlauf und Leuchteffekt
+- **Hintergrund**: Block-Landschaft (Abend/Tag/Nacht), Verlauf, Einfarbig oder **eigenes Bild**
+  (einfach ins Fenster ziehen), mit regelbarer Abdunklung
+- **Eckenrundung**, **Oberflächen-Größe**, **Schriftart**, Animationen an/aus
+- **Startseite**: Titel, Untertitel und Slogan frei wählbar, Elemente ein-/ausblenden
+- **Design teilen**: als Code kopieren und bei Freunden einfügen; Zurücksetzen mit einem Klick
 
 ## Funktionen
 - Alle Minecraft-Versionen (Releases, optional Snapshots), auch uralte

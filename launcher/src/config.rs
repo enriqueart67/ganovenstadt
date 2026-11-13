@@ -25,6 +25,7 @@ pub struct Config {
     pub client_id: String,
     pub redirect_uri: String,
     pub close_on_launch: bool,
+    pub look: crate::theme::Look,
 }
 
 impl Default for Config {
@@ -42,6 +43,7 @@ impl Default for Config {
             client_id: String::new(),
             redirect_uri: "http://localhost:8765/callback".into(),
             close_on_launch: false,
+            look: Default::default(),
         }
     }
 }
