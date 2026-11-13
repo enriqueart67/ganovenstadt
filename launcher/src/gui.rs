@@ -139,22 +139,50 @@ impl App {
         s.prism_account = acc;
     }
 
+    /// Prism nur zum Anmelden öffnen – fehlt Prism, lädt Peregrine es vorher selbst herunter.
     fn open_prism(&mut self) {
         self.prism_check = None;
         self.refresh_prism();
-        match self.h.lock().prism.clone() {
-            Some(p) => match prism::open(&p) {
-                Ok(()) => self.h.log("[Prism] Prism Launcher geöffnet – dort einmal mit Microsoft anmelden, dann Prism schließen."),
-                Err(e) => self.h.error(format!("{e:#}")),
-            },
-            None => {
-                self.h.error(format!(
-                    "Prism Launcher wurde nicht gefunden. Installiere ihn von {} (der Browser wird geöffnet) oder trage unter Einstellungen › Start über Prism den Pfad zu prismlauncher.exe ein.",
-                    prism::DOWNLOAD_URL
-                ));
-                let _ = open::that(prism::DOWNLOAD_URL);
-            }
+        if self.h.lock().busy {
+            return;
         }
+        let found = self.h.lock().prism.clone();
+        if found.is_none() && !prism::can_install() {
+            self.h.error(format!(
+                "Prism Launcher wurde nicht gefunden. Installiere ihn von {} (der Browser wird geöffnet) oder trage unter Einstellungen › Start über Prism den Pfad ein.",
+                prism::DOWNLOAD_URL
+            ));
+            let _ = open::that(prism::DOWNLOAD_URL);
+            return;
+        }
+        let h = self.h.clone();
+        h.set_busy(true);
+        self.rt.spawn(async move {
+            let res = async {
+                let p = match found {
+                    Some(p) => p,
+                    None => {
+                        let p = prism::install(&h).await?;
+                        h.log("[Prism] Prism Launcher installiert (nur für die Anmeldung und den Spielstart).");
+                        p
+                    }
+                };
+                h.status("Warte auf Anmeldung …");
+                let hh = h.clone();
+                prism::login(&p, h.clone(), move |name| {
+                    hh.lock().prism_account = name.clone();
+                    hh.status(if name.is_some() { "Bereit." } else { "Nicht angemeldet." });
+                    hh.set_busy(false);
+                })?;
+                anyhow::Ok(())
+            }
+            .await;
+            if let Err(e) = res {
+                h.progress(0, 0);
+                h.set_busy(false);
+                h.error(format!("{e:#}"));
+            }
+        });
     }
 
     fn login(&mut self) {
@@ -226,15 +254,11 @@ impl App {
                 let s = h.lock();
                 (s.prism.clone(), s.prism_account.clone())
             };
-            let Some(pr) = found else {
+            let (Some(pr), true) = (found, acc.is_some()) else {
+                h.log("[Launcher] Noch nicht angemeldet – Anmeldefenster wird geöffnet. Danach noch einmal auf Spielen klicken.");
                 self.open_prism();
                 return;
             };
-            if acc.is_none() {
-                self.open_prism();
-                h.error("Du bist im Prism Launcher noch nicht angemeldet. Prism wurde geöffnet: oben rechts auf „Konten“ › „Konten verwalten“ › „Microsoft hinzufügen“, anmelden, Prism schließen – dann hier wieder auf Spielen.");
-                return;
-            }
             let label = match &profile_id {
                 Some(pid) => self.prof.list.iter().find(|p| &p.id == pid).map(|p| p.name.clone()).unwrap_or_default(),
                 None => String::new(),
@@ -421,7 +445,7 @@ impl App {
         } else if prism_acc.is_some() {
             "Angemeldet über den Prism Launcher – klicken, um Prism zu öffnen (Konto wechseln)"
         } else if self.cfg.use_prism && self.cfg.client_id.is_empty() {
-            "Prism Launcher öffnen und dort einmal mit Microsoft anmelden"
+            "Mit Microsoft anmelden (Anmeldefenster von Prism, schließt sich danach von selbst)"
         } else {
             "Mit Microsoft anmelden"
         });
@@ -664,7 +688,7 @@ impl App {
         p.text(pos2(area.left() + 62.0, sy), Align2::LEFT_CENTER, line, font(13.0, "medium"), col);
         if account.is_none() && prism_acc.is_none() {
             let hint = if self.cfg.use_prism {
-                "NOCH NICHT ANGEMELDET — OBEN RECHTS KLICKEN, UM PRISM ZU ÖFFNEN"
+                "NOCH NICHT ANGEMELDET — OBEN RECHTS AUF ANMELDEN KLICKEN"
             } else {
                 "DEMO-MODUS — FÜR DIE VOLLVERSION OBEN RECHTS ANMELDEN"
             };
@@ -1076,12 +1100,13 @@ impl App {
                     (s.prism.clone(), s.prism_account.clone())
                 };
                 card(ui, pal, "Start über Prism Launcher", |ui| {
-                    ui.label(RichText::new("Solange du hier nicht direkt mit Microsoft angemeldet bist, startet Peregrine das Spiel im Hintergrund über den Prism Launcher – mit dem Konto, mit dem du dich dort einmal angemeldet hast. Profile, Mods und Client-Mods bleiben in Peregrine.").color(pal.muted).size(12.5));
+                    ui.label(RichText::new("Die Anmeldung und der Spielstart laufen über den Prism Launcher. Peregrine lädt ihn beim ersten Anmelden selbst herunter, öffnet ihn nur für die Anmeldung und schließt ihn danach wieder. Profile, Mods und Client-Mods bleiben in Peregrine.").color(pal.muted).size(12.5));
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut c.use_prism);
                         ui.label("Über Prism Launcher starten");
                     });
                     let (txt, col) = match (&prism_found, &prism_acc) {
+                        (None, _) if prism::can_install() => ("Prism wird beim ersten Anmelden automatisch geladen".to_string(), WARN),
                         (None, _) => ("Prism nicht gefunden".to_string(), BAD),
                         (Some(_), None) => ("Prism gefunden – noch nicht angemeldet".to_string(), WARN),
                         (Some(_), Some(n)) => (format!("Angemeldet als {n}"), GOOD),
@@ -1092,11 +1117,11 @@ impl App {
                     }
                     field(ui, pal, "Pfad zu prismlauncher.exe (leer = automatisch suchen)", &mut c.prism_path, "automatisch");
                     ui.horizontal(|ui| {
-                        if prism_found.is_none() {
+                        if prism_found.is_none() && !prism::can_install() {
                             if ui.button("Prism herunterladen").clicked() {
                                 let _ = open::that(prism::DOWNLOAD_URL);
                             }
-                        } else if ui.button(if prism_acc.is_some() { "Prism öffnen (Konto wechseln)" } else { "Prism öffnen und anmelden" }).clicked() {
+                        } else if ui.button(if prism_acc.is_some() { "Konto wechseln" } else { "Jetzt anmelden" }).clicked() {
                             open_prism = true;
                         }
                     });

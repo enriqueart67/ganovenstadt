@@ -12,10 +12,23 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
-use crate::config::Config;
+use crate::config::{base_dir, Config};
 use crate::state::Ui;
 
 pub const DOWNLOAD_URL: &str = "https://prismlauncher.org/download/";
+const RELEASE_API: &str = "https://api.github.com/repos/PrismLauncher/PrismLauncher/releases/latest";
+/// Fallback, falls die GitHub-API nicht erreichbar ist (Rate-Limit o. Ä.).
+const FALLBACK_TAG: &str = "9.4";
+
+/// Ordner, in den Peregrine Prism selbst installiert (portable, nur für Peregrine).
+pub fn bundled_dir() -> PathBuf {
+    base_dir().join("prism")
+}
+
+/// Kann Peregrine Prism auf diesem System selbst herunterladen?
+pub fn can_install() -> bool {
+    cfg!(windows)
+}
 
 /// Gefundene Prism-Installation.
 #[derive(Clone, Debug, PartialEq)]
@@ -54,6 +67,9 @@ pub fn find(custom: &str) -> Option<Prism> {
             exes.push(p);
         }
     } else {
+        let b = bundled_dir();
+        exes.extend(exe_names().iter().map(|n| b.join(n)));
+        exes.push(b.join("bin").join("prismlauncher"));
         exes.extend(default_exes());
     }
     let exe = exes.into_iter().find(|p| p.is_file())?;
@@ -131,9 +147,131 @@ pub fn account_name(p: &Prism) -> Option<String> {
     pick["profile"]["name"].as_str().filter(|n| !n.is_empty()).map(String::from)
 }
 
-/// Öffnet Prism normal (z. B. zum Anmelden).
-pub fn open(p: &Prism) -> Result<()> {
-    command(p).spawn().with_context(|| format!("Prism konnte nicht gestartet werden: {}", p.exe.display()))?;
+fn accounts_stamp(p: &Prism) -> Option<SystemTime> {
+    std::fs::metadata(p.data.join("accounts.json")).and_then(|m| m.modified()).ok()
+}
+
+/// Öffnet Prism nur zum Anmelden: sobald dort ein Konto hinzugefügt wurde, schließt Peregrine Prism
+/// wieder. `on_done` bekommt den Kontonamen (oder `None`, wenn Prism ohne Anmeldung geschlossen wurde).
+pub fn login(p: &Prism, ui: Ui, on_done: impl FnOnce(Option<String>) + Send + 'static) -> Result<()> {
+    let before = accounts_stamp(p);
+    let had = account_name(p);
+    let mut child = command(p).spawn().with_context(|| format!("Prism konnte nicht gestartet werden: {}", p.exe.display()))?;
+    ui.log("[Prism] Anmeldefenster geöffnet: „Konten“ › „Konten verwalten“ › „Microsoft hinzufügen“. Danach schließt es sich von selbst.");
+    let p = p.clone();
+    std::thread::spawn(move || {
+        let t0 = Instant::now();
+        loop {
+            std::thread::sleep(Duration::from_millis(800));
+            if let Ok(Some(_)) = child.try_wait() {
+                on_done(account_name(&p));
+                return;
+            }
+            let changed = accounts_stamp(&p) != before;
+            if changed {
+                if let Some(name) = account_name(&p) {
+                    // Beim Kontowechsel erst schließen, wenn ein anderes Konto aktiv ist
+                    // (Prism schreibt die Datei beim Start auch zum Erneuern der Sitzung).
+                    if had.as_deref() != Some(name.as_str()) {
+                        // Prism kurz fertig speichern lassen, dann schließen
+                        std::thread::sleep(Duration::from_millis(1500));
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        ui.log(format!("[Prism] Angemeldet als {name} – Prism wurde geschlossen."));
+                        on_done(Some(name));
+                        return;
+                    }
+                }
+            }
+            if t0.elapsed() > Duration::from_secs(3600) {
+                on_done(account_name(&p));
+                return;
+            }
+        }
+    });
+    Ok(())
+}
+
+/// Lädt den Prism Launcher (portable) von GitHub und entpackt ihn nach `bundled_dir()`.
+pub async fn install(ui: &Ui) -> Result<Prism> {
+    if !can_install() {
+        bail!("Bitte installiere den Prism Launcher von {DOWNLOAD_URL}");
+    }
+    let client = reqwest::Client::builder()
+        .user_agent(concat!("peregrine/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(Duration::from_secs(15))
+        .build()?;
+    ui.status("Suche Prism Launcher …");
+    let arm = std::env::consts::ARCH == "aarch64";
+    let pick = |name: &str| {
+        let n = name.to_lowercase();
+        n.ends_with(".zip") && n.contains("portable") && n.contains("windows") && if arm { n.contains("arm64") } else { n.contains("mingw") && !n.contains("arm64") }
+    };
+    let mut url = None;
+    if let Ok(r) = client.get(RELEASE_API).header("Accept", "application/vnd.github+json").send().await {
+        if let Ok(v) = r.json::<Value>().await {
+            url = v["assets"].as_array().into_iter().flatten().find(|a| pick(a["name"].as_str().unwrap_or(""))).and_then(|a| a["browser_download_url"].as_str()).map(String::from);
+        }
+    }
+    let url = url.unwrap_or_else(|| {
+        let kind = if arm { "MSVC-arm64" } else { "MinGW-w64" };
+        format!("https://github.com/PrismLauncher/PrismLauncher/releases/download/{FALLBACK_TAG}/PrismLauncher-Windows-{kind}-Portable-{FALLBACK_TAG}.zip")
+    });
+    ui.log(format!("[Prism] Lade Prism Launcher: {url}"));
+    ui.status("Lade Prism Launcher …");
+    let mut resp = client.get(&url).send().await?.error_for_status()?;
+    let total = resp.content_length().unwrap_or(0) as usize;
+    let mut data = Vec::with_capacity(total);
+    ui.progress(0, total.max(1));
+    while let Some(chunk) = resp.chunk().await? {
+        data.extend_from_slice(&chunk);
+        ui.progress(data.len().min(total.max(data.len())), total.max(data.len()));
+    }
+    ui.status("Entpacke Prism Launcher …");
+    let dest = bundled_dir();
+    let tmp = dest.with_extension("tmp");
+    let _ = std::fs::remove_dir_all(&tmp);
+    extract_zip(&data, &tmp)?;
+    // Eine einzelne Ordnerebene im Archiv überspringen
+    let mut root = tmp.clone();
+    if !root.join("prismlauncher.exe").exists() {
+        if let Some(sub) = std::fs::read_dir(&tmp)?.flatten().map(|e| e.path()).find(|p| p.join("prismlauncher.exe").exists()) {
+            root = sub;
+        }
+    }
+    std::fs::write(root.join("portable.txt"), "")?;
+    // Daten (Konto, Instanzen) aus einer früheren Installation behalten
+    if dest.exists() {
+        for keep in ["accounts.json", "prismlauncher.cfg", "instances", "meta", "libraries", "assets", "java"] {
+            let from = dest.join(keep);
+            if from.exists() && !root.join(keep).exists() {
+                let _ = std::fs::rename(&from, root.join(keep));
+            }
+        }
+        std::fs::remove_dir_all(&dest)?;
+    }
+    std::fs::rename(&root, &dest)?;
+    let _ = std::fs::remove_dir_all(&tmp);
+    ui.progress(0, 0);
+    find("").filter(|p| p.exe.starts_with(&dest)).context("Prism wurde entpackt, aber prismlauncher.exe fehlt")
+}
+
+fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(data)).context("Prism-Archiv ist beschädigt")?;
+    for i in 0..zip.len() {
+        let mut e = zip.by_index(i)?;
+        let Some(rel) = e.enclosed_name() else { continue };
+        let out = dest.join(rel);
+        if e.is_dir() {
+            std::fs::create_dir_all(&out)?;
+            continue;
+        }
+        if let Some(d) = out.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        let mut f = std::fs::File::create(&out)?;
+        std::io::copy(&mut e, &mut f)?;
+    }
     Ok(())
 }
 
@@ -364,6 +502,26 @@ mod tests {
         assert!(s.contains("JavaPath=\"C:\\\\java\\\\bin\\\\javaw.exe\""));
         assert!(s.contains("ShowConsole=false"));
         assert_eq!(ini_value("[General]\nInstanceDir=\"D:/mc\"\n", "InstanceDir").as_deref(), Some("D:/mc"));
+    }
+
+    #[test]
+    fn zip_extract() {
+        use std::io::Write;
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut z = zip::ZipWriter::new(&mut buf);
+            let o = zip::write::SimpleFileOptions::default();
+            z.start_file("prismlauncher.exe", o).unwrap();
+            z.write_all(b"x").unwrap();
+            z.start_file("platforms/qwindows.dll", o).unwrap();
+            z.write_all(b"y").unwrap();
+            z.finish().unwrap();
+        }
+        let tmp = std::env::temp_dir().join(format!("peregrine-zip-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        extract_zip(buf.get_ref(), &tmp).unwrap();
+        assert!(tmp.join("prismlauncher.exe").exists() && tmp.join("platforms/qwindows.dll").exists());
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
