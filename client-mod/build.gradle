@@ -21,6 +21,9 @@ dependencies {
 // "26.1.2" -> "26.1": das Mod-Jar passt fuer die ganze Versionsreihe (26.1, 26.1.1, 26.1.2 …)
 def mcSeries = project.minecraft_version.tokenize('.').take(2).join('.')
 
+// Versionsabhaengige Quellen: ab 26.3 heisst die Grafik-Bibliothek "renderpearl" statt "blaze3d"
+sourceSets.main.java.srcDirs += (mcSeries == '26.1' || mcSeries == '26.2') ? 'src/blaze3d/java' : 'src/renderpearl/java'
+
 processResources {
     inputs.property 'version', project.version
     inputs.property 'mc_series', mcSeries

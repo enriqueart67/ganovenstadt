@@ -161,6 +161,8 @@ pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool
     if detach {
         return Ok(());
     }
+    ui.lock().starting_since = Some(std::time::Instant::now());
+    ui.repaint();
     let readers: Vec<Box<dyn std::io::Read + Send>> = vec![
         Box::new(child.stdout.take().unwrap()),
         Box::new(child.stderr.take().unwrap()),
@@ -169,12 +171,17 @@ pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool
         let ui = ui.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(r).lines().map_while(Result::ok) {
+                // Spielfenster ist da, sobald Minecraft die Grafik startet bzw. Ressourcen laedt
+                if line.contains("Backend library") || line.contains("Reloading ResourceManager") {
+                    ui.lock().starting_since = None;
+                }
                 ui.log(line);
             }
         });
     }
     std::thread::spawn(move || {
         let code = child.wait().map(|s| s.to_string()).unwrap_or_default();
+        ui.lock().starting_since = None;
         ui.log(format!("[Launcher] Spiel beendet ({code})"));
         ui.status("Bereit.");
     });

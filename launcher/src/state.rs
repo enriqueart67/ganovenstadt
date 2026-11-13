@@ -16,6 +16,8 @@ pub struct Shared {
     pub account: Option<Account>,
     pub error: Option<String>,
     pub quit: bool,
+    /// Seit wann Minecraft startet (bis das Spielfenster da ist).
+    pub starting_since: Option<std::time::Instant>,
 }
 
 #[derive(Clone)]

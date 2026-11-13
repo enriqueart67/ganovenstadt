@@ -551,15 +551,30 @@ impl App {
         let p = ui.painter();
         let ink = pal.text;
         let paper = pal.bg;
-        if busy {
+        let starting = self.h.lock().starting_since.filter(|t| t.elapsed().as_secs() < 120).is_some();
+        if busy || starting {
             p.rect_filled(play, pal.r, pal.surface2);
-            let f = if total > 0 { done as f32 / total as f32 } else { 0.0 };
+            let f = if total > 0 && busy { done as f32 / total as f32 } else { 0.0 };
             if f > 0.0 {
                 p.rect_filled(Rect::from_min_size(play.min, vec2(play.width() * f, play.height())), pal.r, pal.accent);
+            } else {
+                // unbestimmt: oranges Stueck gleitet hin und her
+                let tt = (ui.input(|i| i.time) % 1.6) / 1.6;
+                let pos = (0.5 - 0.5 * (tt * std::f64::consts::TAU).cos()) as f32;
+                let seg = play.width() * 0.22;
+                let x0 = play.left() + (play.width() - seg) * pos;
+                p.rect_filled(Rect::from_min_max(pos2(x0, play.bottom() - 4.0), pos2(x0 + seg, play.bottom())), 0.0, pal.accent);
             }
-            let txt = if total > 0 { format!("LÄDT  {:.0} %", f * 100.0) } else { "STARTET …".into() };
+            let txt = if total > 0 && busy {
+                format!("LÄDT  {:.0} %", f * 100.0)
+            } else if starting && !busy {
+                "MINECRAFT STARTET".into()
+            } else {
+                "VORBEREITEN …".into()
+            };
             p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, txt, font(30.0, "display"), if f > 0.15 { Color32::WHITE } else { pal.text });
-            p.text(pos2(play.right() - 28.0, play.center().y), Align2::RIGHT_CENTER, format!("{done} / {total}"), font(12.0, "mono"), if f > 0.9 { Color32::WHITE } else { pal.muted });
+            let right_txt = if total > 0 && busy { format!("{done} / {total}") } else if starting && !busy { "FENSTER ÖFFNET SICH …".into() } else { status.to_uppercase() };
+            p.text(pos2(play.right() - 28.0, play.center().y), Align2::RIGHT_CENTER, right_txt, font(12.0, "mono"), if f > 0.9 { Color32::WHITE } else { pal.muted });
         } else {
             let fill = theme::lerp_color(ink, pal.accent, hov);
             p.rect_filled(play, pal.r, fill);
@@ -1159,6 +1174,35 @@ impl eframe::App for App {
             }
         });
 
+        // Start-Animation des Launchers (Splash), blendet nach dem Laden aus
+        let el = self.started.elapsed().as_secs_f32();
+        let loaded = !self.h.lock().versions.is_empty();
+        let hold = if loaded { 0.9_f32 } else { 3.0 };
+        if el < hold + 0.35 {
+            let a = if el < hold { 1.0 } else { 1.0 - (el - hold) / 0.35 };
+            let screen = ctx.screen_rect();
+            egui::Area::new(Id::new("splash")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
+                ui.allocate_rect(screen, Sense::click());
+                let p = ui.painter();
+                let al = |c: Color32| alpha(c, (a.clamp(0.0, 1.0) * c.a() as f32) as u8);
+                p.rect_filled(screen, 0.0, al(pal.bg));
+                let c = screen.center();
+                let logo = Rect::from_center_size(pos2(c.x, c.y - 92.0), vec2(64.0, 64.0));
+                if a > 0.99 {
+                    theme::logo(p, &pal, logo, &self.logo);
+                }
+                let tr = p.text(pos2(c.x, c.y - 10.0), Align2::CENTER_CENTER, self.cfg.look.title.to_uppercase(), font(64.0, "display"), al(pal.text));
+                p.rect_filled(Rect::from_min_size(pos2(tr.right() + 8.0, tr.top() + 12.0), vec2(10.0, 10.0)), 0.0, al(pal.accent));
+                p.text(pos2(c.x, tr.bottom() + 6.0), Align2::CENTER_TOP, self.cfg.look.subtitle.to_uppercase(), font(12.0, "monom"), al(pal.muted));
+                let bar = Rect::from_center_size(pos2(c.x, tr.bottom() + 54.0), vec2(220.0, 2.0));
+                p.rect_filled(bar, 0.0, al(pal.border));
+                let f = (el / hold).min(1.0);
+                let f = 1.0 - (1.0 - f).powi(3);
+                p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * f, 2.0)), 0.0, al(pal.accent));
+            });
+            ctx.request_repaint();
+        }
+
         if let Some(err) = error {
             let screen = ctx.screen_rect();
             egui::Area::new(Id::new("dim")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
@@ -1199,7 +1243,7 @@ impl eframe::App for App {
             config::save_config(&self.cfg);
             self.saved = self.cfg.clone();
         }
-        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landschaft") || busy || self.prof.busy() {
+        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landschaft") || busy || self.prof.busy() || self.h.lock().starting_since.is_some() {
             ctx.request_repaint_after(Duration::from_millis(33));
         }
     }

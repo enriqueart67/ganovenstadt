@@ -7,7 +7,12 @@
     "MouseHandlerMixin",
     "OptionInstanceAccessor",
     "GameRendererMixin",
-    "LevelMixin"
+    "LevelMixin",
+    "LoadingOverlayMixin",
+    "ScreenBackgroundMixin",
+    "LevelLoadingScreenMixin",
+    "GenericMessageScreenMixin",
+    "LoadingLogoMixin"
   ],
   "injectors": {
     "defaultRequire": 1

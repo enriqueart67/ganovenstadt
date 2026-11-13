@@ -34,6 +34,7 @@ Mod-Menü im Spiel → eigenes Design „Papier/Nacht“.
 | **Modrinth** (nur Modrinth, CurseForge wurde entfernt) | Entdecken & Installieren von **Mods** (mit Abhängigkeiten), **Ressourcenpaketen**, **Shadern** (Iris wird automatisch mitinstalliert), **Datenpaketen** (Welt wählbar), **Modpacks** (.mrpack → neues Profil, gepinnte Loader-Version, Overrides, Titel/Icons per Hash-Lookup). Ein-/Ausschalten (`.disabled`), Entfernen. |
 | **Client-Mods** | Legt die passende Peregrine-Mod (26.1/26.2/26.3) vor dem Start in Fabric/Quilt-Profile, installiert fehlende Fabric API. Einstellungen macht man **im Spiel** (Rechts-Shift) – der Launcher schreibt die Mod-Config **nicht**. |
 | **Design** | Eigenes Peregrine-Design (siehe 2.2), komplett anpassbar unter „Aussehen“ (Farbschemas, Akzentfarbe, eigene Farben, Hintergrund-Bild/Landschaft, Schrift, Größe, Texte, Export/Import als Code). |
+| **Lade-Animationen** | Splash beim Öffnen des Launchers (Falke, Schriftzug, oranger Balken); Spielen-Leiste mit laufendem Balken (Vorbereiten), Prozent (Download) und „MINECRAFT STARTET“ bis das Spielfenster da ist (`Shared.starting_since`, erkannt an Log-Zeilen). |
 | **Sonstiges** | Konsole mit Spiel-Log, Einstellungen (RAM, JVM-Args, Spielordner, Fenstergröße, Java-Pfad), rahmenloses Fenster, Falken-Icon auch in der Windows-`.exe`. |
 
 ### 2.2 Design „Papier/Nacht“ (aktueller Stand)
@@ -86,6 +87,7 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
 - **22 Module:** FPS, CPS, Koordinaten, Keystrokes, Rüstung, Trank-Effekte, Uhrzeit, Ping, Server-Adresse, Geschwindigkeit, Tageszähler, Arbeitsspeicher, Reichweite, Combo-Zähler · Fadenkreuz, Kein Schadens-Wackeln · Zoom (C), Fullbright (G), Kein Regen · Auto-Sprint (V), Schleichen umschalten · HUD-Stil.
 - Speichert in `config/peregrine-client.json` des Profils (`format: 2`, pro Modul `enabled`, `placed`, `x`, `y`, `settings`).
 - Wichtige Klassen: `PeregrineClient` (Init, Tasten, HUD), `Modules` (alle Module), `module/*` (Basis), `setting/*`, `gui/ClickGui`, `gui/HudEditor`, `gui/Ui` (öffnet Screens per Reflection: 26.1 `Minecraft.setScreen`, 26.2+ `Gui.setScreen`), `Store`, Mixins (`CameraMixin` Zoom, `MouseHandlerMixin` CPS, `OptionInstanceAccessor` Fullbright, `GameRendererMixin` Hurt-Cam, `LevelMixin` Regen).
+- **Eigene Ladebildschirme** (kein Mojang-Logo mehr): `gui/LoadingScreens` + `gui/PixelFont` (eigene 5×7-Pixelschrift aus Rechtecken, funktioniert schon vor dem Laden der Texturen). Mixins: `LoadingOverlayMixin` (Startbildschirm, eigene Ebene via `nextStratum()`, gleicher Ein-/Ausblend-Ablauf wie Mojang), `LoadingLogoMixin` (unterdrückt Mojangs Logo/Hintergrund/Balken – **versionsabhängige Quelle**: `src/blaze3d/java` für 26.1/26.2, `src/renderpearl/java` ab 26.3, Auswahl in `build.gradle`), `LevelLoadingScreenMixin` („Welt wird geladen“ komplett eigen), `ScreenBackgroundMixin` + `GenericMessageScreenMixin` (Verbinden/Speichern-Hintergrund).
 - Unterschiede 26.1/26.2/26.3 bisher: Bildschirm öffnen (s. o.), 26.3 nutzt SDL statt GLFW (daher `InputConstants.KEY_*` statt GLFW-Konstanten).
 
 ---
@@ -106,7 +108,11 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
 - Keine Updates für installierte Modrinth-Inhalte; keine Zeitänderung (26.3 hat neue Uhr-Logik).
 - Die `.exe` ist nicht signiert (Windows SmartScreen kann warnen → „Weitere Informationen“ › „Trotzdem ausführen“).
 
-## 6. Mögliche nächste Schritte
+## 6. Fertige Datei
+`download/Peregrine-Client.exe` (Windows, im Repo) – nach Änderungen neu bauen (siehe 2. Bauen) und ersetzen.
+Direkter Link: https://github.com/enriqueart67/ganovenstadt/raw/claude/youthful-pasteur-m8a12x/download/Peregrine-Client.exe
+
+## 7. Mögliche nächste Schritte
 - Mod-Menü im Spiel im Papier/Orange-Look des Launchers gestalten.
 - Weitere Module: Freelook, Chat-Zeitstempel, wenig Feuer, Waypoints, Blockumrandung.
 - „Alles aktualisieren“ für Modrinth-Inhalte; Forge/NeoForge; Skin-Kopf als Konto-Bild.
