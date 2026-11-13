@@ -28,6 +28,7 @@ pub struct Job {
     pub path: PathBuf,
     pub sha1: Option<String>,
     pub size: Option<u64>,
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub exec: bool,
 }
 

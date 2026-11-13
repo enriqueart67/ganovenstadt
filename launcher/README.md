@@ -64,7 +64,8 @@ Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 ## Logo
 Das Icon – ein weißer Falke im Sturzflug auf schwarzem Abzeichen – stammt aus
 `assets/logo/peregrine-icon.pdf`. Daraus erzeugt sind `icon.png` (Fenster-/Taskleisten-Symbol)
-und `logo.png` (Titelleiste und, falls unter „Aussehen › Startseite“ eingeschaltet, groß auf
+`icon.ico` (wird unter Windows beim Bauen in die `.exe` eingebettet – Explorer, Verknüpfungen,
+Datei-Eigenschaften) und `logo.png` (Titelleiste und, falls unter „Aussehen › Startseite“ eingeschaltet, groß auf
 der Startseite).
 
 ## Lizenzen
