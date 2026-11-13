@@ -446,7 +446,9 @@ pub fn write_instance(p: &Prism, id: &str, name: &str, game: &Path, pack: &Value
 }
 
 /// Startet die Instanz und liest das Spiel-Log mit, bis das Spiel beendet ist.
-pub fn launch(p: &Prism, id: &str, game: &Path, ui: Ui) -> Result<()> {
+/// Fortschritt (Spielen-Leiste) läuft bis das Minecraft-Fenster da ist; erst dann ist der Launcher
+/// wieder frei. Unter Windows werden alle Fenster der Hintergrund-Komponente versteckt.
+pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result<()> {
     let started = SystemTime::now();
     let mut cmd = command(p);
     cmd.arg("--launch").arg(id);
@@ -455,28 +457,60 @@ pub fn launch(p: &Prism, id: &str, game: &Path, ui: Ui) -> Result<()> {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000);
     }
-    let mut child = cmd.spawn().with_context(|| format!("Anmelde-Komponente konnte nicht gestartet werden: {}", p.exe.display()))?;
+    let mut child = cmd.spawn().with_context(|| format!("Spielstart fehlgeschlagen: {}", p.exe.display()))?;
+    let pid = child.id();
+    let hiding = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(HIDE_FAST));
+    hide_windows_while(pid, hiding.clone());
+    ui.status("Anmeldung wird geprüft …");
+    ui.progress(35, 100);
     let log = game.join("logs").join("latest.log");
     std::thread::spawn(move || {
+        use std::sync::atomic::Ordering;
         let t0 = Instant::now();
         let mut pos: Option<u64> = None;
         let mut prism_done = false;
         let mut last_data = Instant::now();
+        let mut ready = false;
+        let mut pct = 35usize;
+        let finish_loading = |ready: &mut bool, ui: &Ui| {
+            if !*ready {
+                *ready = true;
+                ui.progress(0, 0);
+                ui.set_busy(false);
+            }
+        };
         loop {
             if !prism_done {
                 if let Ok(Some(_)) = child.try_wait() {
                     prism_done = true;
-                    // Lief Prism schon, gibt der neue Prozess den Auftrag sofort ab und beendet sich.
+                    // Lief die Komponente schon, gibt der neue Prozess den Auftrag ab und beendet sich.
                     if t0.elapsed() > Duration::from_secs(15) && pos.is_some() {
                         break;
                     }
                 }
             }
-            // Neues latest.log (vom aktuellen Start) mitlesen
+            // Bis das Spiel loslegt: langsam weiterzählen (Dateien werden geladen)
+            if pos.is_none() && !ready {
+                let target = (35 + (t0.elapsed().as_secs() as usize) / 2).min(60);
+                if target > pct {
+                    pct = target;
+                    if pct >= 40 {
+                        ui.status("Lade Spieldateien …");
+                    }
+                    ui.progress(pct, 100);
+                }
+            }
+            // Braucht die Komponente den Nutzer (z. B. neu anmelden), Fenster nicht länger verstecken
+            if pos.is_none() && t0.elapsed() > Duration::from_secs(240) && hiding.load(Ordering::Relaxed) == HIDE_FAST {
+                hiding.store(REVEAL, Ordering::Relaxed);
+            }
             if pos.is_none() {
                 if let Ok(m) = std::fs::metadata(&log) {
                     if m.modified().is_ok_and(|t| t >= started) {
                         pos = Some(0);
+                        pct = pct.max(65);
+                        ui.status("Minecraft startet …");
+                        ui.progress(pct, 100);
                         ui.log("[Launcher] Minecraft startet …");
                     }
                 }
@@ -497,10 +531,25 @@ pub fn launch(p: &Prism, id: &str, game: &Path, ui: Ui) -> Result<()> {
                             *off += line.len() as u64;
                             let l = line.trim_end().to_string();
                             let stop = l.contains("Stopping!");
+                            let up = ["Backend library", "Sound engine started", "OpenAL initialized", "Reloading ResourceManager"]
+                                .iter()
+                                .any(|m| l.contains(m));
                             ui.log(l);
                             line.clear();
                             last_data = Instant::now();
+                            if !ready {
+                                if up {
+                                    ui.status(format!("{label} läuft"));
+                                    finish_loading(&mut ready, &ui);
+                                    hiding.store(HIDE_SLOW, Ordering::Relaxed);
+                                } else if pct < 95 {
+                                    pct += 1;
+                                    ui.progress(pct, 100);
+                                }
+                            }
                             if stop {
+                                finish_loading(&mut ready, &ui);
+                                hiding.store(STOP, Ordering::Relaxed);
                                 ui.log("[Launcher] Spiel beendet");
                                 ui.status("Bereit.");
                                 return;
@@ -509,6 +558,11 @@ pub fn launch(p: &Prism, id: &str, game: &Path, ui: Ui) -> Result<()> {
                     }
                 }
             }
+            if !ready && pos.is_some() && last_data.elapsed() > Duration::from_secs(20) {
+                ui.status(format!("{label} läuft"));
+                finish_loading(&mut ready, &ui);
+                hiding.store(HIDE_SLOW, Ordering::Relaxed);
+            }
             if prism_done && pos.is_none() && t0.elapsed() > Duration::from_secs(120) {
                 ui.log("[Launcher] Kein Spielstart erkannt.");
                 break;
@@ -516,13 +570,70 @@ pub fn launch(p: &Prism, id: &str, game: &Path, ui: Ui) -> Result<()> {
             if pos.is_some() && last_data.elapsed() > Duration::from_secs(6 * 3600) {
                 break;
             }
-            std::thread::sleep(Duration::from_millis(300));
+            std::thread::sleep(Duration::from_millis(200));
         }
+        hiding.store(STOP, Ordering::Relaxed);
+        finish_loading(&mut ready, &ui);
         ui.log("[Launcher] Spiel beendet");
         ui.status("Bereit.");
     });
     Ok(())
 }
+
+const STOP: u8 = 0;
+const HIDE_FAST: u8 = 1;
+const REVEAL: u8 = 2;
+const HIDE_SLOW: u8 = 3;
+
+/// Versteckt (nur Windows) alle Fenster der Hintergrund-Komponente, solange `active` gesetzt ist.
+/// Das Minecraft-Fenster gehört zu einem anderen Prozess (Java) und bleibt sichtbar.
+#[cfg(windows)]
+fn hide_windows_while(pid: u32, mode: std::sync::Arc<std::sync::atomic::AtomicU8>) {
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, ShowWindow, SW_HIDE, SW_SHOW,
+    };
+    struct Ctx {
+        pid: u32,
+        hide: bool,
+        hidden: Vec<isize>,
+    }
+    unsafe extern "system" fn cb(hwnd: HWND, lp: LPARAM) -> BOOL {
+        let ctx = &mut *(lp as *mut Ctx);
+        let mut wpid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut wpid);
+        let mut buf = [0u16; 256];
+        let n = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+        let title = String::from_utf16_lossy(&buf[..n.max(0) as usize]);
+        let ours = wpid == ctx.pid || title.contains("Prism Launcher");
+        if ours && ctx.hide && IsWindowVisible(hwnd) != 0 {
+            ShowWindow(hwnd, SW_HIDE);
+            ctx.hidden.push(hwnd as isize);
+        }
+        1
+    }
+    std::thread::spawn(move || {
+        use std::sync::atomic::Ordering;
+        let mut ctx = Ctx { pid, hide: true, hidden: Vec::new() };
+        let t0 = Instant::now();
+        loop {
+            let m = mode.load(Ordering::Relaxed);
+            if !(m == HIDE_FAST || m == HIDE_SLOW) || t0.elapsed() > Duration::from_secs(12 * 3600) {
+                break;
+            }
+            unsafe { EnumWindows(Some(cb), &mut ctx as *mut Ctx as LPARAM) };
+            std::thread::sleep(Duration::from_millis(if m == HIDE_FAST { 30 } else { 400 }));
+        }
+        // Braucht die Komponente den Nutzer (z. B. Anmeldung abgelaufen), versteckte Fenster wieder zeigen
+        if mode.load(Ordering::Relaxed) == REVEAL {
+            for h in ctx.hidden.drain(..) {
+                unsafe { ShowWindow(h as HWND, SW_SHOW) };
+            }
+        }
+    });
+}
+#[cfg(not(windows))]
+fn hide_windows_while(_pid: u32, _mode: std::sync::Arc<std::sync::atomic::AtomicU8>) {}
 
 #[cfg(test)]
 mod tests {

@@ -270,7 +270,10 @@ impl App {
             h.set_busy(true);
             self.rt.spawn(async move {
                 let res = async {
+                    h.status("Bereite Start vor …");
+                    h.progress(3, 100);
                     let java = install::prepare_java(&h, &client, &cfg, &version).await?;
+                    h.progress(15, 100);
                     let lv = if loader == "Vanilla" {
                         None
                     } else {
@@ -278,7 +281,10 @@ impl App {
                         Some(install::loader_version(&client, &version, &loader, loader_version.as_deref()).await?.1)
                     };
                     let game = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
+                    h.progress(20, 100);
+                    h.status("Bereite Client-Mods vor …");
                     setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
+                    h.progress(30, 100);
                     let (key, name) = match &profile_id {
                         Some(pid) => (format!("profil-{pid}"), format!("Peregrine · {label}")),
                         None => (format!("{loader}-{version}"), format!("Peregrine · {loader} {version}")),
@@ -288,18 +294,20 @@ impl App {
                     prism::write_instance(&pr, &id, &name, &game, &pack, &cfg, java.as_deref())?;
                     h.log(format!("[Launcher] Starte {} (Konto: {})", name.trim_start_matches("Peregrine · "), acc.unwrap_or_default()));
                     h.log("[Launcher] Beim ersten Start einer Version werden die Spieldateien geladen – das dauert einmalig etwas.");
-                    prism::launch(&pr, &id, &game, h.clone())?;
-                    h.status(format!("{version} läuft"));
+                    prism::launch(&pr, &id, &game, version.clone(), h.clone())?;
                     anyhow::Ok(())
                 }
                 .await;
+                // Bei Erfolg gibt prism::launch den Launcher frei, sobald das Minecraft-Fenster da ist.
                 match res {
                     Ok(()) if cfg.close_on_launch => h.lock().quit = true,
                     Ok(()) => {}
-                    Err(e) => h.error(format!("{e:#}")),
+                    Err(e) => {
+                        h.progress(0, 0);
+                        h.set_busy(false);
+                        h.error(format!("{e:#}"));
+                    }
                 }
-                h.progress(0, 0);
-                h.set_busy(false);
             });
             return;
         }
@@ -708,9 +716,22 @@ impl App {
             if f > 0.0 {
                 p.rect_filled(Rect::from_min_size(play.min, vec2(play.width() * f, play.height())), pal.r, pal.accent);
             }
+            if total == 0 {
+                // Unbestimmter Fortschritt: wandernder Balken
+                let now = ui.input(|i| i.time) as f32;
+                let w = play.width() * 0.28;
+                let x = play.left() - w + ((now * 0.55).fract()) * (play.width() + w);
+                let bar = Rect::from_min_max(pos2(x.max(play.left()), play.top()), pos2((x + w).min(play.right()), play.bottom()));
+                if bar.width() > 0.0 {
+                    p.rect_filled(bar, pal.r, alpha(pal.accent, 170));
+                }
+                ui.ctx().request_repaint();
+            }
             let txt = if total > 0 { format!("LÄDT  {:.0} %", f * 100.0) } else { "STARTET …".into() };
             p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, txt, font(30.0, "display"), if f > 0.15 { Color32::WHITE } else { pal.text });
-            p.text(pos2(play.right() - 28.0, play.center().y), Align2::RIGHT_CENTER, format!("{done} / {total}"), font(12.0, "mono"), if f > 0.9 { Color32::WHITE } else { pal.muted });
+            let right = if total == 100 { status.to_uppercase() } else if total > 0 { format!("{done} / {total}") } else { String::new() };
+            p.text(pos2(play.right() - 28.0, play.center().y), Align2::RIGHT_CENTER, right, font(12.0, "mono"), if f > 0.9 { Color32::WHITE } else { pal.muted });
+            ui.ctx().request_repaint_after(Duration::from_millis(50));
         } else {
             let fill = theme::lerp_color(ink, pal.accent, hov);
             p.rect_filled(play, pal.r, fill);
