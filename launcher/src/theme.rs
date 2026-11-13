@@ -59,6 +59,7 @@ pub struct Look {
     pub tagline: String,
     pub show_badge: bool,
     pub show_tagline: bool,
+    pub show_logo: bool,
 }
 
 impl Default for Look {
@@ -88,6 +89,7 @@ impl Default for Look {
             tagline: "Minecraft-Launcher  ·  Fabric & Quilt  ·  Java inklusive".into(),
             show_badge: true,
             show_tagline: true,
+            show_logo: true,
         };
         l.apply_preset("Graphit");
         l
@@ -524,4 +526,19 @@ pub fn paint_landscape(p: &Painter, r: Rect, t: f32, scene_name: &str) {
     paint_layer(p, r, t, 12.0, 0.60, 0.13, 3.0, 3.1, false, s.layers[0]);
     paint_layer(p, r, t, 16.0, 0.72, 0.10, 7.0, 8.7, true, s.layers[1]);
     paint_layer(p, r, t, 22.0, 0.84, 0.06, 14.0, 1.9, true, s.layers[2]);
+}
+
+// ------------------------------------------------------------------ Logo
+/// Laedt den Falken (transparentes PNG) als Textur mit Mipmaps fuer scharfe kleine Groessen.
+pub fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
+    let img = image::load_from_memory(include_bytes!("../assets/logo/falcon.png")).expect("Logo").to_rgba8();
+    let ci = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+    let opts = egui::TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..egui::TextureOptions::LINEAR };
+    ctx.load_texture("falke", ci, opts)
+}
+
+/// Abzeichen in Akzentfarbe mit dem Falken darauf.
+pub fn logo(p: &Painter, pal: &Pal, rect: Rect, tex: &egui::TextureHandle) {
+    pal.fill(p, rect, (rect.width() * 0.22).min(pal.r.max(4.0) * 2.0));
+    p.image(tex.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
 }

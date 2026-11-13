@@ -37,6 +37,7 @@ pub struct App {
     bg_tex: Option<(String, egui::TextureHandle)>,
     bg_err: Option<(String, String)>,
     import_text: String,
+    logo: egui::TextureHandle,
 }
 
 impl App {
@@ -61,6 +62,7 @@ impl App {
             bg_tex: None,
             bg_err: None,
             import_text: String::new(),
+            logo: theme::load_logo(&cc.egui_ctx),
         };
         app.load_versions();
         app.refresh_login();
@@ -191,10 +193,8 @@ impl App {
         }
         let p = ui.painter();
         p.line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0_f32, pal.border));
-        let logo = Rect::from_center_size(pos2(r.left() + 38.0, r.center().y), vec2(22.0, 22.0));
-        pal.fill(p, logo, pal.r.min(7.0));
-        let initial = self.cfg.look.title.chars().next().unwrap_or('P').to_uppercase().to_string();
-        p.text(logo.center(), Align2::CENTER_CENTER, initial, font(13.0, "bold"), pal.on_accent);
+        let logo = Rect::from_center_size(pos2(r.left() + 36.0, r.center().y), vec2(26.0, 26.0));
+        theme::logo(p, pal, logo, &self.logo);
         let end = p.text(pos2(r.left() + 60.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.title, font(13.0, "bold"), pal.text);
         p.text(pos2(end.right() + 6.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.subtitle, font(13.0, "medium"), pal.muted);
 
@@ -335,15 +335,24 @@ impl App {
             }
             p.text(pos, Align2::LEFT_TOP, s, f, col)
         };
-        let tr = txt(pos2(hero.left() + 38.0, y), &look.title, font(56.0, "bold"), ht);
+        let mut tx = hero.left() + 38.0;
+        if look.show_logo {
+            let lr = Rect::from_min_size(pos2(tx + 2.0, y + 6.0), vec2(96.0, 96.0));
+            if on_image {
+                p.rect_filled(lr.translate(vec2(0.0, 3.0)), lr.width() * 0.22, alpha(Color32::BLACK, 60));
+            }
+            theme::logo(p, pal, lr, &self.logo);
+            tx = lr.right() + 22.0;
+        }
+        let tr = txt(pos2(tx, y), &look.title, font(56.0, "bold"), ht);
         let mut ty = tr.bottom() - 4.0;
         if !look.subtitle.is_empty() {
             let sub_c = if on_image { theme::lerp_color(pal.accent, Color32::WHITE, 0.3) } else { pal.accent };
-            let r = txt(pos2(hero.left() + 41.0, ty), &look.subtitle, font(15.0, "semibold"), sub_c);
+            let r = txt(pos2(tx + 3.0, ty), &look.subtitle, font(15.0, "semibold"), sub_c);
             ty = r.bottom() + 6.0;
         }
         if look.show_tagline && !look.tagline.is_empty() {
-            txt(pos2(hero.left() + 41.0, ty), &look.tagline, font(13.5, "regular"), hm);
+            txt(pos2(tx + 3.0, ty), &look.tagline, font(13.5, "regular"), hm);
         }
 
         // Account oben rechts
@@ -643,6 +652,9 @@ impl App {
                         ui.add_space(16.0);
                         theme::toggle(ui, pal, &mut l.show_tagline);
                         ui.label("Slogan anzeigen");
+                        ui.add_space(16.0);
+                        theme::toggle(ui, pal, &mut l.show_logo);
+                        ui.label("Logo anzeigen");
                     });
                 });
 
