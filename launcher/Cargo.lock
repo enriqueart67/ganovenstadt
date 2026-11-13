@@ -932,28 +932,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ganovenstadt-launcher"
-version = "2.0.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "dirs",
- "eframe",
- "futures",
- "hex",
- "open",
- "rand 0.8.8",
- "reqwest",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "tokio",
- "url",
- "zip",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2840,6 +2818,28 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "skyrush"
+version = "2.0.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "dirs",
+ "eframe",
+ "futures",
+ "hex",
+ "open",
+ "rand 0.8.8",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tokio",
+ "url",
+ "zip",
+]
 
 [[package]]
 name = "slab"

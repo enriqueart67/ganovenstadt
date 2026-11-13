@@ -3,4 +3,4 @@
 3D-Browserspiel im GTA-Stil mit Multiplayer.
 
 Spielen: https://enriqueart67.github.io/ganovenstadt/spiel.html
-- [Minecraft-Launcher](launcher/README.md) (Rust)
+- [SKYRUSH – Minecraft-Launcher](launcher/README.md) (Rust)

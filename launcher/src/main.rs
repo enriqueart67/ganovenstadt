@@ -1,5 +1,5 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-//! Ganovenstadt-Launcher – ein schneller Minecraft-Launcher in Rust.
+//! Skyrush – ein schneller Minecraft-Launcher in Rust.
 mod auth;
 mod config;
 mod gui;

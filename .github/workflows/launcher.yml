@@ -1,4 +1,4 @@
-name: Launcher bauen
+name: Skyrush bauen
 
 on:
   push:
@@ -11,13 +11,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            file: ganovenstadt-launcher.exe
+            file: skyrush.exe
             name: Windows
           - os: ubuntu-latest
-            file: ganovenstadt-launcher
+            file: skyrush
             name: Linux
           - os: macos-latest
-            file: ganovenstadt-launcher
+            file: skyrush
             name: macOS
     runs-on: ${{ matrix.os }}
     defaults:
@@ -33,5 +33,5 @@ jobs:
       - run: cargo build --release
       - uses: actions/upload-artifact@v4
         with:
-          name: Ganovenstadt-Launcher-${{ matrix.name }}
+          name: Skyrush-${{ matrix.name }}
           path: launcher/target/release/${{ matrix.file }}
