@@ -30,6 +30,8 @@ pub struct Config {
     pub look: crate::theme::Look,
     pub active_profile: Option<String>,
     pub client: crate::client_mods::ClientMods,
+    /// Eigener Pfad zu Prisms accounts.json oder Prism-Ordner (leer = automatisch suchen)
+    pub prism_path: String,
 }
 
 impl Default for Config {
@@ -52,6 +54,7 @@ impl Default for Config {
             look: Default::default(),
             active_profile: None,
             client: Default::default(),
+            prism_path: String::new(),
         }
     }
 }
@@ -62,6 +65,9 @@ pub struct Account {
     pub id: String,
     pub access_token: String,
     pub refresh_token: String,
+    /// "microsoft" (eigener Login) oder "prism" (von Prism uebernommen)
+    #[serde(default)]
+    pub source: String,
 }
 
 fn read<T: for<'a> Deserialize<'a>>(p: &Path) -> Option<T> {

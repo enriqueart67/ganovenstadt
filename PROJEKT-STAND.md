@@ -30,6 +30,7 @@ Mod-Menü im Spiel → eigenes Design „Papier/Nacht“.
 | **Spielen** | Alle Minecraft-Versionen aus Mojangs Manifest (Releases, Snapshots, Beta/Alpha), Suche + Filter in der Versionsauswahl. Vanilla, **Fabric**, **Quilt** (Forge/NeoForge **nicht**). Java wird automatisch von Mojang geladen. |
 | **Schnell** | Paralleler Download (64 gleichzeitig, HTTP/2), Schnellstart ohne Prüfung bei bereits installierten Versionen (Marker-Datei `.ready-<loader>`), Option „Reparieren“. |
 | **Login** | Microsoft-Login (OAuth PKCE → Xbox → XSTS → Minecraft). Braucht **eigene Azure Client-ID** (Einstellungen) + Freischaltung durch Mojang. Ohne Konto: offizieller **Demo-Modus**. |
+| **Anmeldung über Prism** | Einmal im Prism Launcher mit Microsoft anmelden → „ANMELDEN“ (oben rechts) übernimmt das Konto aus Prisms `accounts.json` (`src/prism.rs`: Windows `%APPDATA%\PrismLauncher`, Linux `~/.local/share/PrismLauncher`, Flatpak, macOS; eigener Pfad in Einstellungen). Vor jedem Start wird die Datei neu gelesen und der Token geprüft; abgelaufen (~1 Tag) → Hinweis, Prism kurz zu öffnen (Prism erneuert selbst). Prisms Microsoft-Refresh-Token/Client-ID werden bewusst **nicht** benutzt. `Account.source = "prism"`. |
 | **Profile** | Eigene Profile mit eigenem Spielordner (`<spielordner>/instances/<id>`), Version, Loader (optional feste Loader-Version). Auf der Startseite per „Schnellstart“ oder in der Versionsauswahl wählbar. |
 | **Modrinth** (nur Modrinth, CurseForge wurde entfernt) | Entdecken & Installieren von **Mods** (mit Abhängigkeiten), **Ressourcenpaketen**, **Shadern** (Iris wird automatisch mitinstalliert), **Datenpaketen** (Welt wählbar), **Modpacks** (.mrpack → neues Profil, gepinnte Loader-Version, Overrides, Titel/Icons per Hash-Lookup). Ein-/Ausschalten (`.disabled`), Entfernen. |
 | **Client-Mods** | Legt die passende Peregrine-Mod (26.1/26.2/26.3) vor dem Start in Fabric/Quilt-Profile, installiert fehlende Fabric API. Einstellungen macht man **im Spiel** (Rechts-Shift) – der Launcher schreibt die Mod-Config **nicht**. |
@@ -102,7 +103,7 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
 ---
 
 ## 5. Bekannte Grenzen
-- Microsoft-Login braucht eigene Azure-App + Mojang-Freischaltung (sonst nur Demo).
+- Eigener Microsoft-Login braucht eigene Azure-App + Mojang-Freischaltung. Alternative: Anmeldung über Prism (Token läuft nach ~1 Tag ab → Prism kurz öffnen).
 - Kein Forge/NeoForge (Profile, Modpacks, Mods nur Fabric/Quilt).
 - Client-Mod nur für 26.1–26.3; In-Game nur auf 26.2 getestet. Rüstung/Trank/Reichweite/Combo/Hurt-Cam/Regen/Toggle-Sneak nicht im Spiel getestet.
 - Keine Updates für installierte Modrinth-Inhalte; keine Zeitänderung (26.3 hat neue Uhr-Logik).

@@ -75,6 +75,14 @@ cargo build --release
 ```
 Die Datei liegt dann unter `target/release/peregrine(.exe)`.
 
+## Anmelden über Prism (am einfachsten)
+1. [Prism Launcher](https://prismlauncher.org) installieren und dort **einmal** mit deinem Microsoft-Konto anmelden.
+2. Im Peregrine Client oben rechts auf **ANMELDEN** klicken – das Konto wird aus Prism übernommen.
+
+Die Anmeldung gilt etwa einen Tag. Ist sie abgelaufen, sagt der Client Bescheid: Prism kurz öffnen
+(es erneuert die Anmeldung selbst) und wieder auf Spielen klicken. Steht Prism woanders (z. B. portable),
+den Prism-Ordner unter **Einstellungen › Anmeldung über Prism** eintragen.
+
 ## Microsoft-Login einrichten (einmalig)
 Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 

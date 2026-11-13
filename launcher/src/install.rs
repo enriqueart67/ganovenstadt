@@ -640,7 +640,7 @@ mod tests {
         let libs = collect_libs(&m, &dir.join("libraries"), &Features { demo: true, custom_res: true });
         assert_eq!(libs.len(), 1);
         assert!(libs[0].extract.is_some() && !libs[0].classpath);
-        let acc = crate::config::Account { name: "Steve".into(), id: "uuid".into(), access_token: "tok".into(), refresh_token: String::new() };
+        let acc = crate::config::Account { name: "Steve".into(), id: "uuid".into(), access_token: "tok".into(), refresh_token: String::new(), source: String::new() };
         let cfg = Config { game_dir: dir.to_string_lossy().into(), ..Default::default() };
         let (_j, args) = crate::launch::build(&cfg, "1.8.9", Some(&acc), None).unwrap();
         let joined = args.join(" ");

@@ -8,6 +8,7 @@ mod install;
 mod launch;
 mod mods;
 mod net;
+mod prism;
 mod profiles;
 mod state;
 mod theme;

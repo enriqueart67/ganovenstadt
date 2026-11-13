@@ -146,6 +146,7 @@ async fn finish(client: &Client, tok: Value) -> Result<Account> {
         id: prof["id"].as_str().context("Keine UUID")?.into(),
         access_token: access,
         refresh_token,
+        source: "microsoft".into(),
     })
 }
 
@@ -188,5 +189,14 @@ fn wait_for_code(l: TcpListener, state: &str) -> Result<String> {
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(100)),
             Err(e) => return Err(e.into()),
         }
+    }
+}
+
+/// Prueft einen Minecraft-Token. Ok(false) = abgelaufen; Netzwerkfehler gelten als „unbekannt“ (Ok(true)).
+pub async fn token_valid(client: &Client, token: &str) -> Result<bool> {
+    match client.get("https://api.minecraftservices.com/minecraft/profile").bearer_auth(token).send().await {
+        Ok(r) if r.status().as_u16() == 401 => Ok(false),
+        Ok(_) => Ok(true),
+        Err(_) => Ok(true),
     }
 }
