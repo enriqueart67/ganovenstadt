@@ -385,7 +385,7 @@ public final class ClickGui extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent e, boolean doubleClick) {
         double mx = e.x(), my = e.y();
-        if (e.button() == 0) {
+        if (e.button() == InputConstants.MOUSE_BUTTON_LEFT) { // 26.1/26.2: 0, ab 26.3 (SDL): 1
             for (Slider s : sliders) {
                 if (mx >= s.x() && mx < s.x() + s.w() && my >= s.y() && my < s.y() + s.h()) {
                     dragging = s.s();

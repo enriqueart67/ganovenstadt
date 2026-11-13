@@ -9,8 +9,9 @@ public final class Clicks {
 
     public static synchronized void click(int button) {
         long now = System.currentTimeMillis();
-        if (button == 0) LEFT.addLast(now);
-        else if (button == 1) RIGHT.addLast(now);
+        // Maustasten-Nummern unterscheiden sich je Version (26.3 nutzt SDL: links 1, rechts 3)
+        if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT) LEFT.addLast(now);
+        else if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT) RIGHT.addLast(now);
     }
 
     private static int count(ArrayDeque<Long> q) {

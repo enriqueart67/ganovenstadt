@@ -96,6 +96,7 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
 - **33 Module (vorher 24):** FPS, CPS, Koordinaten, Keystrokes, Rüstung, Trank-Effekte, Uhrzeit, Ping, Server-Adresse, Geschwindigkeit, Tageszähler, Arbeitsspeicher, Reichweite, Combo-Zähler · Fadenkreuz, Kein Schadens-Wackeln · Zoom (C), Fullbright (G), Kein Regen · Auto-Sprint (V), Schleichen umschalten · HUD-Stil.
 - Speichert in `config/peregrine-client.json` des Profils (`format: 2`, pro Modul `enabled`, `placed`, `x`, `y`, `settings`).
 - Wichtige Klassen: `PeregrineClient` (Init, Tasten, HUD), `Modules` (alle Module), `module/*` (Basis), `setting/*`, `gui/ClickGui`, `gui/HudEditor`, `gui/Ui` (öffnet Screens per Reflection: 26.1 `Minecraft.setScreen`, 26.2+ `Gui.setScreen`), `Store`, Mixins (`CameraMixin` Zoom, `MouseHandlerMixin` CPS, `OptionInstanceAccessor` Fullbright, `GameRendererMixin` Hurt-Cam, `LevelMixin` Regen).
+- **Achtung 26.3 (SDL):** Maustasten-Nummern geändert (`InputConstants.MOUSE_BUTTON_LEFT` 26.2 = 0, 26.3 = 1, rechts 1 → 3). Immer die Konstanten benutzen, nie 0/1 hart kodieren (war der Grund, warum im Menü in 26.3 kein Klick ging). Konstanten werden pro Version beim Bauen eingesetzt.
 - Unterschiede 26.1/26.2/26.3 bisher: Bildschirm öffnen (s. o.), 26.3 nutzt SDL statt GLFW (daher `InputConstants.KEY_*` statt GLFW-Konstanten).
 
 ---
