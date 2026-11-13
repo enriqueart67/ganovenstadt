@@ -62,11 +62,13 @@ pub struct ClientMods {
     pub enabled: bool,
     /// Leistungs-Mods (Sodium & Co.) automatisch installieren.
     pub turbo: bool,
+    /// Im Launcher geänderte Tasten: Aktion (z. B. "key.peregrine.zoom") -> Minecraft-Tastenname.
+    pub keys: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for ClientMods {
     fn default() -> Self {
-        Self { enabled: true, turbo: true }
+        Self { enabled: true, turbo: true, keys: Default::default() }
     }
 }
 
@@ -78,6 +80,113 @@ pub const TURBO: [(&str, &str, &str); 5] = [
     ("immediatelyfast", "ImmediatelyFast", "schnelleres Zeichnen von HUD, Text und Items"),
     ("entityculling", "Entity Culling", "verdeckte Tiere/Truhen werden nicht gezeichnet"),
 ];
+/// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
+pub const KEYS: [(&str, &str, &str); 4] = [
+    ("key.peregrine.menu", "Mod-Menü öffnen", "key.keyboard.right.shift"),
+    ("key.peregrine.zoom", "Zoom (halten)", "key.keyboard.c"),
+    ("key.peregrine.fullbright", "Fullbright an/aus", "key.keyboard.g"),
+    ("key.peregrine.sprint", "Auto-Sprint an/aus", "key.keyboard.v"),
+];
+
+/// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).
+pub const SPECIAL_KEYS: [(&str, &str); 10] = [
+    ("key.keyboard.right.shift", "Rechts-Shift"),
+    ("key.keyboard.left.shift", "Links-Shift"),
+    ("key.keyboard.right.control", "Rechts-Strg"),
+    ("key.keyboard.left.control", "Links-Strg"),
+    ("key.keyboard.left.alt", "Links-Alt"),
+    ("key.keyboard.right.alt", "Alt Gr"),
+    ("key.mouse.middle", "Mittlere Maustaste"),
+    ("key.mouse.4", "Maustaste 4"),
+    ("key.mouse.5", "Maustaste 5"),
+    ("key.keyboard.caps.lock", "Feststelltaste"),
+];
+
+/// Lesbarer Name einer Minecraft-Taste ("key.keyboard.c" -> "C").
+pub fn key_label(k: &str) -> String {
+    if let Some((_, l)) = SPECIAL_KEYS.iter().find(|(id, _)| *id == k) {
+        return l.to_string();
+    }
+    let rest = k.trim_start_matches("key.keyboard.").trim_start_matches("key.mouse.");
+    match rest {
+        "space" => "Leertaste".into(),
+        "tab" => "Tab".into(),
+        "enter" => "Enter".into(),
+        "backspace" => "Rücktaste".into(),
+        "up" => "Pfeil hoch".into(),
+        "down" => "Pfeil runter".into(),
+        "left" => "Pfeil links".into(),
+        "right" => "Pfeil rechts".into(),
+        "unknown" => "keine".into(),
+        r => r.replace('.', " ").to_uppercase(),
+    }
+}
+
+/// Minecraft-Tastenname zu einer egui-Taste.
+pub fn key_from_egui(name: &str) -> Option<String> {
+    let n = name.to_lowercase();
+    let mc = match n.as_str() {
+        n if n.len() == 1 && n.chars().all(|c| c.is_ascii_alphanumeric()) => n.to_string(),
+        n if n.starts_with('f') && n[1..].parse::<u8>().is_ok_and(|x| (1..=25).contains(&x)) => n.to_string(),
+        n if n.starts_with("num") && n.len() == 4 => n[3..].to_string(),
+        "space" => "space".into(),
+        "tab" => "tab".into(),
+        "enter" => "enter".into(),
+        "backspace" => "backspace".into(),
+        "insert" => "insert".into(),
+        "delete" => "delete".into(),
+        "home" => "home".into(),
+        "end" => "end".into(),
+        "pageup" => "page.up".into(),
+        "pagedown" => "page.down".into(),
+        "arrowup" => "up".into(),
+        "arrowdown" => "down".into(),
+        "arrowleft" => "left".into(),
+        "arrowright" => "right".into(),
+        "minus" => "minus".into(),
+        "plus" | "equals" => "equal".into(),
+        "comma" => "comma".into(),
+        "period" => "period".into(),
+        "slash" => "slash".into(),
+        "backslash" => "backslash".into(),
+        "semicolon" => "semicolon".into(),
+        "openbracket" => "left.bracket".into(),
+        "closebracket" => "right.bracket".into(),
+        "backtick" => "grave.accent".into(),
+        "quote" => "apostrophe".into(),
+        _ => return None,
+    };
+    Some(format!("key.keyboard.{mc}"))
+}
+
+/// Im Launcher gewählte Tasten in options.txt des Spielordners eintragen (nur geänderte).
+/// Fehlt options.txt (allererster Start), gelten bis zum nächsten Start die Standard-Tasten.
+pub fn apply_keys(run_dir: &Path, keys: &std::collections::BTreeMap<String, String>) -> Result<bool> {
+    let path = run_dir.join("options.txt");
+    let Ok(text) = std::fs::read_to_string(&path) else { return Ok(false) };
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    let mut changed = false;
+    for (action, key) in keys {
+        let prefix = format!("key_{action}:");
+        let want = format!("{prefix}{key}");
+        match lines.iter_mut().find(|l| l.starts_with(&prefix)) {
+            Some(l) if *l == want => {}
+            Some(l) => {
+                *l = want;
+                changed = true;
+            }
+            None => {
+                lines.push(want);
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        std::fs::write(&path, lines.join("\n") + "\n")?;
+    }
+    Ok(true)
+}
+
 pub const TURBO_MARKER: &str = ".peregrine-turbo.json";
 
 /// Ergebnis der Vorbereitung vor dem Spielstart.
@@ -127,6 +236,25 @@ pub fn prepare(run_dir: &Path, version: &str, loader: &str, cm: &ClientMods) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keys() {
+        assert_eq!(key_from_egui("C").as_deref(), Some("key.keyboard.c"));
+        assert_eq!(key_from_egui("F5").as_deref(), Some("key.keyboard.f5"));
+        assert_eq!(key_from_egui("ArrowUp").as_deref(), Some("key.keyboard.up"));
+        assert_eq!(key_label("key.keyboard.right.shift"), "Rechts-Shift");
+        assert_eq!(key_label("key.keyboard.c"), "C");
+        let dir = std::env::temp_dir().join(format!("pc-keys-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut m = std::collections::BTreeMap::new();
+        m.insert("key.peregrine.zoom".to_string(), "key.keyboard.x".to_string());
+        assert!(!apply_keys(&dir, &m).unwrap());
+        std::fs::write(dir.join("options.txt"), "version:4000\nkey_key.peregrine.zoom:key.keyboard.c\nfov:0.0\n").unwrap();
+        assert!(apply_keys(&dir, &m).unwrap());
+        let t = std::fs::read_to_string(dir.join("options.txt")).unwrap();
+        assert!(t.contains("key_key.peregrine.zoom:key.keyboard.x") && t.contains("fov:0.0") && !t.contains("keyboard.c"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn versions() {

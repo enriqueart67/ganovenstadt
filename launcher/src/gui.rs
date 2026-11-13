@@ -51,6 +51,7 @@ pub struct App {
     logo: egui::TextureHandle,
     prof: ProfilesUi,
     prism_check: Option<(Instant, String)>,
+    key_capture: Option<String>,
 }
 
 impl App {
@@ -83,6 +84,7 @@ impl App {
             logo: theme::load_logo(&cc.egui_ctx),
             prof: ProfilesUi::new(),
             prism_check: None,
+            key_capture: None,
         };
         app.load_versions();
         app.refresh_login();
@@ -1428,6 +1430,24 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
     let marker = mods.join(client_mods::TURBO_MARKER);
     // slug -> (Minecraft-Version, Dateiname)
     let mut have: BTreeMap<String, (String, String)> = std::fs::read(&marker).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default();
+    // Online nur einmal am Tag nach Updates schauen; sonst sofort weiter, wenn alles da ist.
+    let check_file = mods.join(".peregrine-turbo-check");
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let complete = client_mods::TURBO.iter().all(|(slug, _, _)| {
+        have.get(*slug).is_some_and(|(mc, f)| {
+            let p = mods.join(f);
+            mc == version && (p.exists() || std::path::Path::new(&format!("{}.disabled", p.display())).exists())
+        })
+    });
+    if on && complete {
+        let last = std::fs::read_to_string(&check_file).ok().and_then(|t| {
+            let (v, ts) = t.trim().split_once(' ')?;
+            (v == version).then(|| ts.parse::<u64>().ok()).flatten()
+        });
+        if last.is_some_and(|t| now.saturating_sub(t) < 24 * 3600) {
+            return;
+        }
+    }
     let before = have.clone();
     // Früher mitgelieferte Mods, die nicht mehr im Paket sind, wieder entfernen
     for slug in have.keys().cloned().collect::<Vec<_>>() {
@@ -1471,6 +1491,9 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
         let _ = std::fs::create_dir_all(&mods);
         let _ = std::fs::write(&marker, serde_json::to_vec_pretty(&have).unwrap_or_default());
     }
+    if on {
+        let _ = std::fs::write(&check_file, format!("{version} {now}"));
+    }
     if !fresh.is_empty() {
         h.log(format!("[Turbo] Leistungs-Mods installiert: {}", fresh.join(", ")));
     }
@@ -1487,6 +1510,13 @@ async fn setup_client_mods(
     profile_id: Option<&str>,
     shared: &std::sync::Arc<std::sync::Mutex<profiles_ui::ModsShared>>,
 ) {
+    if loader != "Vanilla" && cm.enabled && !cm.keys.is_empty() {
+        match client_mods::apply_keys(game, &cm.keys) {
+            Ok(true) => {}
+            Ok(false) => h.log("[Client-Mods] Eigene Tasten gelten ab dem nächsten Start (options.txt wird beim ersten Start angelegt)."),
+            Err(e) => h.log(format!("[Client-Mods] Tasten konnten nicht gesetzt werden: {e:#}")),
+        }
+    }
     match client_mods::prepare(game, version, loader, cm) {
         Ok(client_mods::Prepared::Ready { needs_fabric_api }) => {
             if needs_fabric_api {

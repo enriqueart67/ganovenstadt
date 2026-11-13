@@ -350,6 +350,35 @@ pub async fn loader_version(client: &Client, mc: &str, loader: &str, pinned: Opt
         "Quilt" => "https://meta.quiltmc.org/v3",
         _ => bail!("Unbekannter Loader {loader}"),
     };
+    if let Some(v) = pinned {
+        return Ok((base, v.to_string()));
+    }
+    // Neueste Loader-Version höchstens einmal am Tag abfragen (spart Zeit beim Start, geht auch offline)
+    let cache_file = base_dir().join("cache").join("loader-versions.json");
+    let mut cache: std::collections::BTreeMap<String, (String, u64)> =
+        std::fs::read(&cache_file).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default();
+    let key = format!("{loader}|{mc}");
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if let Some((v, t)) = cache.get(&key) {
+        if now.saturating_sub(*t) < 24 * 3600 {
+            return Ok((base, v.clone()));
+        }
+    }
+    let (b, v) = match loader_version_online(client, base, mc, loader).await {
+        Ok(r) => r,
+        Err(e) => match cache.get(&key) {
+            Some((v, _)) => return Ok((base, v.clone())),
+            None => return Err(e),
+        },
+    };
+    cache.insert(key, (v.clone(), now));
+    let _ = std::fs::create_dir_all(cache_file.parent().unwrap());
+    let _ = std::fs::write(&cache_file, serde_json::to_vec(&cache).unwrap_or_default());
+    Ok((b, v))
+}
+
+async fn loader_version_online(client: &Client, base: &'static str, mc: &str, loader: &str) -> Result<(&'static str, String)> {
+    let pinned: Option<&str> = None;
     let list = get_json(client, &format!("{base}/versions/loader/{mc}")).await
         .with_context(|| format!("{loader} unterstützt Minecraft {mc} nicht"))?;
     let arr = list.as_array().filter(|a| !a.is_empty())

@@ -38,22 +38,55 @@ impl App {
                         });
                     }
                 });
-                card(ui, pal, "So geht's", |ui| {
-                    for (key, what) in [
-                        ("Rechts-Shift", "Mod-Menü öffnen: Module an-/ausschalten, Einstellungen, Suche"),
-                        ("HUD bearbeiten", "im Menü oben rechts: Anzeigen mit der Maus verschieben, Mausrad = Größe"),
-                        ("C", "Zoom (gedrückt halten)"),
-                        ("G", "Fullbright an/aus"),
-                        ("V", "Auto-Sprint an/aus"),
-                    ] {
+                let capture = &mut self.key_capture;
+                card(ui, pal, "Tasten", |ui| {
+                    ui.label(RichText::new("Klicke auf eine Taste und drücke dann die neue. Gilt ab dem nächsten Spielstart für alle Profile. Im Menü: „HUD bearbeiten“ oben rechts, Anzeigen mit der Maus verschieben, Mausrad = Größe.").color(pal.muted).size(12.5));
+                    // Gedrückte Taste erfassen
+                    if let Some(action) = capture.clone() {
+                        let pressed = ui.input(|i| {
+                            i.events.iter().find_map(|e| match e {
+                                egui::Event::Key { key, pressed: true, .. } => Some(*key),
+                                _ => None,
+                            })
+                        });
+                        if let Some(k) = pressed {
+                            if k == egui::Key::Escape {
+                                *capture = None;
+                            } else if let Some(mc) = client_mods::key_from_egui(k.name()) {
+                                cm.keys.insert(action, mc);
+                                *capture = None;
+                            }
+                        }
+                    }
+                    for (action, label, default) in client_mods::KEYS {
+                        let current = cm.keys.get(action).cloned().unwrap_or_else(|| default.to_string());
                         ui.horizontal(|ui| {
-                            let (kr, _) = ui.allocate_exact_size(vec2(110.0, 24.0), egui::Sense::hover());
-                            ui.painter().rect_filled(kr, pal.r.min(6.0), pal.surface2);
-                            ui.painter().text(kr.center(), egui::Align2::CENTER_CENTER, key, theme::font(12.5, "semibold"), pal.text);
-                            ui.label(RichText::new(what).color(pal.muted));
+                            let (lr, _) = ui.allocate_exact_size(vec2(170.0, 26.0), egui::Sense::hover());
+                            ui.painter().text(lr.left_center(), egui::Align2::LEFT_CENTER, label, theme::font(14.0, "regular"), pal.text);
+                            let waiting = capture.as_deref() == Some(action);
+                            let text = if waiting { "Taste drücken …".to_string() } else { client_mods::key_label(&current) };
+                            let btn = egui::Button::new(RichText::new(text).font(theme::font(13.0, "semibold")).color(if waiting { pal.accent } else { pal.text }))
+                                .min_size(vec2(150.0, 26.0));
+                            if ui.add(btn).clicked() {
+                                *capture = if waiting { None } else { Some(action.to_string()) };
+                            }
+                            if waiting {
+                                egui::ComboBox::from_id_salt(("special", action))
+                                    .selected_text("Sondertaste …")
+                                    .show_ui(ui, |ui| {
+                                        for (id, name) in client_mods::SPECIAL_KEYS {
+                                            if ui.selectable_label(false, name).clicked() {
+                                                cm.keys.insert(action.to_string(), id.to_string());
+                                                *capture = None;
+                                            }
+                                        }
+                                    });
+                            }
+                            if cm.keys.get(action).is_some_and(|k| k != default) && ui.small_button("Standard").clicked() {
+                                cm.keys.insert(action.to_string(), default.to_string());
+                            }
                         });
                     }
-                    ui.label(RichText::new("Alle Tasten lassen sich im Spiel unter Optionen › Steuerung › Peregrine Client ändern.").color(pal.muted).size(12.0));
                 });
                 card(ui, pal, &format!("Alle Module ({})", MODULES.len()), |ui| {
                     let mut last = "";

@@ -501,7 +501,7 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
                 }
             }
             // Braucht die Komponente den Nutzer (z. B. neu anmelden), Fenster nicht länger verstecken
-            if pos.is_none() && t0.elapsed() > Duration::from_secs(240) && hiding.load(Ordering::Relaxed) == HIDE_FAST {
+            if pos.is_none() && t0.elapsed() > Duration::from_secs(300) && hiding.load(Ordering::Relaxed) == HIDE_FAST {
                 hiding.store(REVEAL, Ordering::Relaxed);
             }
             if pos.is_none() {
