@@ -1,9 +1,10 @@
-"""Erzeugt das Falken-Logo des Peregrine Client (braucht Pillow).
+"""Erzeugt das Logo des Peregrine Client: ein fliegender Falke, schlicht schwarz-weiss (braucht Pillow).
 
     python generate.py
 
-falcon.png / falcon-64.png: nur der Falke (transparent) – der Launcher legt ihn
-auf ein Abzeichen in deiner Akzentfarbe. icon.png: Fenster-Symbol mit blauem Hintergrund.
+falcon.png: weisser Falke auf transparentem Grund. Der Launcher faerbt ihn passend ein
+(dunkles Design: schwarzer Falke auf weissem Abzeichen, helles Design: umgekehrt).
+icon.png: Fenster-/Taskleisten-Symbol (weisser Falke auf Schwarz).
 """
 from pathlib import Path
 from PIL import Image, ImageDraw
@@ -11,43 +12,29 @@ from PIL import Image, ImageDraw
 HERE = Path(__file__).parent
 SS = 8  # Supersampling fuer glatte Kanten
 
-HEAD = [(10, 96), (12, 80), (15, 64), (20, 50), (27, 39), (36, 30), (46, 24), (57, 20), (67, 19), (75, 21), (80, 25),
-        (86, 28), (91, 33), (94, 39), (95, 46), (93, 52), (91, 47), (87, 45), (83, 47), (80, 51), (75, 58), (68, 66),
-        (62, 75), (58, 86), (57, 96)]
-# dunkle Kappe, Nacken/Ruecken und der typische "Bart"-Streifen unter dem Auge
-HOOD = [(10, 96), (12, 80), (15, 64), (20, 50), (27, 39), (36, 30), (46, 24), (57, 20), (67, 19), (75, 21), (80, 25),
-        (80, 30), (74, 30), (66, 33), (62, 40), (62, 50), (64, 60), (62, 70), (57, 73), (53, 66), (50, 56), (44, 53),
-        (37, 57), (31, 66), (27, 80), (25, 96)]
-BEAK = [(80, 25), (86, 28), (91, 33), (94, 39), (95, 46), (93, 52), (91, 47), (87, 45), (83, 46), (80, 41)]
-CERE = [(78, 27), (82, 27), (83, 42), (79, 40)]
-EYE = (70, 32)
-
-WHITE = (255, 255, 255, 255)
-DARK = (14, 22, 44, 255)
-BEAK_C = (52, 62, 86, 255)
-GOLD = (255, 196, 64, 255)
+# rechte Haelfte (Kopf oben Mitte -> Fluegelspitze -> Schwanz), wird gespiegelt
+RIGHT = [(50, 22), (52.5, 23), (54, 26.5), (54, 31), (56, 34), (63, 33), (72, 30), (82, 28.5), (92, 29), (100, 31),
+         (91, 36), (82, 41), (72, 46), (62, 50), (56.5, 54), (55, 63), (55.5, 70), (58.5, 78), (53, 80.5), (50, 79.5)]
 
 
-def render(size, badge=None, pad=0.12):
+def shape():
+    pts = RIGHT + [(100 - x, y) for x, y in reversed(RIGHT[1:-1])]
+    ys = [y for _, y in pts]
+    dy = 50 - (min(ys) + max(ys)) / 2
+    return [(x, y + dy) for x, y in pts]
+
+
+def render(size, badge=None, fg=(255, 255, 255, 255), pad=0.08):
     n = size * SS
     im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     if badge:
-        d.rounded_rectangle([0, 0, n - 1, n - 1], radius=int(n * 0.22), fill=badge + (255,))
+        d.rounded_rectangle([0, 0, n - 1, n - 1], radius=int(n * 0.22), fill=badge)
     sc, off = n * (1 - 2 * pad) / 100, n * pad
-    P = lambda pts: [(off + x * sc, off + y * sc) for x, y in pts]
-    d.polygon(P(HEAD), fill=WHITE)
-    d.polygon(P(HOOD), fill=DARK)
-    d.polygon(P(BEAK), fill=BEAK_C)
-    d.polygon(P(CERE), fill=GOLD)
-    cx, cy = off + EYE[0] * sc, off + EYE[1] * sc
-    for r, c in [(6.0, GOLD), (3.7, DARK)]:
-        d.ellipse([cx - r * sc, cy - r * sc, cx + r * sc, cy + r * sc], fill=c)
-    d.ellipse([cx + 0.5 * sc, cy - 2.5 * sc, cx + 2.0 * sc, cy - 1.0 * sc], fill=WHITE)
+    d.polygon([(off + x * sc, off + y * sc) for x, y in shape()], fill=fg)
     return im.resize((size, size), Image.LANCZOS)
 
 
 if __name__ == "__main__":
     render(512).save(HERE / "falcon.png", optimize=True)
-    render(64).save(HERE / "falcon-64.png", optimize=True)
-    render(256, badge=(79, 140, 255)).save(HERE / "icon.png", optimize=True)
+    render(256, badge=(0, 0, 0, 255)).save(HERE / "icon.png", optimize=True)

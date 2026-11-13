@@ -61,10 +61,10 @@ Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 - Spieldateien (Standard): `~/.peregrine/minecraft/`
 
 ## Logo
-Der Wanderfalke (englisch *Peregrine*) ist das schnellste Tier der Welt. Das Logo liegt in
-`assets/logo/` und wird mit `python assets/logo/generate.py` (braucht Pillow) neu erzeugt –
-so kannst du Formen und Farben direkt im Skript ändern. Das Abzeichen hinter dem Falken
-übernimmt im Launcher automatisch deine Akzentfarbe.
+Ein fliegender Wanderfalke (englisch *Peregrine*, das schnellste Tier der Welt), schlicht
+schwarz-weiß. Im Launcher passt er sich an: auf dunklem Design ein weißes Abzeichen mit
+schwarzem Falken, auf hellem umgekehrt. Die Dateien liegen in `assets/logo/` und werden mit
+`python assets/logo/generate.py` (braucht Pillow) neu erzeugt.
 
 ## Lizenzen
 Schriftart **Poppins** (SIL Open Font License, siehe `assets/fonts/OFL.txt`).

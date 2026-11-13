@@ -537,8 +537,9 @@ pub fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
     ctx.load_texture("falke", ci, opts)
 }
 
-/// Abzeichen in Akzentfarbe mit dem Falken darauf.
+/// Schlichtes Schwarz-Weiss-Abzeichen mit dem Falken (passt sich hellem/dunklem Design an).
 pub fn logo(p: &Painter, pal: &Pal, rect: Rect, tex: &egui::TextureHandle) {
-    pal.fill(p, rect, (rect.width() * 0.22).min(pal.r.max(4.0) * 2.0));
-    p.image(tex.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    let (badge, bird) = if pal.light { (Color32::BLACK, Color32::WHITE) } else { (Color32::WHITE, Color32::BLACK) };
+    p.rect_filled(rect, (rect.width() * 0.22).min(pal.r.max(4.0) * 2.0), badge);
+    p.image(tex.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), bird);
 }
