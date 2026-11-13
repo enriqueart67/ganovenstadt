@@ -1,6 +1,8 @@
 # Ganovenstadt-Launcher (Rust)
 
-Ein schneller Minecraft-Launcher, geschrieben in **Rust**, mit eigener Oberfläche (egui).
+Ein schneller Minecraft-Launcher, geschrieben in **Rust**, mit modernem Design:
+rahmenloses Fenster, Seitenleiste, animierte Block-Landschaft (komplett im Code gezeichnet),
+Verlaufs-Buttons und Karten-Einstellungen.
 
 ## Warum ist er schnell?
 - **Startet sofort**: eine einzige kleine Programmdatei (~10 MB), kein Python, kein Java, kein Electron.
@@ -50,3 +52,6 @@ Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 ## Speicherorte
 - Einstellungen, Login & Java: `~/.ganovenstadt-launcher/`
 - Spieldateien (Standard): `~/.ganovenstadt-launcher/minecraft/`
+
+## Lizenzen
+Schriftart **Poppins** (SIL Open Font License, siehe `assets/fonts/OFL.txt`).

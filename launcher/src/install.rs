@@ -47,7 +47,9 @@ pub fn installed(game_dir: &str) -> Vec<VersionEntry> {
             }
         }
     }
-    out.sort_by(|a, b| b.id.cmp(&a.id));
+    // nach Versionsnummer sortieren (1.21 > 1.8)
+    let key = |id: &str| -> Vec<u32> { id.split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse().ok()).collect() };
+    out.sort_by(|a, b| key(&b.id).cmp(&key(&a.id)));
     out
 }
 
