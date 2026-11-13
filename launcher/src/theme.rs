@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 
 pub type Rgb = [u8; 3];
 
+/// Aktuelle Design-Generation (2 = Peregrine-Design „Papier/Nacht“).
+pub const DESIGN: u32 = 2;
+
 pub const GOOD: Color32 = Color32::from_rgb(52, 199, 120);
 pub const BAD: Color32 = Color32::from_rgb(235, 72, 72);
 pub const WARN: Color32 = Color32::from_rgb(240, 180, 40);
@@ -17,11 +20,12 @@ pub fn c(rgb: Rgb) -> Color32 {
 }
 
 // ------------------------------------------------------------------ Einstellbares Aussehen
-pub const PRESETS: [&str; 4] = ["Graphit", "OLED", "Mitternacht", "Hell"];
-pub const BACKGROUNDS: [&str; 4] = ["Landschaft", "Verlauf", "Einfarbig", "Bild"];
+pub const PRESETS: [&str; 6] = ["Papier", "Nacht", "Graphit", "OLED", "Mitternacht", "Hell"];
+pub const BACKGROUNDS: [&str; 5] = ["Keine", "Landschaft", "Verlauf", "Einfarbig", "Bild"];
 pub const SCENES: [&str; 3] = ["Abend", "Tag", "Nacht"];
-pub const FONTS: [&str; 2] = ["Poppins", "Standard"];
-pub const ACCENTS: [(&str, Rgb); 8] = [
+pub const FONTS: [&str; 3] = ["Plex", "Poppins", "Standard"];
+pub const ACCENTS: [(&str, Rgb); 9] = [
+    ("Signal-Orange", [255, 79, 0]),
     ("Blau", [79, 140, 255]),
     ("Türkis", [45, 200, 180]),
     ("Grün", [74, 200, 110]),
@@ -35,6 +39,8 @@ pub const ACCENTS: [(&str, Rgb); 8] = [
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct Look {
+    /// Design-Generation – aeltere gespeicherte Looks werden einmalig auf das neue Design gesetzt.
+    pub design: u32,
     pub preset: String,
     pub bg: Rgb,
     pub surface: Rgb,
@@ -65,6 +71,7 @@ pub struct Look {
 impl Default for Look {
     fn default() -> Self {
         let mut l = Self {
+            design: DESIGN,
             preset: String::new(),
             bg: [0; 3],
             surface: [0; 3],
@@ -77,21 +84,21 @@ impl Default for Look {
             gradients: false,
             glow: false,
             animations: true,
-            rounding: 8.0,
+            rounding: 2.0,
             ui_scale: 1.0,
-            font: "Poppins".into(),
-            background: "Landschaft".into(),
+            font: "Plex".into(),
+            background: "Keine".into(),
             scene: "Nacht".into(),
             image_path: String::new(),
             dim: 0.25,
             title: "PEREGRINE".into(),
             subtitle: "CLIENT".into(),
             tagline: "Minecraft-Launcher  ·  Fabric & Quilt  ·  Java inklusive".into(),
-            show_badge: true,
+            show_badge: false,
             show_tagline: true,
             show_logo: false,
         };
-        l.apply_preset("Graphit");
+        l.apply_preset("Papier");
         l
     }
 }
@@ -99,6 +106,9 @@ impl Default for Look {
 impl Look {
     pub fn apply_preset(&mut self, name: &str) {
         let (bg, s, s2, b, t, m): (Rgb, Rgb, Rgb, Rgb, Rgb, Rgb) = match name {
+            // Peregrine-Design: warmes Papier bzw. tiefe Nacht, Flaechen = Hintergrund (nur Haarlinien)
+            "Papier" => ([243, 241, 236], [243, 241, 236], [231, 228, 221], [210, 206, 197], [17, 17, 16], [112, 108, 100]),
+            "Nacht" => ([14, 14, 13], [14, 14, 13], [29, 28, 26], [46, 45, 42], [237, 235, 230], [140, 136, 128]),
             "OLED" => ([0, 0, 0], [10, 10, 11], [20, 20, 22], [32, 32, 36], [240, 240, 242], [130, 130, 138]),
             "Mitternacht" => ([10, 14, 26], [16, 22, 40], [24, 32, 56], [34, 44, 74], [230, 234, 245], [136, 146, 176]),
             "Hell" => ([244, 244, 246], [255, 255, 255], [236, 236, 240], [222, 222, 228], [20, 20, 24], [105, 105, 115]),
@@ -122,7 +132,6 @@ pub struct Pal {
     pub on_accent: Color32,
     pub r: f32,
     pub grad: bool,
-    pub glow: bool,
     pub light: bool,
 }
 
@@ -145,7 +154,6 @@ impl Pal {
             on_accent: if luminance(accent) > 0.62 { Color32::from_rgb(16, 16, 20) } else { Color32::WHITE },
             r: l.rounding,
             grad: l.gradients,
-            glow: l.glow,
             light: luminance(c(l.bg)) > 0.5,
         }
     }
@@ -157,10 +165,10 @@ impl Pal {
             p.rect_filled(rect, r, self.accent);
         }
     }
-    pub fn shine(&self, p: &Painter, rect: Rect, r: f32, strength: f32) {
-        if self.glow {
-            glow(p, rect, r, self.accent, strength);
-        }
+    /// Primaerknopf im Peregrine-Stil: Tinte (Textfarbe), beim Ueberfahren Signalfarbe.
+    pub fn primary(&self, p: &Painter, rect: Rect, hover: bool, label: &str) {
+        p.rect_filled(rect, self.r, if hover { self.accent } else { self.text });
+        p.text(rect.center(), egui::Align2::CENTER_CENTER, label.to_uppercase(), font(11.5, "monom"), if hover { Color32::WHITE } else { self.bg });
     }
 }
 
@@ -172,28 +180,49 @@ pub fn font(size: f32, weight: &str) -> FontId {
     }
 }
 
-pub fn setup_fonts(ctx: &egui::Context, poppins: bool) {
+/// Schriften: "Plex" (Peregrine-Design: IBM Plex Sans Condensed + Plex Mono), "Poppins" oder "Standard".
+/// Familien: regular/medium/semibold/bold, "display" (grosse Titel), "mono"/"monom" (Beschriftungen).
+pub fn setup_fonts(ctx: &egui::Context, which: &str) {
     let mut fonts = FontDefinitions::default();
     let base: Vec<String> = fonts.families[&FontFamily::Proportional].clone();
-    for (key, data) in [
-        ("regular", &include_bytes!("../assets/fonts/Poppins-Regular.ttf")[..]),
-        ("medium", &include_bytes!("../assets/fonts/Poppins-Medium.ttf")[..]),
-        ("semibold", &include_bytes!("../assets/fonts/Poppins-SemiBold.ttf")[..]),
-        ("bold", &include_bytes!("../assets/fonts/Poppins-Bold.ttf")[..]),
-    ] {
-        let mut fam = base.clone();
-        if poppins {
-            let name = format!("poppins-{key}");
-            fonts.font_data.insert(name.clone(), FontData::from_static(data));
-            fam.insert(0, name.clone());
-            if key == "regular" {
-                fonts.families.get_mut(&FontFamily::Proportional).unwrap().insert(0, name);
-            }
+    let mut add = |name: &str, data: &'static [u8]| {
+        fonts.font_data.insert(name.into(), FontData::from_static(data));
+    };
+    add("plex-regular", include_bytes!("../assets/fonts/IBMPlexSansCondensed-Regular.ttf"));
+    add("plex-medium", include_bytes!("../assets/fonts/IBMPlexSansCondensed-Medium.ttf"));
+    add("plex-semibold", include_bytes!("../assets/fonts/IBMPlexSansCondensed-SemiBold.ttf"));
+    add("plex-bold", include_bytes!("../assets/fonts/IBMPlexSansCondensed-Bold.ttf"));
+    add("plexmono-regular", include_bytes!("../assets/fonts/IBMPlexMono-Regular.ttf"));
+    add("plexmono-medium", include_bytes!("../assets/fonts/IBMPlexMono-Medium.ttf"));
+    add("poppins-regular", include_bytes!("../assets/fonts/Poppins-Regular.ttf"));
+    add("poppins-medium", include_bytes!("../assets/fonts/Poppins-Medium.ttf"));
+    add("poppins-semibold", include_bytes!("../assets/fonts/Poppins-SemiBold.ttf"));
+    add("poppins-bold", include_bytes!("../assets/fonts/Poppins-Bold.ttf"));
+    let fam = |first: Option<&str>| -> Vec<String> {
+        let mut v = base.clone();
+        if let Some(f) = first {
+            v.insert(0, f.to_string());
         }
-        if key != "regular" {
-            fonts.families.insert(FontFamily::Name(key.into()), fam);
+        v
+    };
+    let prefix = match which {
+        "Poppins" => Some("poppins"),
+        "Standard" => None,
+        _ => Some("plex"),
+    };
+    for key in ["regular", "medium", "semibold", "bold"] {
+        let f = prefix.map(|p| format!("{p}-{key}"));
+        if key == "regular" {
+            fonts.families.insert(FontFamily::Proportional, fam(f.as_deref()));
+        } else {
+            fonts.families.insert(FontFamily::Name(key.into()), fam(f.as_deref()));
         }
     }
+    let display = prefix.map(|p| format!("{p}-bold"));
+    fonts.families.insert(FontFamily::Name("display".into()), fam(display.as_deref()));
+    fonts.families.insert(FontFamily::Name("mono".into()), fam(Some("plexmono-regular")));
+    fonts.families.insert(FontFamily::Name("monom".into()), fam(Some("plexmono-medium")));
+    fonts.families.get_mut(&FontFamily::Monospace).unwrap().insert(0, "plexmono-regular".into());
     ctx.set_fonts(fonts);
 }
 
@@ -202,8 +231,8 @@ pub fn apply_style(ctx: &egui::Context, pal: &Pal) {
     use egui::TextStyle::*;
     style.text_styles = [
         (Heading, font(24.0, "bold")),
-        (Body, FontId::proportional(14.0)),
-        (Button, font(14.0, "medium")),
+        (Body, FontId::proportional(15.0)),
+        (Button, font(14.5, "medium")),
         (Small, FontId::proportional(11.5)),
         (Monospace, FontId::monospace(12.5)),
     ]
@@ -226,6 +255,7 @@ pub fn apply_style(ctx: &egui::Context, pal: &Pal) {
     v.selection.bg_fill = pal.accent;
     v.selection.stroke = Stroke::new(1.0_f32, pal.on_accent);
     v.slider_trailing_fill = true;
+    v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.45 };
     v.hyperlink_color = pal.accent;
     v.window_rounding = (pal.r + 4.0).into();
     v.menu_rounding = r.into();
@@ -239,12 +269,14 @@ pub fn apply_style(ctx: &egui::Context, pal: &Pal) {
     }
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, pal.border);
     v.widgets.noninteractive.bg_fill = pal.surface;
+    // Knoepfe: nur feine Umrandung, beim Ueberfahren leicht gefuellt (klar, ruhig)
+    v.extreme_bg_color = lerp_color(pal.bg, pal.surface2, 0.45);
     v.widgets.inactive.bg_fill = pal.surface2;
-    v.widgets.inactive.weak_bg_fill = pal.surface2;
+    v.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
     v.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, pal.border);
     v.widgets.hovered.bg_fill = hover;
-    v.widgets.hovered.weak_bg_fill = hover;
-    v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, pal.accent);
+    v.widgets.hovered.weak_bg_fill = pal.surface2;
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, pal.text);
     v.widgets.active.bg_fill = pal.accent;
     v.widgets.active.weak_bg_fill = pal.accent;
     v.widgets.active.bg_stroke = Stroke::new(1.0_f32, pal.accent);
@@ -321,43 +353,32 @@ pub fn radial_glow(p: &Painter, c: Pos2, radius: f32, color: Color32, max_alpha:
     p.add(Shape::mesh(mesh));
 }
 
-pub fn glow(p: &Painter, rect: Rect, rounding: f32, color: Color32, strength: f32) {
-    for i in (1..=8).rev() {
-        let e = i as f32 * 2.5;
-        let a = ((9 - i) as f32 * 4.0 * strength) as u8;
-        p.rect_filled(rect.expand(e), rounding + e, alpha(color, a));
-    }
-}
 
-/// Ein-/Aus-Schalter.
+/// Ein-/Aus-Schalter (flach: Spur + Knopf).
 pub fn toggle(ui: &mut egui::Ui, pal: &Pal, on: &mut bool) -> egui::Response {
-    let (rect, mut resp) = ui.allocate_exact_size(vec2(40.0, 22.0), egui::Sense::click());
+    let (rect, mut resp) = ui.allocate_exact_size(vec2(36.0, 18.0), egui::Sense::click());
     if resp.clicked() {
         *on = !*on;
         resp.mark_changed();
     }
     let t = ui.ctx().animate_bool_with_time(resp.id, *on, 0.12);
     let p = ui.painter();
-    p.rect_filled(rect, 11.0, lerp_color(pal.surface2, pal.accent, t));
-    p.rect_stroke(rect, 11.0, Stroke::new(1.0_f32, alpha(pal.border, (255.0 * (1.0 - t)) as u8)));
-    let x = egui::lerp(rect.left() + 11.0..=rect.right() - 11.0, t);
-    let knob = if t > 0.5 { pal.on_accent } else if pal.light { Color32::WHITE } else { pal.text };
-    p.circle_filled(pos2(x, rect.center().y), 8.0, knob);
+    let r = pal.r.min(9.0);
+    p.rect_filled(rect, r, lerp_color(pal.surface2, pal.accent, t));
+    if t < 1.0 {
+        p.rect_stroke(rect, r, Stroke::new(1.0_f32, alpha(pal.border, (255.0 * (1.0 - t)) as u8)));
+    }
+    let x = egui::lerp(rect.left() + 9.0..=rect.right() - 9.0, t);
+    let knob = Rect::from_center_size(pos2(x, rect.center().y), vec2(12.0, 12.0));
+    p.rect_filled(knob, (r - 2.0).max(0.0), if t > 0.5 { Color32::WHITE } else { pal.text });
     resp
 }
 
 // ------------------------------------------------------------------ Icons (Vektor)
 pub enum Icon {
-    Home,
-    Console,
-    Settings,
-    Brush,
-    Grid,
-    Crosshair,
     Close,
     Minimize,
     Maximize,
-    Play,
     Chevron,
 }
 
@@ -365,42 +386,6 @@ pub fn icon(p: &Painter, c: Pos2, s: f32, color: Color32, kind: Icon) {
     let st = Stroke::new(s * 0.09, color);
     let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
     match kind {
-        Icon::Home => {
-            p.add(Shape::line(vec![pt(-0.42, -0.02), pt(0.0, -0.4), pt(0.42, -0.02)], st));
-            p.add(Shape::line(vec![pt(-0.3, -0.12), pt(-0.3, 0.38), pt(0.3, 0.38), pt(0.3, -0.12)], st));
-        }
-        Icon::Console => {
-            p.rect_stroke(Rect::from_min_max(pt(-0.44, -0.34), pt(0.44, 0.34)), s * 0.08, st);
-            p.add(Shape::line(vec![pt(-0.24, -0.1), pt(-0.08, 0.03), pt(-0.24, 0.16)], st));
-            p.line_segment([pt(0.02, 0.16), pt(0.24, 0.16)], st);
-        }
-        Icon::Settings => {
-            for i in 0..8 {
-                let a = i as f32 * std::f32::consts::TAU / 8.0;
-                let (sn, cs) = a.sin_cos();
-                p.line_segment([pt(cs * 0.28, sn * 0.28), pt(cs * 0.44, sn * 0.44)], Stroke::new(s * 0.13, color));
-            }
-            p.circle_stroke(c, s * 0.29, st);
-            p.circle_stroke(c, s * 0.1, st);
-        }
-        Icon::Brush => {
-            p.circle_stroke(c, s * 0.4, st);
-            for (x, y) in [(-0.16, -0.16), (0.14, -0.2), (-0.22, 0.12)] {
-                p.circle_filled(pt(x, y), s * 0.07, color);
-            }
-            p.circle_filled(pt(0.14, 0.14), s * 0.1, color);
-        }
-        Icon::Crosshair => {
-            p.circle_stroke(c, s * 0.3, st);
-            for (a, b) in [((0.0, -0.46), (0.0, -0.16)), ((0.0, 0.16), (0.0, 0.46)), ((-0.46, 0.0), (-0.16, 0.0)), ((0.16, 0.0), (0.46, 0.0))] {
-                p.line_segment([pt(a.0, a.1), pt(b.0, b.1)], st);
-            }
-        }
-        Icon::Grid => {
-            for (x, y) in [(-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22)] {
-                p.rect_stroke(Rect::from_center_size(pt(x, y), vec2(s * 0.32, s * 0.32)), s * 0.06, st);
-            }
-        }
         Icon::Close => {
             p.line_segment([pt(-0.28, -0.28), pt(0.28, 0.28)], st);
             p.line_segment([pt(0.28, -0.28), pt(-0.28, 0.28)], st);
@@ -410,9 +395,6 @@ pub fn icon(p: &Painter, c: Pos2, s: f32, color: Color32, kind: Icon) {
         }
         Icon::Maximize => {
             p.rect_stroke(Rect::from_min_max(pt(-0.26, -0.26), pt(0.26, 0.26)), 1.0, st);
-        }
-        Icon::Play => {
-            p.add(Shape::convex_polygon(vec![pt(-0.28, -0.38), pt(0.4, 0.0), pt(-0.28, 0.38)], color, Stroke::NONE));
         }
         Icon::Chevron => {
             p.add(Shape::line(vec![pt(-0.28, -0.12), pt(0.0, 0.14), pt(0.28, -0.12)], st));

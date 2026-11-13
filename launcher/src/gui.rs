@@ -56,8 +56,11 @@ impl App {
         let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Tokio");
         let h = Handle::new(cc.egui_ctx.clone());
         h.lock().account = config::load_account();
-        let cfg = config::load_config();
-        theme::setup_fonts(&cc.egui_ctx, cfg.look.font != "Standard");
+        let mut cfg = config::load_config();
+        if cfg.look.design < theme::DESIGN {
+            cfg.look = Look::default(); // einmalig auf das neue Peregrine-Design umstellen
+        }
+        theme::setup_fonts(&cc.egui_ctx, &cfg.look.font);
         let app = Self {
             saved: cfg.clone(),
             cfg,
@@ -228,7 +231,8 @@ impl App {
     }
 
     // -------------------------------------------------------------- Rahmen
-    fn title_bar(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
+    /// Titelleiste mit Logo, Text-Navigation, Konto und Fenster-Knoepfen.
+    fn title_bar(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal, account: &Option<config::Account>, action: &mut Option<Action>) {
         let ctx = ui.ctx().clone();
         let bar = ui.interact(r, Id::new("titlebar"), Sense::click_and_drag());
         if bar.drag_started() {
@@ -240,22 +244,57 @@ impl App {
         }
         let p = ui.painter();
         p.line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0_f32, pal.border));
-        let logo = Rect::from_center_size(pos2(r.left() + 36.0, r.center().y), vec2(28.0, 28.0));
-        theme::logo(p, pal, logo, &self.logo);
-        let end = p.text(pos2(r.left() + 60.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.title, font(13.0, "bold"), pal.text);
-        p.text(pos2(end.right() + 6.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.subtitle, font(13.0, "medium"), pal.muted);
+        let mut x = r.left() + 20.0;
+        if self.cfg.look.show_logo || true {
+            let logo = Rect::from_center_size(pos2(x + 11.0, r.center().y), vec2(22.0, 22.0));
+            theme::logo(p, pal, logo, &self.logo);
+            x += 32.0;
+        }
+        let end = p.text(pos2(x, r.center().y), Align2::LEFT_CENTER, self.cfg.look.title.to_uppercase(), font(12.5, "monom"), pal.text);
+        if !self.cfg.look.subtitle.is_empty() {
+            p.text(pos2(end.right() + 7.0, r.center().y), Align2::LEFT_CENTER, self.cfg.look.subtitle.to_uppercase(), font(12.5, "mono"), pal.muted);
+        }
 
+        // Navigation
+        let mut nx = r.left() + 250.0;
+        for (page, label) in [
+            (Page::Home, "START"),
+            (Page::Profiles, "PROFILE"),
+            (Page::Client, "CLIENT-MODS"),
+            (Page::Look, "AUSSEHEN"),
+            (Page::Console, "KONSOLE"),
+            (Page::Settings, "EINSTELLUNGEN"),
+        ] {
+            let g = ui.painter().layout_no_wrap(label.into(), font(11.5, "monom"), pal.text);
+            let tr = Rect::from_min_size(pos2(nx, r.top()), vec2(g.size().x, r.height()));
+            let resp = ui.interact(tr.expand2(vec2(8.0, 0.0)), Id::new(("nav", label)), Sense::click());
+            let active = self.page == page;
+            let col = if active || resp.hovered() { pal.text } else { pal.muted };
+            ui.painter().text(pos2(nx, r.center().y), Align2::LEFT_CENTER, label, font(11.5, "monom"), col);
+            if active {
+                ui.painter().rect_filled(Rect::from_min_max(pos2(tr.left(), r.bottom() - 2.0), pos2(tr.right(), r.bottom())), 0.0, pal.accent);
+            }
+            if resp.clicked() {
+                if self.page == Page::Settings && page != Page::Settings && self.cfg.game_dir != self.saved.game_dir {
+                    self.load_versions();
+                }
+                self.page = page;
+            }
+            nx += g.size().x + 26.0;
+        }
+
+        // Fenster-Knoepfe
         let mut x = r.right();
         for (kind, cmd) in [(Icon::Close, 0), (Icon::Maximize, 1), (Icon::Minimize, 2)] {
-            let br = Rect::from_min_max(pos2(x - 46.0, r.top()), pos2(x, r.bottom() - 1.0));
-            x -= 46.0;
+            let br = Rect::from_min_max(pos2(x - 44.0, r.top()), pos2(x, r.bottom() - 1.0));
+            x -= 44.0;
             let resp = ui.interact(br, Id::new(("winbtn", cmd)), Sense::click());
             let p = ui.painter();
             let hot = resp.hovered();
             if hot {
                 p.rect_filled(br, 0.0, if cmd == 0 { BAD } else { pal.surface2 });
             }
-            icon(p, br.center(), 16.0, if hot && cmd == 0 { Color32::WHITE } else if hot { pal.text } else { pal.muted }, kind);
+            icon(p, br.center(), 15.0, if hot && cmd == 0 { Color32::WHITE } else if hot { pal.text } else { pal.muted }, kind);
             if resp.clicked() {
                 match cmd {
                     0 => ctx.send_viewport_cmd(ViewportCommand::Close),
@@ -267,63 +306,35 @@ impl App {
                 }
             }
         }
-    }
 
-    fn sidebar(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal, account: &Option<config::Account>, action: &mut Option<Action>) {
-        ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0_f32, pal.border));
-        let mut y = r.top() + 12.0;
-        for (page, kind, tip) in [
-            (Page::Home, Icon::Home, "Start"),
-            (Page::Profiles, Icon::Grid, "Profile & Inhalte"),
-            (Page::Client, Icon::Crosshair, "Client-Mods"),
-            (Page::Look, Icon::Brush, "Aussehen"),
-            (Page::Console, Icon::Console, "Konsole"),
-            (Page::Settings, Icon::Settings, "Einstellungen"),
-        ] {
-            let br = Rect::from_center_size(pos2(r.center().x, y + 22.0), vec2(44.0, 44.0));
-            y += 54.0;
-            let resp = ui.interact(br, Id::new(("nav", tip)), Sense::click()).on_hover_text(tip);
-            let active = self.page == page;
-            let p = ui.painter();
-            if active {
-                p.rect_filled(br, pal.r, pal.surface2);
-                pal.fill(p, Rect::from_center_size(pos2(r.left() + 3.0, br.center().y), vec2(3.0, 22.0)), 2.0);
-            } else if resp.hovered() {
-                p.rect_filled(br, pal.r, alpha(pal.surface2, 160));
-            }
-            let c = if active { pal.accent } else if resp.hovered() { pal.text } else { pal.muted };
-            icon(p, br.center(), 22.0, c, kind);
-            if resp.clicked() {
-                if self.page == Page::Settings && page != Page::Settings && self.cfg.game_dir != self.saved.game_dir {
-                    self.load_versions();
-                }
-                self.page = page;
-            }
-        }
-        let ar = Rect::from_center_size(pos2(r.center().x, r.bottom() - 32.0), vec2(36.0, 36.0));
-        let tip = match account {
-            Some(a) => format!("{} – klicken zum Abmelden", a.name),
-            None => "Mit Microsoft anmelden".into(),
+        // Konto
+        let label = match account {
+            Some(a) => a.name.to_uppercase(),
+            None => "ANMELDEN".to_string(),
         };
-        let resp = ui.interact(ar, Id::new("avatar"), Sense::click()).on_hover_text(tip);
-        avatar(ui.painter(), pal, ar, account.as_ref().map(|a| a.name.as_str()), resp.hovered());
+        let g = ui.painter().layout_no_wrap(label.clone(), font(11.5, "monom"), pal.text);
+        let ar = Rect::from_min_size(pos2(x - 16.0 - g.size().x - 18.0, r.center().y - 12.0), vec2(g.size().x + 18.0, 24.0));
+        let resp = ui.interact(ar, Id::new("acct"), Sense::click()).on_hover_text(if account.is_some() { "Klicken zum Abmelden" } else { "Mit Microsoft anmelden" });
+        let p = ui.painter();
+        p.rect_stroke(ar, pal.r, Stroke::new(1.0_f32, if resp.hovered() { pal.text } else { pal.border }));
+        p.circle_filled(pos2(ar.left() + 9.0, ar.center().y), 2.5, if account.is_some() { GOOD } else { pal.accent });
+        p.text(pos2(ar.left() + 15.0, ar.center().y), Align2::LEFT_CENTER, label, font(11.5, "monom"), pal.text);
         if resp.clicked() {
             *action = Some(if account.is_some() { Action::Logout } else { Action::Login });
         }
     }
 
-    // -------------------------------------------------------------- Startseite
-    fn home(&mut self, ui: &mut egui::Ui, hero: Rect, t: f32, pal: &Pal, account: &Option<config::Account>, action: &mut Option<Action>) {
+    /// Optionales Bild/Landschaft im Rahmen (wenn unter Aussehen ein Hintergrund gewaehlt ist).
+    fn visual(&mut self, ui: &mut egui::Ui, rect: Rect, t: f32, pal: &Pal) {
         let look = self.cfg.look.clone();
         let ctx = ui.ctx().clone();
         let tex = if look.background == "Bild" { self.bg_texture(&ctx) } else { None };
-        let p = ui.painter().with_clip_rect(hero);
-        let mut on_image = true;
+        let p = ui.painter().with_clip_rect(rect);
         match look.background.as_str() {
             "Bild" => match &tex {
                 Some(tex) => {
                     let [w, h] = tex.size();
-                    let (ia, ra) = (w as f32 / h as f32, hero.width() / hero.height());
+                    let (ia, ra) = (w as f32 / h as f32, rect.width() / rect.height());
                     let uv = if ia > ra {
                         let s = ra / ia;
                         Rect::from_min_max(pos2((1.0 - s) / 2.0, 0.0), pos2((1.0 + s) / 2.0, 1.0))
@@ -331,228 +342,260 @@ impl App {
                         let s = ia / ra;
                         Rect::from_min_max(pos2(0.0, (1.0 - s) / 2.0), pos2(1.0, (1.0 + s) / 2.0))
                     };
-                    p.image(tex.id(), hero, uv, Color32::WHITE);
+                    p.image(tex.id(), rect, uv, Color32::WHITE);
                 }
                 None => {
-                    on_image = false;
-                    p.rect_filled(hero, 0.0, pal.surface);
+                    p.rect_filled(rect, 0.0, pal.surface2);
                     let msg = match &self.bg_err {
-                        Some((_, e)) => format!("Bild konnte nicht geladen werden: {e}"),
-                        None => "Kein Bild gewählt – zieh ein Bild ins Fenster oder wähle eins unter Aussehen.".into(),
+                        Some((_, e)) => format!("Bild nicht ladbar: {e}"),
+                        None => "Bild ins Fenster ziehen".into(),
                     };
-                    p.text(hero.center() - vec2(0.0, 40.0), Align2::CENTER_CENTER, msg, font(13.0, "regular"), pal.muted);
+                    p.text(rect.center(), Align2::CENTER_CENTER, msg, font(11.0, "mono"), pal.muted);
                 }
             },
-            "Verlauf" => {
-                on_image = false;
-                theme::vertical_gradient(&p, hero, &[
-                    (0.0, theme::lerp_color(pal.bg, pal.accent, 0.35)),
-                    (0.7, theme::lerp_color(pal.bg, pal.accent, 0.08)),
-                    (1.0, pal.bg),
-                ]);
-            }
+            "Verlauf" => theme::vertical_gradient(&p, rect, &[(0.0, theme::lerp_color(pal.bg, pal.accent, 0.55)), (1.0, theme::lerp_color(pal.bg, pal.accent, 0.08))]),
             "Einfarbig" => {
-                on_image = false;
-                p.rect_filled(hero, 0.0, pal.surface);
+                p.rect_filled(rect, 0.0, pal.accent);
             }
-            _ => theme::paint_landscape(&p, hero, t, &look.scene),
+            _ => theme::paint_landscape(&p, rect, t, &look.scene),
         }
-        if on_image {
-            p.rect_filled(hero, 0.0, alpha(Color32::BLACK, (look.dim.clamp(0.0, 0.9) * 255.0) as u8));
+        if matches!(look.background.as_str(), "Landschaft" | "Bild") && look.dim > 0.0 {
+            p.rect_filled(rect, 0.0, alpha(Color32::BLACK, (look.dim.clamp(0.0, 0.9) * 255.0) as u8));
         }
-        theme::vertical_gradient(&p, hero, &[(0.0, alpha(pal.bg, 0)), (0.6, alpha(pal.bg, 0)), (1.0, alpha(pal.bg, 230))]);
-        p.rect_stroke(hero.expand(5.0), pal.r + 4.0 + 5.0, Stroke::new(10.0_f32, pal.bg));
+        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, pal.border));
+    }
 
-        let (ht, hm) = if on_image { (Color32::WHITE, alpha(Color32::WHITE, 200)) } else { (pal.text, pal.muted) };
-        let p = ui.painter();
-
-        // Kopfbereich
-        let mut y = hero.top() + 40.0;
-        let latest = self.h.lock().versions.iter().find(|v| v.kind == "release").map(|v| v.id.clone());
-        if let (true, Some(l)) = (look.show_badge, latest) {
-            let g = p.layout_no_wrap(format!("Neueste Version  {l}"), font(11.5, "medium"), ht);
-            let pill = Rect::from_min_size(pos2(hero.left() + 40.0, y), g.size() + vec2(30.0, 10.0));
-            p.rect_filled(pill, pal.r.min(pill.height() / 2.0), if on_image { alpha(Color32::BLACK, 90) } else { pal.surface2 });
-            p.circle_filled(pos2(pill.left() + 12.0, pill.center().y), 3.0, GOOD);
-            p.galley(pos2(pill.left() + 21.0, pill.top() + 5.0), g, ht);
-            y = pill.bottom() + 16.0;
-        }
-        // Text mit dezentem Schatten, damit er auf jedem Hintergrund lesbar bleibt
-        let txt = |pos: egui::Pos2, s: &str, f: egui::FontId, col: Color32| -> Rect {
-            if on_image {
-                p.text(pos + vec2(0.0, 2.0), Align2::LEFT_TOP, s, f.clone(), alpha(Color32::BLACK, 70));
-            }
-            p.text(pos, Align2::LEFT_TOP, s, f, col)
+    // -------------------------------------------------------------- Startseite
+    fn home(&mut self, ui: &mut egui::Ui, area: Rect, t: f32, pal: &Pal, account: &Option<config::Account>, action: &mut Option<Action>) {
+        let look = self.cfg.look.clone();
+        let active = self.active_profile();
+        let (busy, status, done, total, latest, nprof) = {
+            let s = self.h.lock();
+            (s.busy, s.status.clone(), s.done, s.total, s.versions.iter().find(|v| v.kind == "release").map(|v| v.id.clone()), self.prof.list.len())
         };
-        let mut tx = hero.left() + 38.0;
-        if look.show_logo {
-            let lr = Rect::from_min_size(pos2(tx + 2.0, y + 6.0), vec2(96.0, 96.0));
-            if on_image {
-                p.rect_filled(lr.translate(vec2(0.0, 3.0)), lr.width() * 0.22, alpha(Color32::BLACK, 60));
-            }
-            theme::logo(p, pal, lr, &self.logo);
-            tx = lr.right() + 22.0;
-        }
-        let tr = txt(pos2(tx, y), &look.title, font(56.0, "bold"), ht);
-        let mut ty = tr.bottom() - 4.0;
-        if !look.subtitle.is_empty() {
-            let sub_c = if on_image { theme::lerp_color(pal.accent, Color32::WHITE, 0.3) } else { pal.accent };
-            let r = txt(pos2(tx + 3.0, ty), &look.subtitle, font(15.0, "semibold"), sub_c);
-            ty = r.bottom() + 6.0;
-        }
+        let play_h = 78.0;
+        let play = Rect::from_min_max(pos2(area.left(), area.bottom() - play_h), area.max);
+        let top = Rect::from_min_max(area.min, pos2(area.right(), play.top() - 44.0));
+        let split = top.left() + top.width() * 0.6;
+        let left = Rect::from_min_max(top.min, pos2(split - 30.0, top.bottom()));
+        let right = Rect::from_min_max(pos2(split + 10.0, top.top()), top.max);
+        ui.painter().line_segment([pos2(split - 10.0, top.top()), pos2(split - 10.0, top.bottom())], Stroke::new(1.0_f32, pal.border));
+
+        // ---------- links: Typografie
+        let p = ui.painter().with_clip_rect(left.expand(4.0));
+        let mut y = left.top() + 4.0;
         if look.show_tagline && !look.tagline.is_empty() {
-            txt(pos2(tx + 3.0, ty), &look.tagline, font(13.5, "regular"), hm);
+            p.text(pos2(left.left(), y), Align2::LEFT_TOP, look.tagline.to_uppercase(), font(11.0, "mono"), pal.muted);
         }
-
-        // Account oben rechts
-        let chip = Rect::from_min_size(pos2(hero.right() - 270.0, hero.top() + 22.0), vec2(248.0, 52.0));
-        p.rect_filled(chip, pal.r + 2.0, if on_image { alpha(Color32::BLACK, 110) } else { pal.surface });
-        if !on_image {
-            p.rect_stroke(chip, pal.r + 2.0, Stroke::new(1.0_f32, pal.border));
-        }
-        let av = Rect::from_center_size(pos2(chip.left() + 28.0, chip.center().y), vec2(32.0, 32.0));
-        avatar(p, pal, av, account.as_ref().map(|a| a.name.as_str()), false);
-        let (name, sub, sub_c) = match account {
-            Some(a) => (a.name.clone(), "Microsoft-Konto", GOOD),
-            None => ("Gast".to_string(), "Demo-Modus", WARN),
-        };
-        p.text(pos2(av.right() + 10.0, chip.center().y - 8.0), Align2::LEFT_CENTER, name, font(13.5, "semibold"), ht);
-        p.text(pos2(av.right() + 10.0, chip.center().y + 10.0), Align2::LEFT_CENTER, sub, font(11.0, "medium"), sub_c);
-        let btn = Rect::from_min_size(pos2(chip.right() - 90.0, chip.center().y - 14.0), vec2(78.0, 28.0));
-        let resp = ui.interact(btn, Id::new("chipbtn"), Sense::click());
-        let p = ui.painter();
-        if account.is_some() {
-            p.rect_filled(btn, pal.r, if resp.hovered() { pal.surface2 } else { alpha(pal.surface2, 160) });
-            p.text(btn.center(), Align2::CENTER_CENTER, "Abmelden", font(12.0, "semibold"), pal.text);
-        } else {
-            pal.fill(p, btn, pal.r);
-            if resp.hovered() {
-                p.rect_filled(btn, pal.r, alpha(Color32::WHITE, 25));
+        y += 34.0;
+        let (big, sub) = match &active {
+            Some(ap) => {
+                let n = ap.mods.len();
+                let lv = ap.loader_version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
+                (ap.name.clone(), format!("Profil  ·  {}{lv}  ·  Minecraft {}  ·  {n} Inhalt{}", ap.loader, ap.version, if n == 1 { "" } else { "e" }))
             }
-            p.text(btn.center(), Align2::CENTER_CENTER, "Anmelden", font(12.0, "semibold"), pal.on_accent);
+            None => {
+                let v = if self.cfg.version.is_empty() { "…".to_string() } else { self.cfg.version.clone() };
+                let newest = latest.as_deref() == Some(self.cfg.version.as_str());
+                (v, format!("Minecraft Java Edition  ·  {}{}", self.cfg.loader, if newest { "  ·  neueste Version" } else { "" }))
+            }
+        };
+        // Riesige Zahl/Name – automatisch passend zur Breite
+        let mut size = 150.0_f32;
+        loop {
+            let g = p.layout_no_wrap(big.clone(), font(size, "display"), pal.text);
+            if g.size().x <= left.width() || size <= 44.0 {
+                break;
+            }
+            size -= 6.0;
         }
-        if resp.clicked() {
-            *action = Some(if account.is_some() { Action::Logout } else { Action::Login });
-        }
+        let tr = p.text(pos2(left.left() - size * 0.04, y), Align2::LEFT_TOP, &big, font(size, "display"), pal.text);
+        // kleines Signal-Quadrat wie ein Instrumenten-Marker
+        p.rect_filled(Rect::from_min_size(pos2(tr.right() + 10.0, tr.top() + size * 0.22), vec2(10.0, 10.0)), 0.0, pal.accent);
+        y = tr.bottom() + 2.0;
+        p.text(pos2(left.left(), y), Align2::LEFT_TOP, &sub, font(17.0, "regular"), pal.muted);
+        y += 54.0;
 
-        // Unteres Panel
-        let panel = Rect::from_min_max(pos2(hero.left() + 20.0, hero.bottom() - 108.0), pos2(hero.right() - 20.0, hero.bottom() - 20.0));
-        let p = ui.painter();
-        p.rect_filled(panel, pal.r + 4.0, alpha(pal.surface, 240));
-        p.rect_stroke(panel, pal.r + 4.0, Stroke::new(1.0_f32, pal.border));
-
-        let vc = Rect::from_min_size(pos2(panel.left() + 14.0, panel.top() + 14.0), vec2(200.0, panel.height() - 28.0));
+        // Auswahl: Version / Profil
+        let vc = Rect::from_min_size(pos2(left.left(), y), vec2(200.0, 52.0));
         let vresp = ui.interact(vc, Id::new("vercard"), Sense::click());
         let p = ui.painter();
-        p.rect_filled(vc, pal.r, if vresp.hovered() || self.version_open { pal.surface2 } else { alpha(pal.surface2, 140) });
-        p.rect_stroke(vc, pal.r, Stroke::new(1.0_f32, if self.version_open { pal.accent } else { pal.border }));
-        let active = self.active_profile();
-        p.text(pos2(vc.left() + 14.0, vc.top() + 17.0), Align2::LEFT_CENTER, if active.is_some() { "Profil" } else { "Version" }, font(11.5, "medium"), pal.muted);
+        p.text(pos2(vc.left(), vc.top()), Align2::LEFT_TOP, if active.is_some() { "PROFIL" } else { "VERSION" }, font(10.5, "mono"), pal.muted);
         let shown = match &active {
             Some(ap) => ap.name.clone(),
-            None if self.cfg.version.is_empty() => "Lädt …".to_string(),
             None => self.cfg.version.clone(),
         };
-        let size = if shown.chars().count() > 9 { 14.5 } else { 19.0 };
-        p.with_clip_rect(Rect::from_min_max(vc.min, pos2(vc.right() - 34.0, vc.bottom())))
-            .text(pos2(vc.left() + 14.0, vc.top() + 41.0), Align2::LEFT_CENTER, shown, font(size, "semibold"), pal.text);
-        icon(p, pos2(vc.right() - 20.0, vc.center().y), 15.0, pal.muted, Icon::Chevron);
+        let vg = p.layout_no_wrap(shown.clone(), font(20.0, "semibold"), pal.text);
+        let w = (vg.size().x + 30.0).max(120.0).min(320.0);
+        let vc = Rect::from_min_size(vc.min, vec2(w, 52.0));
+        p.with_clip_rect(Rect::from_min_max(vc.min, pos2(vc.right() - 18.0, vc.bottom()))).text(pos2(vc.left(), vc.top() + 30.0), Align2::LEFT_CENTER, shown, font(20.0, "semibold"), pal.text);
+        icon(p, pos2(vc.right() - 8.0, vc.top() + 31.0), 13.0, if vresp.hovered() || self.version_open { pal.text } else { pal.muted }, Icon::Chevron);
+        p.line_segment([pos2(vc.left(), vc.bottom()), pos2(vc.right(), vc.bottom())], Stroke::new(if self.version_open || vresp.hovered() { 2.0_f32 } else { 1.0_f32 }, if self.version_open { pal.accent } else if vresp.hovered() { pal.text } else { pal.border }));
         if vresp.clicked() {
             self.version_open = !self.version_open;
             self.just_opened = true;
             self.focus_search = 3;
         }
-
-        let lx = vc.right() + 14.0;
-        p.text(pos2(lx + 2.0, vc.top() + 17.0), Align2::LEFT_CENTER, if active.is_some() { "Profil-Details" } else { "Modloader" }, font(11.5, "medium"), pal.muted);
-        let seg = Rect::from_min_size(pos2(lx, vc.top() + 30.0), vec2(246.0, 30.0));
-        match &active {
-            Some(ap) => {
-                let n = ap.mods.len();
-                p.text(pos2(lx + 2.0, seg.center().y), Align2::LEFT_CENTER, format!("{} · {} · {} Mod{}", ap.loader, ap.version, n, if n == 1 { "" } else { "s" }), font(13.0, "medium"), pal.text);
+        // Loader als Text-Auswahl
+        let lx = vc.right() + 40.0;
+        ui.painter().text(pos2(lx, vc.top()), Align2::LEFT_TOP, "MODLOADER", font(10.5, "mono"), pal.muted);
+        if active.is_none() {
+            let mut ox = lx;
+            for l in install::LOADERS {
+                let g = ui.painter().layout_no_wrap(l.to_string(), font(20.0, "semibold"), pal.text);
+                let orr = Rect::from_min_size(pos2(ox, vc.top() + 16.0), vec2(g.size().x, 36.0));
+                let resp = ui.interact(orr, Id::new(("ld", l)), Sense::click());
+                let sel = self.cfg.loader == l;
+                let col = if sel { pal.text } else if resp.hovered() { lerp(pal.muted, pal.text) } else { pal.muted };
+                ui.painter().text(pos2(ox, vc.top() + 30.0), Align2::LEFT_CENTER, l, font(20.0, "semibold"), col);
+                if sel {
+                    ui.painter().rect_filled(Rect::from_min_max(pos2(ox, vc.bottom() - 1.0), pos2(ox + g.size().x, vc.bottom() + 1.0)), 0.0, pal.accent);
+                }
+                if resp.clicked() {
+                    self.cfg.loader = l.to_string();
+                }
+                ox += g.size().x + 22.0;
             }
-            None => {
-                let mut loader = self.cfg.loader.clone();
-                segmented_at(ui, pal, seg, "loader", &install::LOADERS, &mut loader);
-                self.cfg.loader = loader;
-            }
-        }
-
-        let (busy, status, done, total) = {
-            let s = self.h.lock();
-            (s.busy, s.status.clone(), s.done, s.total)
-        };
-        let play = Rect::from_min_size(pos2(panel.right() - 14.0 - 220.0, panel.top() + 14.0), vec2(220.0, panel.height() - 28.0));
-        let sr = Rect::from_min_max(pos2(seg.right() + 22.0, vc.top()), pos2(play.left() - 22.0, vc.bottom()));
-        if sr.width() > 80.0 {
-            let p = ui.painter().with_clip_rect(sr);
-            p.text(pos2(sr.left(), vc.top() + 17.0), Align2::LEFT_CENTER, "Status", font(11.5, "medium"), pal.muted);
-            let (line, col) = if busy {
-                (status.clone(), pal.text)
-            } else if status.starts_with("Fehler") {
-                (status.clone(), BAD)
-            } else if account.is_none() {
-                ("Demo-Modus aktiv".to_string(), pal.text)
-            } else {
-                (if status == "Bereit." { "Bereit".to_string() } else { status.clone() }, pal.text)
-            };
-            p.text(pos2(sr.left(), vc.top() + 41.0), Align2::LEFT_CENTER, line, font(13.0, "medium"), col);
-            if busy && total > 0 {
-                let bar = Rect::from_min_size(pos2(sr.left(), vc.top() + 56.0), vec2(sr.width(), 4.0));
-                p.rect_filled(bar, 2.0, pal.surface2);
-                let fr = Rect::from_min_size(bar.min, vec2((bar.width() * done as f32 / total as f32).max(4.0), 4.0));
-                pal.fill(&p, fr, 2.0);
+        } else {
+            let resp = ui.interact(Rect::from_min_size(pos2(lx, vc.top() + 16.0), vec2(170.0, 36.0)), Id::new("leaveprof"), Sense::click());
+            ui.painter().text(pos2(lx, vc.top() + 30.0), Align2::LEFT_CENTER, "aus Profil  ·  zurück", font(16.0, "regular"), if resp.hovered() { pal.text } else { pal.muted });
+            if resp.clicked() {
+                self.cfg.active_profile = None;
             }
         }
 
-        let enabled = !busy && !self.cfg.version.is_empty();
-        let resp = ui.interact(play, Id::new("play"), if enabled { Sense::click() } else { Sense::hover() });
-        let hover = ui.ctx().animate_bool_with_time(Id::new("playhover"), resp.hovered() && enabled, 0.12);
+        // ---------- rechts: Daten
+        let mut ry = right.top() + 4.0;
+        if look.background != "Keine" {
+            let vis = Rect::from_min_size(pos2(right.left(), ry), vec2(right.width(), (right.height() * 0.42).min(200.0)));
+            self.visual(ui, vis, t, pal);
+            ry = vis.bottom() + 18.0;
+        }
         let p = ui.painter();
+        p.text(pos2(right.left(), ry), Align2::LEFT_TOP, "ÜBERSICHT", font(11.0, "mono"), pal.muted);
+        ry += 22.0;
+        let java = if self.cfg.java_path.trim().is_empty() { "automatisch".to_string() } else { "eigener Pfad".into() };
+        let mut rows: Vec<(&str, String, Color32)> = vec![
+            ("KONTO", account.as_ref().map(|a| a.name.clone()).unwrap_or_else(|| "Gast · Demo".into()), if account.is_some() { pal.text } else { pal.accent }),
+            ("ARBEITSSPEICHER", format!("{:.1} GB", self.cfg.ram_mb as f32 / 1024.0).replace('.', ","), pal.text),
+            ("JAVA", java, pal.text),
+            ("CLIENT-MODS", if self.cfg.client.enabled { "an  ·  Rechts-Shift".into() } else { "aus".into() }, pal.text),
+            ("PROFILE", nprof.to_string(), pal.text),
+        ];
+        if look.show_badge {
+            rows.push(("NEUESTE VERSION", latest.clone().unwrap_or_else(|| "–".into()), pal.text));
+        }
+        for (k, v, col) in rows {
+            if ry + 30.0 > right.bottom() {
+                break;
+            }
+            p.line_segment([pos2(right.left(), ry), pos2(right.right(), ry)], Stroke::new(1.0_f32, pal.border));
+            p.text(pos2(right.left(), ry + 15.0), Align2::LEFT_CENTER, k, font(10.5, "mono"), pal.muted);
+            p.text(pos2(right.right(), ry + 15.0), Align2::RIGHT_CENTER, v, font(14.5, "medium"), col);
+            ry += 30.0;
+        }
+        p.line_segment([pos2(right.left(), ry), pos2(right.right(), ry)], Stroke::new(1.0_f32, pal.border));
+
+        // Schnellstart: Profile direkt waehlen
+        if !self.prof.list.is_empty() && ry + 70.0 < right.bottom() {
+            ry += 26.0;
+            ui.painter().text(pos2(right.left(), ry), Align2::LEFT_TOP, "SCHNELLSTART", font(11.0, "mono"), pal.muted);
+            ry += 22.0;
+            let list = self.prof.list.clone();
+            for pr in list.iter() {
+                if ry + 32.0 > right.bottom() {
+                    break;
+                }
+                let rr = Rect::from_min_size(pos2(right.left(), ry), vec2(right.width(), 32.0));
+                let resp = ui.interact(rr, Id::new(("qs", &pr.id)), Sense::click());
+                let sel = self.cfg.active_profile.as_deref() == Some(pr.id.as_str());
+                let p = ui.painter();
+                if resp.hovered() {
+                    p.rect_filled(rr, pal.r, pal.surface2);
+                }
+                if sel {
+                    p.rect_filled(Rect::from_min_size(rr.min + vec2(0.0, 8.0), vec2(3.0, 16.0)), 0.0, pal.accent);
+                }
+                p.with_clip_rect(Rect::from_min_max(rr.min, pos2(rr.right() - 120.0, rr.bottom())))
+                    .text(pos2(rr.left() + 12.0, rr.center().y), Align2::LEFT_CENTER, &pr.name, font(15.0, if sel { "semibold" } else { "regular" }), pal.text);
+                p.text(pos2(rr.right() - 6.0, rr.center().y), Align2::RIGHT_CENTER, format!("{} {}", pr.loader, pr.version).to_uppercase(), font(10.5, "mono"), pal.muted);
+                if resp.clicked() {
+                    self.cfg.active_profile = if sel { None } else { Some(pr.id.clone()) };
+                }
+                ry += 32.0;
+            }
+        }
+
+        // ---------- Statuszeile
+        let sy = play.top() - 22.0;
+        let p = ui.painter();
+        p.text(pos2(area.left(), sy), Align2::LEFT_CENTER, "STATUS", font(10.5, "mono"), pal.muted);
+        let (line, col) = if busy {
+            (status.clone(), pal.text)
+        } else if status.starts_with("Fehler") {
+            (status.clone(), BAD)
+        } else if status.ends_with("läuft") {
+            (status.clone(), GOOD)
+        } else {
+            ("Bereit".to_string(), pal.text)
+        };
+        p.text(pos2(area.left() + 62.0, sy), Align2::LEFT_CENTER, line, font(13.0, "medium"), col);
+        if account.is_none() {
+            p.text(pos2(area.right(), sy), Align2::RIGHT_CENTER, "DEMO-MODUS — FÜR DIE VOLLVERSION OBEN RECHTS ANMELDEN", font(10.5, "mono"), pal.muted);
+        }
+
+        // ---------- Spielen-Leiste
+        let enabled = !busy && (active.is_some() || !self.cfg.version.is_empty());
+        let resp = ui.interact(play, Id::new("play"), if enabled { Sense::click() } else { Sense::hover() });
+        let hov = ui.ctx().animate_bool_with_time(Id::new("playhover"), resp.hovered() && enabled, 0.15);
+        let p = ui.painter();
+        let ink = pal.text;
+        let paper = pal.bg;
         if busy {
-            p.rect_filled(play, pal.r + 2.0, pal.surface2);
+            p.rect_filled(play, pal.r, pal.surface2);
             let f = if total > 0 { done as f32 / total as f32 } else { 0.0 };
             if f > 0.0 {
-                let fr = Rect::from_min_size(play.min, vec2((play.width() * f).max(pal.r * 2.0 + 4.0), play.height()));
-                pal.fill(p, fr, pal.r + 2.0);
+                p.rect_filled(Rect::from_min_size(play.min, vec2(play.width() * f, play.height())), pal.r, pal.accent);
             }
-            let txt = if total > 0 { format!("{:.0} %", f * 100.0) } else { "Startet …".into() };
-            p.text(play.center(), Align2::CENTER_CENTER, txt, font(18.0, "bold"), if f > 0.5 { pal.on_accent } else { pal.text });
+            let txt = if total > 0 { format!("LÄDT  {:.0} %", f * 100.0) } else { "STARTET …".into() };
+            p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, txt, font(30.0, "display"), if f > 0.15 { Color32::WHITE } else { pal.text });
+            p.text(pos2(play.right() - 28.0, play.center().y), Align2::RIGHT_CENTER, format!("{done} / {total}"), font(12.0, "mono"), if f > 0.9 { Color32::WHITE } else { pal.muted });
         } else {
-            pal.shine(p, play, pal.r + 2.0, 0.3 + hover * 0.5);
-            pal.fill(p, play, pal.r + 2.0);
-            if hover > 0.0 {
-                p.rect_filled(play, pal.r + 2.0, alpha(Color32::WHITE, (hover * 28.0) as u8));
-            }
-            icon(p, pos2(play.left() + 34.0, play.center().y), 22.0, pal.on_accent, Icon::Play);
-            p.text(pos2(play.left() + 56.0, play.center().y - 8.0), Align2::LEFT_CENTER, "Spielen", font(19.0, "bold"), pal.on_accent);
-            let sub = match &active {
-                Some(ap) => format!("{} · {}", ap.name, ap.version),
-                None => format!("{} · {}", if self.cfg.version.is_empty() { "–" } else { &self.cfg.version }, self.cfg.loader),
+            let fill = theme::lerp_color(ink, pal.accent, hov);
+            p.rect_filled(play, pal.r, fill);
+            let fg = if hov > 0.5 { Color32::WHITE } else { paper };
+            p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, "SPIELEN", font(34.0, "display"), fg);
+            let what = match &active {
+                Some(ap) => format!("{}  ·  {} {}", ap.name, ap.loader, ap.version).to_uppercase(),
+                None => format!("{}  ·  {}", self.cfg.version, self.cfg.loader).to_uppercase(),
             };
-            p.text(pos2(play.left() + 57.0, play.center().y + 13.0), Align2::LEFT_CENTER, sub, font(11.0, "medium"), alpha(pal.on_accent, 200));
+            let ax = play.right() - 28.0 - hov * 6.0;
+            p.text(pos2(ax, play.center().y), Align2::RIGHT_CENTER, "→", font(30.0, "regular"), fg);
+            p.text(pos2(ax - 44.0, play.center().y), Align2::RIGHT_CENTER, what, font(12.0, "mono"), alpha(fg, 200));
         }
         if resp.clicked() {
             *action = Some(Action::Play);
         }
 
         if self.version_open {
-            self.version_popup(ui, pal, vc, hero);
+            self.version_popup(ui, pal, vc, area);
         }
         self.just_opened = false;
     }
 
     fn version_popup(&mut self, ui: &mut egui::Ui, pal: &Pal, vc: Rect, hero: Rect) {
-        let popup_h = 440.0_f32.min(vc.top() - hero.top() - 8.0);
+        let (above, below) = (vc.top() - hero.top() - 8.0, hero.bottom() - vc.bottom() - 8.0);
+        let popup_h = 440.0_f32.min(above.max(below));
+        let pos = if below >= above { pos2(vc.left(), vc.bottom() + 8.0) } else { pos2(vc.left(), vc.top() - popup_h - 8.0) };
         let area = egui::Area::new(Id::new("verpopup"))
             .order(egui::Order::Foreground)
-            .fixed_pos(pos2(vc.left(), vc.top() - popup_h - 8.0))
+            .fixed_pos(pos)
             .show(ui.ctx(), |ui| {
                 egui::Frame::none()
-                    .fill(pal.surface)
-                    .stroke(Stroke::new(1.0_f32, pal.border))
-                    .rounding(pal.r + 4.0)
-                    .shadow(egui::epaint::Shadow { offset: vec2(0.0, 8.0), blur: 24.0, spread: 0.0, color: alpha(Color32::BLACK, 120) })
+                    .fill(pal.bg)
+                    .stroke(Stroke::new(1.0_f32, pal.text))
+                    .rounding(pal.r)
+                    .shadow(egui::epaint::Shadow { offset: vec2(0.0, 10.0), blur: 30.0, spread: 0.0, color: alpha(Color32::BLACK, 60) })
                     .inner_margin(10.0)
                     .show(ui, |ui| {
                         ui.set_width(300.0);
@@ -625,12 +668,13 @@ impl App {
                                 let (rr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
                                 let sel = self.cfg.active_profile.is_none() && v.id == self.cfg.version;
                                 let p = ui.painter();
-                                if sel {
-                                    p.rect_filled(rr, pal.r, alpha(pal.accent, 45));
-                                } else if resp.hovered() {
+                                if resp.hovered() {
                                     p.rect_filled(rr, pal.r, pal.surface2);
                                 }
-                                p.text(pos2(rr.left() + 10.0, rr.center().y), Align2::LEFT_CENTER, &v.id, font(13.0, "medium"), if sel { pal.accent } else { pal.text });
+                                if sel {
+                                    p.rect_filled(Rect::from_min_size(rr.min + vec2(0.0, 7.0), vec2(3.0, rr.height() - 14.0)), 0.0, pal.accent);
+                                }
+                                p.text(pos2(rr.left() + 12.0, rr.center().y), Align2::LEFT_CENTER, &v.id, font(14.0, if sel { "semibold" } else { "regular" }), pal.text);
                                 let tag = match v.kind.as_str() {
                                     "release" => None,
                                     "snapshot" => Some(("Snapshot", WARN)),
@@ -697,10 +741,6 @@ impl App {
                             ui.label(RichText::new("zweite Farbe").color(pal.muted).size(12.0));
                             egui::color_picker::color_edit_button_srgb(ui, &mut l.accent2);
                         }
-                    });
-                    ui.horizontal(|ui| {
-                        theme::toggle(ui, pal, &mut l.glow);
-                        ui.label("Leuchteffekt um den Spielen-Button");
                     });
                     egui::CollapsingHeader::new(RichText::new("Eigene Farben für alles").color(pal.text)).show(ui, |ui| {
                         egui::Grid::new("colors").num_columns(4).spacing([14.0, 8.0]).show(ui, |ui| {
@@ -928,6 +968,7 @@ fn load_image(path: &str) -> anyhow::Result<egui::ColorImage> {
     Ok(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
 }
 
+#[allow(dead_code)]
 fn avatar(p: &egui::Painter, pal: &Pal, r: Rect, name: Option<&str>, hover: bool) {
     match name {
         Some(n) => {
@@ -949,72 +990,85 @@ fn avatar(p: &egui::Painter, pal: &Pal, r: Rect, name: Option<&str>, hover: bool
     }
 }
 
-fn header(ui: &mut egui::Ui, pal: &Pal, title: &str, sub: &str) {
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
-        ui.label(RichText::new(title).font(font(24.0, "bold")).color(pal.text));
-        ui.label(RichText::new(sub).color(pal.muted).size(12.5));
-    });
-    ui.add_space(6.0);
+fn lerp(a: Color32, b: Color32) -> Color32 {
+    theme::lerp_color(a, b, 0.5)
 }
 
+/// Seitentitel: grosse Display-Schrift, darunter eine Mono-Zeile.
+fn header(ui: &mut egui::Ui, pal: &Pal, title: &str, sub: &str) {
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 4.0;
+        ui.label(RichText::new(title).font(font(38.0, "display")).color(pal.text));
+        ui.label(RichText::new(sub.to_uppercase()).font(font(11.0, "mono")).color(pal.muted));
+    });
+    ui.add_space(14.0);
+}
+
+/// Abschnitt: Haarlinie oben, Mono-Ueberschrift, Inhalt – keine Kaesten.
 fn card(ui: &mut egui::Ui, pal: &Pal, title: &str, body: impl FnOnce(&mut egui::Ui)) {
-    egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)).rounding(pal.r + 2.0).inner_margin(16.0).show(ui, |ui| {
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+    ui.painter().rect_filled(r, 0.0, pal.border);
+    ui.add_space(10.0);
+    ui.horizontal(|ui| {
+        let (m, _) = ui.allocate_exact_size(vec2(6.0, 6.0), Sense::hover());
+        ui.painter().rect_filled(m, 0.0, pal.accent);
+        ui.label(RichText::new(title.to_uppercase()).font(font(11.5, "monom")).color(pal.text));
+    });
+    ui.add_space(2.0);
+    ui.vertical(|ui| {
         ui.set_width(ui.available_width());
-        ui.label(RichText::new(title).font(font(15.0, "semibold")).color(pal.text));
-        ui.add_space(2.0);
         body(ui);
     });
-    ui.add_space(4.0);
+    ui.add_space(18.0);
 }
 
 fn field(ui: &mut egui::Ui, pal: &Pal, label: &str, value: &mut String, hint: &str) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 4.0;
-        ui.label(RichText::new(label).color(pal.muted).size(12.0));
-        ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(440.0).margin(vec2(10.0, 6.0)));
+        ui.label(RichText::new(label.to_uppercase()).font(font(10.5, "mono")).color(pal.muted));
+        ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(440.0).margin(vec2(10.0, 7.0)));
     });
 }
 
+/// Text-Auswahl: Optionen nebeneinander, gewaehlte unterstrichen (Signalfarbe).
 fn segmented_at(ui: &mut egui::Ui, pal: &Pal, rect: Rect, id: &str, options: &[&str], value: &mut String) {
-    ui.painter().rect_filled(rect, pal.r, pal.surface2);
-    let w = rect.width() / options.len() as f32;
+    let mut x = rect.left();
     for (i, o) in options.iter().enumerate() {
-        let r = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w, rect.height())).shrink(3.0);
-        let resp = ui.interact(r, Id::new((id, i)), Sense::click());
+        let g = ui.painter().layout_no_wrap(o.to_string(), font(14.0, "medium"), pal.text);
+        let r = Rect::from_min_size(pos2(x, rect.top()), vec2(g.size().x, rect.height()));
+        let resp = ui.interact(r.expand2(vec2(6.0, 0.0)), Id::new((id, i)), Sense::click());
         let sel = value == o;
-        let p = ui.painter();
+        let col = if sel { pal.text } else if resp.hovered() { lerp(pal.muted, pal.text) } else { pal.muted };
+        ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, *o, font(14.0, "medium"), col);
         if sel {
-            pal.fill(p, r, (pal.r - 2.0).max(0.0));
-        } else if resp.hovered() {
-            p.rect_filled(r, (pal.r - 2.0).max(0.0), theme::lerp_color(pal.surface2, pal.text, 0.08));
+            ui.painter().rect_filled(Rect::from_min_max(pos2(x, r.bottom() - 2.0), pos2(r.right(), r.bottom())), 0.0, pal.accent);
         }
-        p.text(r.center(), Align2::CENTER_CENTER, *o, font(12.5, "medium"), if sel { pal.on_accent } else { pal.muted });
         if resp.clicked() {
             *value = o.to_string();
         }
+        x += g.size().x + 20.0;
     }
 }
 
 fn segmented(ui: &mut egui::Ui, pal: &Pal, id: &str, options: &[&str], value: &mut String) {
-    let w = options.iter().map(|o| ui.fonts(|f| f.layout_no_wrap(o.to_string(), font(12.5, "medium"), Color32::WHITE).size().x)).fold(0.0_f32, f32::max) + 28.0;
-    let (rect, _) = ui.allocate_exact_size(vec2(w * options.len() as f32 + 6.0, 32.0), Sense::hover());
+    let w: f32 = options.iter().map(|o| ui.fonts(|f| f.layout_no_wrap(o.to_string(), font(14.0, "medium"), Color32::WHITE).size().x) + 20.0).sum();
+    let (rect, _) = ui.allocate_exact_size(vec2(w, 30.0), Sense::hover());
     segmented_at(ui, pal, rect, id, options, value);
 }
 
 fn chip(ui: &mut egui::Ui, pal: &Pal, label: &str, on: &mut bool) {
-    let g = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font(11.5, "medium"), Color32::WHITE));
-    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 24.0), Sense::click());
+    let g = ui.fonts(|f| f.layout_no_wrap(label.to_uppercase(), font(10.5, "monom"), Color32::WHITE));
+    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 18.0, 22.0), Sense::click());
     if resp.clicked() {
         *on = !*on;
     }
     let p = ui.painter();
     if *on {
-        pal.fill(p, r, pal.r.min(12.0));
+        p.rect_filled(r, pal.r, pal.text);
     } else {
-        p.rect_filled(r, pal.r.min(12.0), if resp.hovered() { theme::lerp_color(pal.surface2, pal.text, 0.08) } else { pal.surface2 });
+        p.rect_stroke(r, pal.r, Stroke::new(1.0_f32, if resp.hovered() { pal.text } else { pal.border }));
     }
-    p.text(r.center(), Align2::CENTER_CENTER, label, font(11.5, "medium"), if *on { pal.on_accent } else { pal.muted });
+    p.text(r.center(), Align2::CENTER_CENTER, label.to_uppercase(), font(10.5, "monom"), if *on { pal.bg } else { pal.muted });
 }
 
 fn swatch(ui: &mut egui::Ui, pal: &Pal, rgb: theme::Rgb, selected: bool) -> egui::Response {
@@ -1052,7 +1106,7 @@ impl eframe::App for App {
         if self.applied.as_ref() != Some(&self.cfg.look) {
             let l = &self.cfg.look;
             if self.applied.as_ref().map_or(true, |o| o.font != l.font) {
-                theme::setup_fonts(ctx, l.font != "Standard");
+                theme::setup_fonts(ctx, &l.font);
             }
             if self.applied.as_ref().map_or(true, |o| o.ui_scale != l.ui_scale) {
                 ctx.set_zoom_factor(l.ui_scale.clamp(0.6, 2.0));
@@ -1084,9 +1138,8 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().frame(egui::Frame::none().fill(pal.bg)).show(ctx, |ui| {
             let full = ui.max_rect();
-            let title = Rect::from_min_size(full.min, vec2(full.width(), 40.0));
-            let side = Rect::from_min_max(pos2(full.left(), title.bottom()), pos2(full.left() + 68.0, full.bottom()));
-            let content = Rect::from_min_max(pos2(side.right() + 12.0, title.bottom() + 12.0), pos2(full.right() - 12.0, full.bottom() - 12.0));
+            let title = Rect::from_min_size(full.min, vec2(full.width(), 48.0));
+            let content = Rect::from_min_max(pos2(full.left() + 40.0, title.bottom() + 30.0), pos2(full.right() - 40.0, full.bottom() - 28.0));
             match self.page {
                 Page::Home => self.home(ui, content, t, &pal, &account, &mut action),
                 Page::Profiles => self.profiles_page(ui, content, &pal),
@@ -1095,8 +1148,7 @@ impl eframe::App for App {
                 Page::Console => self.console(ui, content, &pal),
                 Page::Settings => self.settings(ui, content, &pal),
             }
-            self.title_bar(ui, title, &pal);
-            self.sidebar(ui, side, &pal, &account, &mut action);
+            self.title_bar(ui, title, &pal, &account, &mut action);
             let grip = Rect::from_min_size(full.max - vec2(14.0, 14.0), vec2(14.0, 14.0));
             let g = ui.interact(grip, Id::new("grip"), Sense::drag());
             if g.hovered() {
@@ -1114,14 +1166,15 @@ impl eframe::App for App {
                 ui.allocate_rect(screen, Sense::click());
             });
             egui::Area::new(Id::new("errorbox")).order(egui::Order::Tooltip).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).show(ctx, |ui| {
-                egui::Frame::none().fill(pal.surface).stroke(Stroke::new(1.0_f32, pal.border)).rounding(pal.r + 4.0).inner_margin(22.0).show(ui, |ui| {
-                    ui.set_max_width(420.0);
-                    ui.label(RichText::new("Etwas ist schiefgelaufen").font(font(17.0, "bold")).color(pal.text));
+                egui::Frame::none().fill(pal.bg).stroke(Stroke::new(1.0_f32, pal.text)).rounding(pal.r).inner_margin(24.0).show(ui, |ui| {
+                    ui.set_max_width(440.0);
+                    ui.label(RichText::new("FEHLER").font(font(11.0, "mono")).color(BAD));
+                    ui.label(RichText::new("Etwas ist schiefgelaufen").font(font(24.0, "display")).color(pal.text));
                     ui.label(RichText::new(err).color(pal.muted));
                     ui.add_space(4.0);
-                    let (r, resp) = ui.allocate_exact_size(vec2(96.0, 34.0), Sense::click());
-                    pal.fill(ui.painter(), r, pal.r);
-                    ui.painter().text(r.center(), Align2::CENTER_CENTER, "OK", font(13.5, "semibold"), pal.on_accent);
+                    let (r, resp) = ui.allocate_exact_size(vec2(110.0, 36.0), Sense::click());
+                    ui.painter().rect_filled(r, pal.r, if resp.hovered() { pal.accent } else { pal.text });
+                    ui.painter().text(r.center(), Align2::CENTER_CENTER, "OK", font(13.0, "monom"), if resp.hovered() { Color32::WHITE } else { pal.bg });
                     if resp.clicked() {
                         let mut s = self.h.lock();
                         s.error = None;

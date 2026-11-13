@@ -1,6 +1,14 @@
 # Peregrine Client – Minecraft-Launcher (Rust)
 
-Ein schneller Minecraft-Launcher, geschrieben in **Rust** – mit cleanem Design, das du komplett anpassen kannst.
+Ein schneller Minecraft-Launcher, geschrieben in **Rust** – mit einem eigenen, sehr klaren Design.
+
+## Design
+Kein typischer „Gaming-Launcher“ mit Neon und Karten, sondern ruhig und typografisch – wie ein
+Fluginstrument: warmes **Papier**-Weiß (oder **Nacht**-Schwarz), Haarlinien statt Kästen, eine
+einzige Signalfarbe (Orange), riesige Versionsnummer in IBM Plex Sans Condensed, Beschriftungen in
+IBM Plex Mono, Navigation als Text in der Titelleiste und eine breite **Spielen-Leiste**, die sich
+beim Laden orange füllt. Unter „Aussehen“ bleibt alles anpassbar (Farbschemas, Akzentfarbe,
+Hintergrund-Bild/Landschaft, Schrift, Größe).
 
 ## Warum ist er schnell?
 - **Startet sofort**: eine einzige kleine Programmdatei (~10 MB), kein Python, kein Java, kein Electron.
@@ -92,4 +100,4 @@ Datei-Eigenschaften) und `logo.png` (Titelleiste und, falls unter „Aussehen �
 der Startseite).
 
 ## Lizenzen
-Schriftart **Poppins** (SIL Open Font License, siehe `assets/fonts/OFL.txt`).
+Schriftarten **IBM Plex Sans Condensed / Plex Mono** und **Poppins** (SIL Open Font License, siehe `assets/fonts/OFL-*.txt`).

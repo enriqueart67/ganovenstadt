@@ -334,8 +334,13 @@ impl App {
             for p in &list {
                 let (rr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
                 let active = self.cfg.active_profile.as_deref() == Some(p.id.as_str());
-                ui.painter().rect_filled(rr, pal.r + 2.0, if resp.hovered() { pal.surface2 } else { pal.surface });
-                ui.painter().rect_stroke(rr, pal.r + 2.0, Stroke::new(1.0_f32, if active { pal.accent } else { pal.border }));
+                if resp.hovered() {
+                    ui.painter().rect_filled(rr, pal.r, pal.surface2);
+                }
+                ui.painter().line_segment([rr.left_bottom(), rr.right_bottom()], Stroke::new(1.0_f32, pal.border));
+                if active {
+                    ui.painter().rect_filled(Rect::from_min_size(rr.min + vec2(0.0, 18.0), vec2(3.0, rr.height() - 36.0)), 0.0, pal.accent);
+                }
                 let ic = Rect::from_min_size(rr.min + vec2(14.0, 14.0), vec2(44.0, 44.0));
                 self.thumb(ui, pal, ic, p.icon.as_deref(), &p.name);
                 let painter = ui.painter();
@@ -345,12 +350,7 @@ impl App {
                 painter.text(pos2(ic.right() + 14.0, rr.top() + 47.0), Align2::LEFT_CENTER, sub, font(12.0, "regular"), pal.muted);
                 let play = Rect::from_min_size(pos2(rr.right() - 120.0, rr.center().y - 17.0), vec2(106.0, 34.0));
                 let presp = ui.interact(play, Id::new(("pplay", &p.id)), Sense::click());
-                let painter = ui.painter();
-                pal.fill(painter, play, pal.r);
-                if presp.hovered() {
-                    painter.rect_filled(play, pal.r, alpha(Color32::WHITE, 25));
-                }
-                painter.text(play.center(), Align2::CENTER_CENTER, "Spielen", font(13.0, "semibold"), pal.on_accent);
+                pal.primary(ui.painter(), play, presp.hovered(), "Spielen");
                 if presp.clicked() {
                     self.play_profile(p.clone());
                 } else if resp.clicked() {
@@ -508,8 +508,7 @@ impl App {
                 ui.label(RichText::new(format!("{} ({})", kind.label(), items.len())).font(font(13.0, "semibold")).color(pal.muted));
                 for m in items {
                     let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 54.0), Sense::hover());
-                    ui.painter().rect_filled(rr, pal.r + 2.0, pal.surface);
-                    ui.painter().rect_stroke(rr, pal.r + 2.0, Stroke::new(1.0_f32, pal.border));
+                    ui.painter().line_segment([rr.left_bottom(), rr.right_bottom()], Stroke::new(1.0_f32, pal.border));
                     let ic = Rect::from_min_size(rr.min + vec2(10.0, 9.0), vec2(36.0, 36.0));
                     self.thumb(ui, pal, ic, m.icon.as_deref(), &m.title);
                     let painter = ui.painter().with_clip_rect(Rect::from_min_max(rr.min, pos2(rr.right() - 200.0, rr.bottom())));
@@ -653,12 +652,11 @@ impl App {
         }
         let busy = self.h.lock().busy;
         let mut clicked = None;
-        let bw = ui.fonts(|f| f.layout_no_wrap(button.to_string(), font(12.5, "semibold"), Color32::WHITE).size().x) + 28.0;
+        let bw = ui.fonts(|f| f.layout_no_wrap(button.to_uppercase(), font(11.5, "monom"), Color32::WHITE).size().x) + 28.0;
         egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
             for hit in &results {
                 let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::hover());
-                ui.painter().rect_filled(rr, pal.r + 2.0, pal.surface);
-                ui.painter().rect_stroke(rr, pal.r + 2.0, Stroke::new(1.0_f32, pal.border));
+                ui.painter().line_segment([rr.left_bottom(), rr.right_bottom()], Stroke::new(1.0_f32, pal.border));
                 let ic = Rect::from_min_size(rr.min + vec2(12.0, 12.0), vec2(48.0, 48.0));
                 self.thumb(ui, pal, ic, hit.icon.as_deref(), &hit.title);
                 let text_clip = Rect::from_min_max(rr.min, pos2(rr.right() - bw - 30.0, rr.bottom()));
@@ -698,15 +696,10 @@ impl App {
                 } else {
                     let enabled = !(show_version && busy);
                     let resp = ui.interact(br, Id::new(("inst", &hit.id)), if enabled { Sense::click() } else { Sense::hover() });
-                    let painter = ui.painter();
-                    pal.fill(painter, br, pal.r);
-                    if resp.hovered() && enabled {
-                        painter.rect_filled(br, pal.r, alpha(Color32::WHITE, 25));
-                    }
+                    pal.primary(ui.painter(), br, resp.hovered() && enabled, button);
                     if !enabled {
-                        painter.rect_filled(br, pal.r, alpha(pal.bg, 120));
+                        ui.painter().rect_filled(br, pal.r, alpha(pal.bg, 140));
                     }
-                    painter.text(br.center(), Align2::CENTER_CENTER, button, font(12.5, "semibold"), pal.on_accent);
                     if resp.clicked() {
                         clicked = Some(hit.clone());
                     }
@@ -719,13 +712,8 @@ impl App {
 }
 
 pub(super) fn accent_button(ui: &mut egui::Ui, pal: &Pal, label: &str) -> egui::Response {
-    let g = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font(13.0, "semibold"), Color32::WHITE));
-    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 28.0, 34.0), Sense::click());
-    let p = ui.painter();
-    pal.fill(p, r, pal.r);
-    if resp.hovered() {
-        p.rect_filled(r, pal.r, alpha(Color32::WHITE, 25));
-    }
-    p.text(r.center(), Align2::CENTER_CENTER, label, font(13.0, "semibold"), pal.on_accent);
+    let g = ui.fonts(|f| f.layout_no_wrap(label.to_uppercase(), font(11.5, "monom"), Color32::WHITE));
+    let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 28.0, 32.0), Sense::click());
+    pal.primary(ui.painter(), r, resp.hovered(), label);
     resp
 }
