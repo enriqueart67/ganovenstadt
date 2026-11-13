@@ -75,6 +75,15 @@ cargo build --release
 ```
 Die Datei liegt dann unter `target/release/peregrine(.exe)`.
 
+## Spielen mit deinem Konto über Prism Launcher (ohne eigene Azure-App)
+1. [Prism Launcher](https://prismlauncher.org/download/) installieren und starten.
+2. In Prism oben rechts **Konten › Konten verwalten › Microsoft hinzufügen** und anmelden. Prism schließen.
+3. Peregrine Client starten – oben rechts steht jetzt dein Name mit „· PRISM“. Auf **Spielen** klicken.
+
+Peregrine legt dafür im Hintergrund eine Prism-Instanz „Peregrine · …“ an, die deinen Peregrine-Spielordner
+(Mods, Shader, Client-Mod) benutzt, und startet sie über Prism. Abschalten oder einen eigenen Pfad zu
+`prismlauncher.exe` angeben: **Einstellungen › Start über Prism Launcher**.
+
 ## Microsoft-Login einrichten (einmalig)
 Microsoft verlangt für jeden Launcher eine eigene App-Registrierung:
 

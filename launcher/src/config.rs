@@ -27,6 +27,10 @@ pub struct Config {
     pub client_id: String,
     pub redirect_uri: String,
     pub close_on_launch: bool,
+    /// Ohne eigenes Konto über den Prism Launcher starten (dessen Anmeldung wird genutzt).
+    pub use_prism: bool,
+    /// Pfad zu prismlauncher(.exe) – leer = automatisch suchen.
+    pub prism_path: String,
     pub look: crate::theme::Look,
     pub active_profile: Option<String>,
     pub client: crate::client_mods::ClientMods,
@@ -49,6 +53,8 @@ impl Default for Config {
             client_id: String::new(),
             redirect_uri: "http://localhost:8765/callback".into(),
             close_on_launch: false,
+            use_prism: true,
+            prism_path: String::new(),
             look: Default::default(),
             active_profile: None,
             client: Default::default(),

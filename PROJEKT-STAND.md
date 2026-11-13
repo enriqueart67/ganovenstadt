@@ -3,7 +3,7 @@
 > Diese Datei fasst alles zusammen, was bisher gebaut wurde. In einem neuen Chat einfach sagen:
 > „Lies `PROJEKT-STAND.md` und mach weiter mit …“
 
-- **Repository:** `enriqueart67/ganovenstadt`, Arbeits-Branch **`claude/youthful-pasteur-m8a12x`**
+- **Repository:** `enriqueart67/ganovenstadt`, Arbeits-Branch **`claude/laughing-babbage-h788yo`** (davor `claude/youthful-pasteur-m8a12x`)
 - Projektübersicht für Menschen: `launcher/README.md`, `client-mod/README.md`.
 - Daneben liegt im Repo das ältere Browser-Spiel *Ganovenstadt* (`index.html`, `spiel.html`) – unabhängig vom Launcher.
 - Sprache der Oberfläche: **Deutsch**.
@@ -29,7 +29,8 @@ Mod-Menü im Spiel → eigenes Design „Papier/Nacht“.
 |---|---|
 | **Spielen** | Alle Minecraft-Versionen aus Mojangs Manifest (Releases, Snapshots, Beta/Alpha), Suche + Filter in der Versionsauswahl. Vanilla, **Fabric**, **Quilt** (Forge/NeoForge **nicht**). Java wird automatisch von Mojang geladen. |
 | **Schnell** | Paralleler Download (64 gleichzeitig, HTTP/2), Schnellstart ohne Prüfung bei bereits installierten Versionen (Marker-Datei `.ready-<loader>`), Option „Reparieren“. |
-| **Login** | Microsoft-Login (OAuth PKCE → Xbox → XSTS → Minecraft). Braucht **eigene Azure Client-ID** (Einstellungen) + Freischaltung durch Mojang. Ohne Konto: offizieller **Demo-Modus**. |
+| **Login** | Microsoft-Login (OAuth PKCE → Xbox → XSTS → Minecraft). Braucht **eigene Azure Client-ID** (Einstellungen) + Freischaltung durch Mojang. |
+| **Start über Prism** (Standard, solange kein eigenes Konto) | `src/prism.rs`: Peregrine sucht den **Prism Launcher**, liest nur den Kontonamen aus `accounts.json` (Titelleiste „NAME · PRISM“), legt pro Version/Profil eine Prism-Instanz `peregrine-…` an (`instance.cfg`, `mmc-pack.json`, `.minecraft` = Junction/Symlink auf den Peregrine-Spielordner), legt Client-Mod + Fabric API hinein, lädt nur Java selbst (`install::prepare_java`) und startet `prismlauncher --launch <id>`. Spiel-Log wird aus `logs/latest.log` in die Konsole gespiegelt. Einstellungen › „Start über Prism Launcher“ (an/aus, Pfad, Status, „Prism öffnen“). Nutzer meldet sich **einmal selbst in Prism** an; Peregrine sieht keine Tokens. Ohne Prism + ohne Konto: Hinweis/Download-Link; mit Schalter aus: Demo-Modus. |
 | **Profile** | Eigene Profile mit eigenem Spielordner (`<spielordner>/instances/<id>`), Version, Loader (optional feste Loader-Version). Auf der Startseite per „Schnellstart“ oder in der Versionsauswahl wählbar. |
 | **Modrinth** (nur Modrinth, CurseForge wurde entfernt) | Entdecken & Installieren von **Mods** (mit Abhängigkeiten), **Ressourcenpaketen**, **Shadern** (Iris wird automatisch mitinstalliert), **Datenpaketen** (Welt wählbar), **Modpacks** (.mrpack → neues Profil, gepinnte Loader-Version, Overrides, Titel/Icons per Hash-Lookup). Ein-/Ausschalten (`.disabled`), Entfernen. |
 | **Client-Mods** | Legt die passende Peregrine-Mod (26.1/26.2/26.3) vor dem Start in Fabric/Quilt-Profile, installiert fehlende Fabric API. Einstellungen macht man **im Spiel** (Rechts-Shift) – der Launcher schreibt die Mod-Config **nicht**. |
@@ -55,6 +56,7 @@ Mod-Menü im Spiel → eigenes Design „Papier/Nacht“.
 | `src/launch.rs` | Java-Kommandozeile bauen, Spiel starten |
 | `src/net.rs` | Paralleler Downloader mit SHA1 |
 | `src/auth.rs` | Microsoft-Login |
+| `src/prism.rs` | Start über Prism Launcher (Suche, Konto-Name, Instanz anlegen, Start, Log mitlesen) |
 | `src/mods.rs` | Modrinth: Suche, Installation, Modpacks, Verwalten |
 | `src/profiles.rs` | Profile speichern/laden, Ordner |
 | `src/client_mods.rs` | eingebettete Mod-Jars (`assets/client-mod/*.jar`), `prepare()` |
@@ -100,7 +102,8 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
 ---
 
 ## 5. Bekannte Grenzen
-- Microsoft-Login braucht eigene Azure-App + Mojang-Freischaltung (sonst nur Demo).
+- Direkter Microsoft-Login braucht eigene Azure-App + Mojang-Freischaltung – bis dahin Start über Prism Launcher (einmal dort anmelden).
+- Prism-Start ist mit einem Prism-Platzhalter getestet (Instanz-Dateien, Junction, Aufruf), **nicht** mit echtem Prism + Konto. Beim ersten Start lädt Prism die Spieldateien selbst (doppelt zu Peregrines eigenem Spielordner).
 - Kein Forge/NeoForge (Profile, Modpacks, Mods nur Fabric/Quilt).
 - Client-Mod nur für 26.1–26.3; In-Game nur auf 26.2 getestet. Rüstung/Trank/Reichweite/Combo/Hurt-Cam/Regen/Toggle-Sneak nicht im Spiel getestet.
 - Keine Updates für installierte Modrinth-Inhalte; keine Zeitänderung (26.3 hat neue Uhr-Logik).

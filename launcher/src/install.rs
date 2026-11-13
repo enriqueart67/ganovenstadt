@@ -343,7 +343,8 @@ async fn java_jobs(ui: &Ui, client: &Client, component: &str) -> Result<(Vec<Job
 }
 
 // ------------------------------------------------------------------ Modloader
-async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str, pinned: Option<&str>) -> Result<String> {
+/// Loader-Version, die gestartet wird: die feste (Modpack) oder die neueste stabile.
+pub async fn loader_version(client: &Client, mc: &str, loader: &str, pinned: Option<&str>) -> Result<(&'static str, String)> {
     let base = match loader {
         "Fabric" => "https://meta.fabricmc.net/v2",
         "Quilt" => "https://meta.quiltmc.org/v3",
@@ -362,12 +363,59 @@ async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str, pinn
         Some(v) => v,
         None => pick["loader"]["version"].as_str().context("Loader-Version fehlt")?,
     };
+    Ok((base, lv.to_string()))
+}
+
+async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str, pinned: Option<&str>) -> Result<String> {
+    let (base, lv) = loader_version(client, mc, loader, pinned).await?;
     let profile = get_json(client, &format!("{base}/versions/loader/{mc}/{lv}/profile/json")).await?;
     let id = profile["id"].as_str().context("Profil-ID fehlt")?.to_string();
     let p = version_json_path(gd, &id);
     std::fs::create_dir_all(p.parent().unwrap())?;
     std::fs::write(&p, serde_json::to_vec_pretty(&profile)?)?;
     Ok(id)
+}
+
+/// Nur Java bereitstellen (für den Start über Prism – Spieldateien lädt Prism selbst).
+/// Liefert `None`, wenn Mojang für diese Plattform kein Java anbietet.
+pub async fn prepare_java(ui: &Ui, client: &Client, cfg: &Config, version: &str) -> Result<Option<PathBuf>> {
+    if !cfg.java_path.trim().is_empty() {
+        return Ok(Some(PathBuf::from(cfg.java_path.trim())));
+    }
+    let gd = PathBuf::from(&cfg.game_dir);
+    let vj = version_json_path(&gd, version);
+    if !vj.exists() {
+        ui.status("Lade Versionsinfos …");
+        let manifest = fetch_manifest(client).await?;
+        let entry = manifest.iter().find(|e| e.id == version)
+            .with_context(|| format!("Version {version} nicht gefunden"))?;
+        let job = Job { url: entry.url.clone(), path: vj.clone(), sha1: Some(entry.sha1.clone()), size: None, exec: false };
+        run_jobs(ui, client, vec![job], true, "Lade Versionsinfos …").await?;
+    }
+    let json = read_json(&vj)?;
+    let java = java_path(cfg, &json);
+    if java.is_absolute() && java.exists() {
+        return Ok(Some(java));
+    }
+    ui.status("Prüfe Java …");
+    let (jobs, links) = java_jobs(ui, client, &java_component(&json)).await?;
+    if jobs.is_empty() {
+        return Ok(None);
+    }
+    run_jobs(ui, client, jobs, false, "Lade Java …").await?;
+    #[cfg(unix)]
+    for (dest, target) in links {
+        if std::fs::symlink_metadata(&dest).is_err() {
+            if let Some(d) = dest.parent() {
+                std::fs::create_dir_all(d)?;
+            }
+            let _ = std::os::unix::fs::symlink(target, &dest);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = links;
+    let java = java_path(cfg, &json);
+    Ok(java.is_absolute().then_some(java))
 }
 
 // ------------------------------------------------------------------ Hauptablauf

@@ -14,6 +14,9 @@ pub struct Shared {
     pub busy: bool,
     pub versions: Vec<VersionEntry>,
     pub account: Option<Account>,
+    /// Gefundene Prism-Installation und dort angemeldetes Konto.
+    pub prism: Option<crate::prism::Prism>,
+    pub prism_account: Option<String>,
     pub error: Option<String>,
     pub quit: bool,
 }
