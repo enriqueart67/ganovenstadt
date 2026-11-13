@@ -251,7 +251,13 @@ impl App {
         }
         config::save_config(&self.cfg);
         self.saved = self.cfg.clone();
-        let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), self.cfg.clone(), self.repair);
+        // Mod-Menü im Launcher-Design, Einstellungen für alle Profile gemeinsam
+        if let Err(e) = client_mods::write_theme(&Pal::from(&self.cfg.look)) {
+            self.h.log(format!("[Client-Mods] Design konnte nicht übertragen werden: {e:#}"));
+        }
+        let mut cfg_rt = self.cfg.clone();
+        cfg_rt.runtime_jvm = vec![client_mods::jvm_arg()];
+        let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), cfg_rt, self.repair);
         self.repair = false;
         let account = h.lock().account.clone();
         let shared = self.prof.shared.clone();
@@ -293,7 +299,7 @@ impl App {
                     h.status("Bereite Client-Mods vor …");
                     setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
                     h.progress(25, 100);
-                    setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo).await;
+                    setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo, &cfg.client.turbo_off).await;
                     h.progress(30, 100);
                     let (key, name) = match &profile_id {
                         Some(pid) => (format!("profil-{pid}"), format!("Peregrine · {label}")),
@@ -327,7 +333,7 @@ impl App {
                 let id = install::prepare(&h, &client, &cfg, &version, &loader, loader_version.as_deref(), repair).await?;
                 let game = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
                 setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
-                setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo).await;
+                setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo, &cfg.client.turbo_off).await;
                 let (java, args) = launch::build(&cfg, &id, account.as_ref(), run_dir.as_deref())?;
                 h.log(format!("[Launcher] Starte {id} mit {}", java.display()));
                 h.status(format!("{id} läuft"));
@@ -1427,7 +1433,8 @@ impl eframe::App for App {
 
 /// Leistungs-Mods (Sodium & Co.) passend zur Minecraft-Version installieren, alte Versionen ersetzen,
 /// beim Ausschalten wieder entfernen. Welche Dateien von Peregrine stammen, steht in mods/.peregrine-turbo.json.
-async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Path, version: &str, loader: &str, on: bool) {
+async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Path, version: &str, loader: &str, on: bool, off: &[String]) {
+    let wanted = |slug: &str| on && !off.iter().any(|o| o == slug);
     use std::collections::BTreeMap;
     if loader == "Vanilla" {
         return;
@@ -1439,13 +1446,14 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
     // Online nur einmal am Tag nach Updates schauen; sonst sofort weiter, wenn alles da ist.
     let check_file = mods.join(".peregrine-turbo-check");
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let complete = client_mods::TURBO.iter().all(|(slug, _, _)| {
+    let complete = client_mods::TURBO.iter().filter(|(slug, _, _)| wanted(slug)).all(|(slug, _, _)| {
         have.get(*slug).is_some_and(|(mc, f)| {
             let p = mods.join(f);
             mc == version && (p.exists() || std::path::Path::new(&format!("{}.disabled", p.display())).exists())
         })
     });
-    if on && complete {
+    let none_unwanted = have.keys().all(|k| wanted(k));
+    if on && complete && none_unwanted {
         let last = std::fs::read_to_string(&check_file).ok().and_then(|t| {
             let (v, ts) = t.trim().split_once(' ')?;
             (v == version).then(|| ts.parse::<u64>().ok()).flatten()
@@ -1471,13 +1479,13 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
             if std::path::Path::new(&format!("{}.disabled", path.display())).exists() {
                 continue; // vom Nutzer abgeschaltet – respektieren
             }
-            if on && mc == version && path.exists() {
+            if wanted(slug) && mc == version && path.exists() {
                 continue;
             }
             let _ = std::fs::remove_file(&path);
             have.remove(slug);
         }
-        if !on {
+        if !wanted(slug) {
             continue;
         }
         h.status(format!("Installiere {name} …"));

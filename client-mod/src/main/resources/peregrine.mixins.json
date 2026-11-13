@@ -7,7 +7,9 @@
     "MouseHandlerMixin",
     "OptionInstanceAccessor",
     "GameRendererMixin",
-    "LevelMixin"
+    "LevelMixin",
+    "AbstractClientPlayerMixin",
+    "PlayerModelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

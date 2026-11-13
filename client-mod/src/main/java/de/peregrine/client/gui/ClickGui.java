@@ -52,19 +52,20 @@ public final class ClickGui extends Screen {
 
     /** Symbole (Unicode) für Kategorien und Module. */
     private static final Map<Category, String> CAT_ICON = Map.of(
-            Category.HUD, "▣", Category.PVP, "⚔", Category.GRAPHICS, "☀", Category.MOVEMENT, "➜", Category.OTHER, "✦");
+            Category.HUD, "▣", Category.PVP, "⚔", Category.GRAPHICS, "☀", Category.MOVEMENT, "➜", Category.COSMETICS, "♛", Category.OTHER, "✦");
     private static final Map<String, String> MOD_ICON = Map.ofEntries(
             Map.entry("fps", "⏱"), Map.entry("cps", "🖱"), Map.entry("coords", "⌖"), Map.entry("clock", "⌚"),
             Map.entry("ping", "📶"), Map.entry("server", "🖧"), Map.entry("speed", "»"), Map.entry("days", "☼"),
             Map.entry("memory", "▤"), Map.entry("reach", "↔"), Map.entry("combo", "✚"), Map.entry("potions", "⚗"),
             Map.entry("armor", "⛨"), Map.entry("keystrokes", "⬆"), Map.entry("crosshair", "✛"), Map.entry("nohurtcam", "♥"),
             Map.entry("zoom", "🔍"), Map.entry("fullbright", "☀"), Map.entry("noweather", "☂"), Map.entry("togglesprint", "➜"),
-            Map.entry("togglesneak", "⇣"), Map.entry("style", "🎨"));
+            Map.entry("togglesneak", "⇣"), Map.entry("style", "🎨"), Map.entry("cape", "⚑"), Map.entry("emotes", "☺"));
 
-    // Farben (dunkel, Peregrine-Orange als Akzent)
-    private static final int BG = 0xF2101013, SIDE = 0xFF0B0B0D, CARD = 0xFF19191E, CARD_HOVER = 0xFF222229,
-            LINE = 0xFF26262E, TEXT = 0xFFF2F2F5, MUTED = 0xFF8C8C99, MUTED2 = 0xFF5E5E6A,
-            ACCENT = 0xFFFF4F00, ACCENT_DARK = 0xFF7A2A08, OFF = 0xFF2A2A32;
+    // Farben aus dem Launcher-Design (bei jedem Öffnen neu geladen)
+    private final Theme t = Theme.load();
+    private final int BG = t.bg, SIDE = t.side, CARD = t.card, CARD_HOVER = t.cardHover, LINE = t.line,
+            TEXT = t.text, MUTED = t.muted, MUTED2 = t.muted2, ACCENT = t.accent, ACCENT_HOVER = t.accentHover,
+            ACCENT_DARK = t.accentSoft, ICON_ON = t.accentSoftText, OFF = t.off, OFF_HOVER = t.offHover, ON_ACCENT = t.onAccent;
 
     public ClickGui() {
         super(Component.literal("Peregrine Client"));
@@ -127,7 +128,7 @@ public final class ClickGui extends Screen {
         float a = anim();
         int W = Math.min(620, width - 20), H = Math.min(370, height - 20);
         int x0 = (width - W) / 2, y0 = (height - H) / 2 + (int) ((1f - a) * 14);
-        g.fill(x0 + 4, y0 + 6, x0 + W + 4, y0 + H + 6, alpha(0x70000000, a)); // Schatten
+        g.fill(x0 + 4, y0 + 6, x0 + W + 4, y0 + H + 6, alpha(t.shadow, a)); // Schatten
         round(g, x0, y0, W, H, BG);
 
         // ---------- Seitenleiste
@@ -136,7 +137,7 @@ public final class ClickGui extends Screen {
         g.fill(x0 + sw - 1, y0, x0 + sw, y0 + H, LINE);
         // Logo
         round(g, x0 + 12, y0 + 12, 22, 22, ACCENT);
-        centered(g, "P", x0 + 23, y0 + 16, 1.4f, 0xFF000000 | 0xFFFFFF);
+        centered(g, "P", x0 + 23, y0 + 16, 1.4f, ON_ACCENT);
         g.text(font, "PEREGRINE", x0 + 40, y0 + 13, TEXT, false);
         scaled(g, "CLIENT", x0 + 40, y0 + 24, 0.75f, ACCENT, false);
 
@@ -144,7 +145,7 @@ public final class ClickGui extends Screen {
         scaled(g, "KATEGORIEN", x0 + 14, sy, 0.7f, MUTED2, false);
         sy += 12;
         int by = y0 + H - 50;
-        int rowH = Math.max(14, Math.min(20, (by - 6 - sy) / 6 - 2));
+        int rowH = Math.max(12, Math.min(20, (by - 6 - sy) / (Category.values().length + 1) - 2));
         List<Category> cats = new ArrayList<>();
         cats.add(null);
         cats.addAll(List.of(Category.values()));
@@ -173,8 +174,8 @@ public final class ClickGui extends Screen {
         }
         // unten: HUD-Editor + Hinweis
         boolean hh = Ui.in(mx, my, x0 + 10, by, sw - 20, 22);
-        round(g, x0 + 10, by, sw - 20, 22, hh ? 0xFFFF6A26 : ACCENT);
-        centered(g, "✎  HUD bearbeiten", x0 + sw / 2, by + 7, 1f, 0xFFFFFFFF);
+        round(g, x0 + 10, by, sw - 20, 22, hh ? ACCENT_HOVER : ACCENT);
+        centered(g, "✎  HUD bearbeiten", x0 + sw / 2, by + 7, 1f, ON_ACCENT);
         hits.add(new Hit(x0 + 10, by, sw - 20, 22, () -> Ui.open(new HudEditor(this))));
         long on = Modules.ALL.stream().filter(m -> m.enabled).count();
         scaled(g, on + " von " + Modules.ALL.size() + " Modulen aktiv", x0 + 12, y0 + H - 20, 0.7f, MUTED, false);
@@ -233,7 +234,7 @@ public final class ClickGui extends Screen {
             // Symbol
             int ix = x + cardW / 2 - 13, iy = y + 8;
             round(g, ix, iy, 26, 26, m.enabled ? ACCENT_DARK : OFF);
-            centered(g, MOD_ICON.getOrDefault(m.id, "•"), x + cardW / 2, iy + 7, 1.4f, m.enabled ? 0xFFFFB38A : MUTED);
+            centered(g, MOD_ICON.getOrDefault(m.id, "•"), x + cardW / 2, iy + 7, 1.4f, m.enabled ? ICON_ON : MUTED);
             // Name + Beschreibung
             centered(g, font.plainSubstrByWidth(m.name, cardW - 10), x + cardW / 2, y + 39, 1f, TEXT);
             String d = font.plainSubstrByWidth(m.description, (int) ((cardW - 12) / 0.7f));
@@ -241,8 +242,8 @@ public final class ClickGui extends Screen {
             // An/Aus-Leiste
             int bx = x + 6, bw = cardW - 12 - (m.settings.isEmpty() ? 0 : 20), byy = y + cardH - 20;
             boolean bh = Ui.in(mx, my, bx, byy, bw, 14);
-            round(g, bx, byy, bw, 14, m.enabled ? (bh ? 0xFFFF6A26 : ACCENT) : (bh ? 0xFF34343E : OFF));
-            centered(g, m.enabled ? "AKTIVIERT" : "AUS", bx + bw / 2, byy + 4, 0.75f, m.enabled ? 0xFFFFFFFF : MUTED);
+            round(g, bx, byy, bw, 14, m.enabled ? (bh ? ACCENT_HOVER : ACCENT) : (bh ? OFF_HOVER : OFF));
+            centered(g, m.enabled ? "AKTIVIERT" : "AUS", bx + bw / 2, byy + 4, 0.75f, m.enabled ? ON_ACCENT : MUTED);
             boolean visible = y + cardH > top && y < cy + ch;
             if (visible) {
                 hits.add(new Hit(x, Math.max(y, top), cardW, Math.max(0, Math.min(y + cardH, cy + ch) - Math.max(y, top)), () -> {
@@ -253,7 +254,7 @@ public final class ClickGui extends Screen {
             if (!m.settings.isEmpty()) {
                 int gx = x + cardW - 20;
                 boolean gh = Ui.in(mx, my, gx, byy, 14, 14);
-                round(g, gx, byy, 14, 14, gh ? 0xFF34343E : OFF);
+                round(g, gx, byy, 14, 14, gh ? OFF_HOVER : OFF);
                 g.text(font, "⚙", gx + 3, byy + 3, gh ? ACCENT : MUTED, false);
                 if (visible && byy >= top && byy + 14 <= cy + ch) hits.add(new Hit(gx, byy, 14, 14, () -> {
                     open = m;
@@ -297,12 +298,12 @@ public final class ClickGui extends Screen {
         int hy = cy + 28;
         round(g, cx, hy, cw, 44, CARD);
         round(g, cx + 8, hy + 8, 28, 28, m.enabled ? ACCENT_DARK : OFF);
-        centered(g, MOD_ICON.getOrDefault(m.id, "•"), cx + 22, hy + 16, 1.4f, m.enabled ? 0xFFFFB38A : MUTED);
+        centered(g, MOD_ICON.getOrDefault(m.id, "•"), cx + 22, hy + 16, 1.4f, m.enabled ? ICON_ON : MUTED);
         scaled(g, m.name, cx + 44, hy + 10, 1.25f, TEXT, false);
         scaled(g, font.plainSubstrByWidth(m.description, (int) ((cw - 120) / 0.8f)), cx + 44, hy + 26, 0.8f, MUTED, false);
         int tx = cx + cw - 60, ty = hy + 14;
         round(g, tx, ty, 50, 16, m.enabled ? ACCENT : OFF);
-        centered(g, m.enabled ? "AN" : "AUS", tx + 25, ty + 4, 0.85f, m.enabled ? 0xFFFFFFFF : MUTED);
+        centered(g, m.enabled ? "AN" : "AUS", tx + 25, ty + 4, 0.85f, m.enabled ? ON_ACCENT : MUTED);
         hits.add(new Hit(tx, ty, 50, 16, () -> {
             m.toggle();
             Store.save();
@@ -323,7 +324,7 @@ public final class ClickGui extends Screen {
                 int sx = cx + cw - 32;
                 round(g, sx, y + 6, 24, 10, b.on() ? ACCENT : OFF);
                 int kx = b.on() ? sx + 15 : sx + 2;
-                g.fill(kx, y + 7, kx + 7, y + 15, 0xFFFFFFFF);
+                g.fill(kx, y + 7, kx + 7, y + 15, b.on() ? ON_ACCENT : BG);
                 if (y >= top) hits.add(new Hit(cx, y, cw, 22, () -> {
                     b.toggle();
                     Store.save();
@@ -333,13 +334,13 @@ public final class ClickGui extends Screen {
                 g.fill(rx, y + 10, rx + sw, y + 12, OFF);
                 int kx = rx + (int) (n.fraction() * sw);
                 g.fill(rx, y + 10, kx, y + 12, ACCENT);
-                round(g, kx - 3, y + 6, 6, 10, 0xFFFFFFFF);
+                round(g, kx - 3, y + 6, 6, 10, TEXT);
                 g.text(font, n.text(), rx + sw + 10, y + 7, MUTED, false);
                 if (y >= top) sliders.add(new Slider(rx - 3, y, sw + 6, 22, n));
             } else if (s instanceof ModeSetting md) {
                 int w = 150;
                 boolean hov = Ui.in(mx, my, rx, y + 3, w, 16);
-                round(g, rx, y + 3, w, 16, hov ? 0xFF34343E : OFF);
+                round(g, rx, y + 3, w, 16, hov ? OFF_HOVER : OFF);
                 g.text(font, "‹", rx + 6, y + 7, MUTED, false);
                 g.text(font, "›", rx + w - 10, y + 7, MUTED, false);
                 g.text(font, md.get(), rx + (w - font.width(md.get())) / 2, y + 7, TEXT, false);
@@ -356,7 +357,7 @@ public final class ClickGui extends Screen {
             } else if (s instanceof ColorSetting c) {
                 int px = cx + cw - 10 - ColorSetting.PALETTE.length * 14;
                 for (int col : ColorSetting.PALETTE) {
-                    if (col == c.argb()) round(g, px - 1, y + 4, 13, 14, 0xFFFFFFFF);
+                    if (col == c.argb()) round(g, px - 1, y + 4, 13, 14, TEXT);
                     g.fill(px, y + 5, px + 11, y + 17, col);
                     final int ccol = col;
                     if (y >= top) hits.add(new Hit(px, y + 5, 11, 12, () -> {

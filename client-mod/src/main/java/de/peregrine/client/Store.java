@@ -11,15 +11,32 @@ import net.fabricmc.loader.api.FabricLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Speichert Module (an/aus, Einstellungen, HUD-Positionen) in config/peregrine-client.json. */
+/** Speichert Module (an/aus, Einstellungen, HUD-Positionen) – gemeinsam für alle Profile (vom Launcher) oder in config/peregrine-client.json. */
 public final class Store {
-    public static Path path() {
+    /** Gemeinsamer Ordner vom Launcher (-Dperegrine.home) – sonst null. */
+    public static Path home() {
+        String h = System.getProperty("peregrine.home");
+        return h == null || h.isBlank() ? null : Path.of(h);
+    }
+
+    private static Path local() {
         return FabricLoader.getInstance().getConfigDir().resolve("peregrine-client.json");
+    }
+
+    /** Einstellungen gelten für alle Profile, wenn der Launcher einen gemeinsamen Ordner vorgibt. */
+    public static Path path() {
+        Path h = home();
+        return h == null ? local() : h.resolve("peregrine-client.json");
     }
 
     public static void load() {
         try {
             Path p = path();
+            // Erster Start mit gemeinsamem Ordner: bisherige Einstellungen dieses Profils übernehmen
+            if (!Files.exists(p) && !p.equals(local()) && Files.exists(local())) {
+                Files.createDirectories(p.getParent());
+                Files.copy(local(), p);
+            }
             if (!Files.exists(p)) return;
             JsonObject root = JsonParser.parseString(Files.readString(p)).getAsJsonObject();
             if (!root.has("modules")) return; // altes Format – Standardwerte nehmen

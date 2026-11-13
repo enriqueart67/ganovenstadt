@@ -31,6 +31,9 @@ pub struct Config {
     pub use_prism: bool,
     /// Pfad zu prismlauncher(.exe) – leer = automatisch suchen.
     pub prism_path: String,
+    /// Nur zur Laufzeit: zusätzliche JVM-Argumente dieses Starts.
+    #[serde(skip)]
+    pub runtime_jvm: Vec<String>,
     pub look: crate::theme::Look,
     pub active_profile: Option<String>,
     pub client: crate::client_mods::ClientMods,
@@ -55,6 +58,7 @@ impl Default for Config {
             close_on_launch: false,
             use_prism: true,
             prism_path: String::new(),
+            runtime_jvm: Vec::new(),
             look: Default::default(),
             active_profile: None,
             client: Default::default(),

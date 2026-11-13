@@ -439,6 +439,31 @@ public final class Modules {
         }
     }
 
+    // ================================================================== Cosmetics
+    public static final class Cape extends Module {
+        public static final String[] DESIGNS = {"Falke", "Nacht", "Papier", "Flamme", "Ozean", "Galaxie", "Regenbogen", "Kristall"};
+        public final ModeSetting design = add(new ModeSetting("design", "Design", "Falke", DESIGNS));
+        public final BoolSetting elytra = add(new BoolSetting("elytra", "Auch auf der Elytra", true));
+
+        Cape() {
+            super("cape", "Umhang", "Eigener Umhang (F5 zum Ansehen) – sehen nur Peregrine-Spieler auf deinem PC", Category.COSMETICS, true);
+        }
+    }
+
+    public static final class EmoteModule extends Module {
+        public final BoolSetting camera = add(new BoolSetting("camera", "Kamera nach vorne drehen", true));
+        public final BoolSetting stopOnMove = add(new BoolSetting("stop", "Beim Laufen abbrechen", true));
+
+        EmoteModule() {
+            super("emotes", "Emotes", "Animationen für deine Spielfigur – Rad mit Taste B", Category.COSMETICS, true);
+        }
+
+        @Override
+        public void tick(Minecraft mc) {
+            Emotes.tick(mc);
+        }
+    }
+
     // ================================================================== Sonstiges
     public static final class Style extends Module {
         public final ColorSetting labelColor = add(new ColorSetting("label", "Farbe Beschriftung", 0xFF4F8CFF));
@@ -474,11 +499,13 @@ public final class Modules {
     public static final NoWeather NO_WEATHER = new NoWeather();
     public static final ToggleSprint TOGGLE_SPRINT = new ToggleSprint();
     public static final ToggleSneak TOGGLE_SNEAK = new ToggleSneak();
+    public static final Cape CAPE = new Cape();
+    public static final EmoteModule EMOTES = new EmoteModule();
     public static final Style STYLE = new Style();
 
     public static final List<Module> ALL = List.of(
             FPS, CPS, COORDS, KEYSTROKES, ARMOR, POTIONS, CLOCK, PING, SERVER, SPEED, DAYS, MEMORY, REACH, COMBO,
-            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, STYLE);
+            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, EMOTES, STYLE);
 
     public static List<HudModule> huds() {
         List<HudModule> l = new ArrayList<>();

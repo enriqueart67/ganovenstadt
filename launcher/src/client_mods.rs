@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 22] = [
+pub const MODULES: [(&str, &str, &str); 24] = [
     ("HUD", "FPS", "Bilder pro Sekunde"),
     ("HUD", "CPS", "Klicks pro Sekunde (links | rechts)"),
     ("HUD", "Koordinaten", "X, Y, Z und Himmelsrichtung"),
@@ -52,6 +52,8 @@ pub const MODULES: [(&str, &str, &str); 22] = [
     ("Grafik", "Kein Regen", "Regen/Gewitter nur bei dir aus"),
     ("Bewegung", "Auto-Sprint", "Automatisch sprinten (Taste V)"),
     ("Bewegung", "Schleichen umschalten", "Einmal drücken statt halten"),
+    ("Cosmetics", "Umhang", "8 eigene Umhänge, auch auf der Elytra (F5 zum Ansehen)"),
+    ("Cosmetics", "Emotes", "Winken, Dab, Klatschen, Tanzen u. a. – Rad mit Taste B"),
     ("Sonstiges", "HUD-Stil", "Farben und Hintergrund aller Anzeigen"),
 ];
 
@@ -62,13 +64,15 @@ pub struct ClientMods {
     pub enabled: bool,
     /// Leistungs-Mods (Sodium & Co.) automatisch installieren.
     pub turbo: bool,
+    /// Einzelne Leistungs-Mods, die der Nutzer abgeschaltet hat (Slugs).
+    pub turbo_off: Vec<String>,
     /// Im Launcher geänderte Tasten: Aktion (z. B. "key.peregrine.zoom") -> Minecraft-Tastenname.
     pub keys: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for ClientMods {
     fn default() -> Self {
-        Self { enabled: true, turbo: true, keys: Default::default() }
+        Self { enabled: true, turbo: true, turbo_off: Vec::new(), keys: Default::default() }
     }
 }
 
@@ -81,11 +85,12 @@ pub const TURBO: [(&str, &str, &str); 5] = [
     ("entityculling", "Entity Culling", "verdeckte Tiere/Truhen werden nicht gezeichnet"),
 ];
 /// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
-pub const KEYS: [(&str, &str, &str); 4] = [
+pub const KEYS: [(&str, &str, &str); 5] = [
     ("key.peregrine.menu", "Mod-Menü öffnen", "key.keyboard.right.shift"),
     ("key.peregrine.zoom", "Zoom (halten)", "key.keyboard.c"),
     ("key.peregrine.fullbright", "Fullbright an/aus", "key.keyboard.g"),
     ("key.peregrine.sprint", "Auto-Sprint an/aus", "key.keyboard.v"),
+    ("key.peregrine.emote", "Emote-Rad", "key.keyboard.b"),
 ];
 
 /// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).
@@ -185,6 +190,29 @@ pub fn apply_keys(run_dir: &Path, keys: &std::collections::BTreeMap<String, Stri
         std::fs::write(&path, lines.join("\n") + "\n")?;
     }
     Ok(true)
+}
+
+/// Gemeinsamer Ordner der Client-Mod (Einstellungen für alle Profile, Design aus dem Launcher).
+pub fn shared_dir() -> std::path::PathBuf {
+    crate::config::base_dir().join("client")
+}
+
+/// Design des Launchers für das Mod-Menü im Spiel (Farben als [r, g, b]).
+pub fn write_theme(pal: &crate::theme::Pal) -> Result<()> {
+    let c = |x: eframe::egui::Color32| [x.r(), x.g(), x.b()];
+    let v = serde_json::json!({
+        "bg": c(pal.bg), "surface": c(pal.surface), "surface2": c(pal.surface2), "border": c(pal.border),
+        "text": c(pal.text), "muted": c(pal.muted), "accent": c(pal.accent), "onAccent": c(pal.on_accent),
+        "light": pal.light,
+    });
+    let dir = shared_dir();
+    std::fs::create_dir_all(&dir)?;
+    write_if_changed(&dir.join("theme.json"), &serde_json::to_vec_pretty(&v)?)
+}
+
+/// JVM-Argument, mit dem die Client-Mod den gemeinsamen Ordner findet.
+pub fn jvm_arg() -> String {
+    format!("-Dperegrine.home={}", shared_dir().display())
 }
 
 pub const TURBO_MARKER: &str = ".peregrine-turbo.json";

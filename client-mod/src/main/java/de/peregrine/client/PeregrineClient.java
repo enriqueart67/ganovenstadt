@@ -25,7 +25,7 @@ public final class PeregrineClient implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Peregrine");
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("peregrine", "main"));
 
-    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey;
+    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey;
 
     @Override
     public void onInitializeClient() {
@@ -34,6 +34,7 @@ public final class PeregrineClient implements ClientModInitializer {
         zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.zoom", InputConstants.KEY_C, CATEGORY));
         fullbrightKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.fullbright", InputConstants.KEY_G, CATEGORY));
         sprintKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.sprint", InputConstants.KEY_V, CATEGORY));
+        emoteKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.emote", InputConstants.KEY_B, CATEGORY));
 
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("peregrine", "hud"), (g, dt) -> {
             if (HudEditor.active) return;
@@ -72,7 +73,12 @@ public final class PeregrineClient implements ClientModInitializer {
         return menuKey != null && menuKey.matches(e);
     }
 
+    public static boolean isEmoteKey(net.minecraft.client.input.KeyEvent e) {
+        return emoteKey != null && emoteKey.matches(e);
+    }
+
     private static void onTick(Minecraft mc) {
+        while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
         Zoom.setHeld(zoomKey.isDown());
         while (fullbrightKey.consumeClick()) toggle(mc, Modules.FULLBRIGHT);

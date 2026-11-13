@@ -367,7 +367,11 @@ pub fn instance_cfg(name: &str, cfg: &Config, java: Option<&Path>) -> String {
         "-XX:G1ReservePercent=20", "-XX:MaxGCPauseMillis=50", "-XX:G1HeapRegionSize=32M",
     ]
     .join(" ");
-    let jvm = format!("{jvm} {}", cfg.extra_jvm_args.trim());
+    let mut jvm = format!("{jvm} {}", cfg.extra_jvm_args.trim());
+    for a in &cfg.runtime_jvm {
+        // Prism trennt JvmArgs wie eine Kommandozeile – Argumente mit Leerzeichen in Anführungszeichen
+        if a.contains(' ') { jvm += &format!(" \"{a}\"") } else { jvm += &format!(" {a}") }
+    }
     out += &format!(
         "OverrideMemory=true\nMaxMemAlloc={}\nMinMemAlloc={}\nOverrideJavaArgs=true\nJvmArgs=\"{}\"\n",
         cfg.ram_mb,

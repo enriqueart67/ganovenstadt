@@ -5,6 +5,7 @@ public enum Category {
     PVP("PvP"),
     GRAPHICS("Grafik"),
     MOVEMENT("Bewegung"),
+    COSMETICS("Cosmetics"),
     OTHER("Sonstiges");
 
     public final String label;

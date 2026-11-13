@@ -104,6 +104,7 @@ pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>, run_dir: 
             .map(String::from),
     );
     jvm.extend(cfg.extra_jvm_args.split_whitespace().map(String::from));
+    jvm.extend(cfg.runtime_jvm.iter().cloned());
     let log_cfg = &json["logging"]["client"];
     if let (Some(arg), Some(id)) = (log_cfg["argument"].as_str(), log_cfg["file"]["id"].as_str()) {
         let p = assets.join("log_configs").join(id);

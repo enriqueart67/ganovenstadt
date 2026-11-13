@@ -31,8 +31,15 @@ impl App {
                         ui.label("Leistungs-Mods automatisch installieren");
                     });
                     ui.label(RichText::new("Für Fabric und Quilt. Peregrine lädt die passenden Versionen von Modrinth und hält sie aktuell.").color(pal.muted).size(12.5));
-                    for (_, name, what) in client_mods::TURBO {
+                    for (slug, name, what) in client_mods::TURBO {
                         ui.horizontal(|ui| {
+                            let mut on = !cm.turbo_off.iter().any(|o| o == slug);
+                            ui.add_enabled_ui(cm.turbo, |ui| theme::toggle(ui, pal, &mut on));
+                            if on {
+                                cm.turbo_off.retain(|o| o != slug);
+                            } else if !cm.turbo_off.iter().any(|o| o == slug) {
+                                cm.turbo_off.push(slug.to_string());
+                            }
                             ui.label(RichText::new(name).color(pal.text));
                             ui.label(RichText::new(format!("– {what}")).color(pal.muted).size(12.5));
                         });
