@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "peregrine",
+  "version": "${version}",
+  "name": "Peregrine Client",
+  "description": "Client-Mods des Peregrine Client: FPS, CPS, Koordinaten, Keystrokes, eigenes Fadenkreuz, Zoom, Fullbright und Auto-Sprint.",
+  "authors": ["Peregrine Client"],
+  "license": "MIT",
+  "icon": "assets/peregrine/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["de.peregrine.client.PeregrineClient"]
+  },
+  "mixins": ["peregrine.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=25"
+  }
+}

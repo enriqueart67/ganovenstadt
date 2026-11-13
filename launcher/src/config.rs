@@ -29,6 +29,7 @@ pub struct Config {
     pub close_on_launch: bool,
     pub look: crate::theme::Look,
     pub active_profile: Option<String>,
+    pub client: crate::client_mods::ClientMods,
 }
 
 impl Default for Config {
@@ -50,6 +51,7 @@ impl Default for Config {
             close_on_launch: false,
             look: Default::default(),
             active_profile: None,
+            client: Default::default(),
         }
     }
 }

@@ -353,6 +353,7 @@ pub enum Icon {
     Settings,
     Brush,
     Grid,
+    Crosshair,
     Close,
     Minimize,
     Maximize,
@@ -388,6 +389,12 @@ pub fn icon(p: &Painter, c: Pos2, s: f32, color: Color32, kind: Icon) {
                 p.circle_filled(pt(x, y), s * 0.07, color);
             }
             p.circle_filled(pt(0.14, 0.14), s * 0.1, color);
+        }
+        Icon::Crosshair => {
+            p.circle_stroke(c, s * 0.3, st);
+            for (a, b) in [((0.0, -0.46), (0.0, -0.16)), ((0.0, 0.16), (0.0, 0.46)), ((-0.46, 0.0), (-0.16, 0.0)), ((0.16, 0.0), (0.46, 0.0))] {
+                p.line_segment([pt(a.0, a.1), pt(b.0, b.1)], st);
+            }
         }
         Icon::Grid => {
             for (x, y) in [(-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22)] {

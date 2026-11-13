@@ -21,6 +21,13 @@ Ein schneller Minecraft-Launcher, geschrieben in **Rust** – mit cleanem Design
 - **Startseite**: Titel, Untertitel und Slogan frei wählbar, Elemente ein-/ausblenden
 - **Design teilen**: als Code kopieren und bei Freunden einfügen; Zurücksetzen mit einem Klick
 
+## Client-Mods (Seite „Client-Mods“)
+Eingebaute Extras im Spiel wie bei bekannten PvP-Clients – eine eigene Fabric-Mod, die der Launcher
+automatisch in Fabric-/Quilt-Profile legt (Minecraft 26.1, 26.2, 26.3, Fabric API kommt automatisch mit):
+**FPS, CPS, Koordinaten, Richtung, Uhrzeit, Keystrokes, eigenes Fadenkreuz** (mit Live-Vorschau im
+Launcher), **Zoom** (C), **Fullbright** (G) und **Auto-Sprint** (V). Änderungen im Launcher wirken
+sofort – auch während du spielst. Quellcode und Bauanleitung: [`client-mod/`](../client-mod/README.md).
+
 ## Profile & Inhalte (alles von Modrinth)
 - **Profile anlegen**: Name, Minecraft-Version und Modloader (Fabric, Quilt oder Vanilla).
   Jedes Profil hat einen **eigenen Spielordner** – Welten, Einstellungen und Inhalte bleiben getrennt.

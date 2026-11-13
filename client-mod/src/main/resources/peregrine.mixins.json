@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "de.peregrine.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["CameraMixin", "MouseHandlerMixin", "OptionInstanceAccessor"],
+  "injectors": { "defaultRequire": 1 }
+}

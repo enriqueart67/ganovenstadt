@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 //! Peregrine Client – ein schneller Minecraft-Launcher in Rust.
 mod auth;
+mod client_mods;
 mod config;
 mod gui;
 mod install;

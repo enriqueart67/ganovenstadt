@@ -6,16 +6,19 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, Id, Rect, RichText, Sense,
 use crate::config::{self, Config};
 use crate::state::Ui as Handle;
 use crate::theme::{self, alpha, font, icon, Icon, Look, Pal, BAD, GOOD, WARN};
-use crate::{auth, install, launch, net, profiles};
+use crate::{auth, client_mods, install, launch, mods, net, profiles};
 
 #[path = "gui_profiles.rs"]
 mod profiles_ui;
+#[path = "gui_client.rs"]
+mod client_ui;
 use profiles_ui::ProfilesUi;
 
 #[derive(PartialEq, Clone, Copy)]
 enum Page {
     Home,
     Profiles,
+    Client,
     Look,
     Console,
     Settings,
@@ -152,7 +155,7 @@ impl App {
             Some(p) => self.play_profile(p),
             None => {
                 let (v, l) = (self.cfg.version.clone(), self.cfg.loader.clone());
-                self.launch(v, l, None, None);
+                self.launch(v, l, None, None, None);
             }
         }
     }
@@ -163,19 +166,22 @@ impl App {
         }
         let dir = profiles::dir(&self.cfg.game_dir, &p);
         self.h.log(format!("[Launcher] Profil „{}“ ({} {})", p.name, p.loader, p.version));
-        self.launch(p.version, p.loader, p.loader_version, Some(dir));
+        self.launch(p.version, p.loader, p.loader_version, Some(dir), Some(p.id));
     }
 
-    fn launch(&mut self, version: String, loader: String, loader_version: Option<String>, run_dir: Option<std::path::PathBuf>) {
+    fn launch(&mut self, version: String, loader: String, loader_version: Option<String>, run_dir: Option<std::path::PathBuf>, profile_id: Option<String>) {
         config::save_config(&self.cfg);
         self.saved = self.cfg.clone();
         let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), self.cfg.clone(), self.repair);
         self.repair = false;
         let account = h.lock().account.clone();
+        let shared = self.prof.shared.clone();
         h.set_busy(true);
         self.rt.spawn(async move {
             let res = async {
                 let id = install::prepare(&h, &client, &cfg, &version, &loader, loader_version.as_deref(), repair).await?;
+                let game = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
+                setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
                 let (java, args) = launch::build(&cfg, &id, account.as_ref(), run_dir.as_deref())?;
                 h.log(format!("[Launcher] Starte {id} mit {}", java.display()));
                 h.status(format!("{id} läuft"));
@@ -192,6 +198,17 @@ impl App {
             h.progress(0, 0);
             h.set_busy(false);
         });
+    }
+
+    /// Client-Mod-Einstellungen in alle Spielordner schreiben, in denen die Mod liegt (wirkt sofort im Spiel).
+    fn sync_client_config(&self) {
+        let mut dirs = vec![std::path::PathBuf::from(&self.cfg.game_dir)];
+        dirs.extend(self.prof.list.iter().map(|p| profiles::dir(&self.cfg.game_dir, p)));
+        for d in dirs {
+            if d.join("mods").join("peregrine-client.jar").exists() {
+                let _ = client_mods::write_config(&d, &self.cfg.client);
+            }
+        }
     }
 
     fn bg_texture(&mut self, ctx: &egui::Context) -> Option<egui::TextureHandle> {
@@ -269,6 +286,7 @@ impl App {
         for (page, kind, tip) in [
             (Page::Home, Icon::Home, "Start"),
             (Page::Profiles, Icon::Grid, "Profile & Inhalte"),
+            (Page::Client, Icon::Crosshair, "Client-Mods"),
             (Page::Look, Icon::Brush, "Aussehen"),
             (Page::Console, Icon::Console, "Konsole"),
             (Page::Settings, Icon::Settings, "Einstellungen"),
@@ -1083,6 +1101,7 @@ impl eframe::App for App {
             match self.page {
                 Page::Home => self.home(ui, content, t, &pal, &account, &mut action),
                 Page::Profiles => self.profiles_page(ui, content, &pal),
+                Page::Client => self.client_page(ui, content, &pal),
                 Page::Look => self.look_page(ui, content, &pal),
                 Page::Console => self.console(ui, content, &pal),
                 Page::Settings => self.settings(ui, content, &pal),
@@ -1134,6 +1153,9 @@ impl eframe::App for App {
             }
             None => {}
         }
+        if self.cfg.client != self.saved.client {
+            self.sync_client_config();
+        }
         if self.cfg != self.saved {
             config::save_config(&self.cfg);
             self.saved = self.cfg.clone();
@@ -1145,5 +1167,45 @@ impl eframe::App for App {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         config::save_config(&self.cfg);
+    }
+}
+
+/// Vor dem Start: Client-Mod einlegen (oder entfernen), Einstellungen schreiben, ggf. Fabric API nachinstallieren.
+async fn setup_client_mods(
+    h: &Handle,
+    client: &reqwest::Client,
+    game: &std::path::Path,
+    version: &str,
+    loader: &str,
+    cm: &client_mods::ClientMods,
+    profile_id: Option<&str>,
+    shared: &std::sync::Arc<std::sync::Mutex<profiles_ui::ModsShared>>,
+) {
+    match client_mods::prepare(game, version, loader, cm) {
+        Ok(client_mods::Prepared::Ready { needs_fabric_api }) => {
+            if needs_fabric_api {
+                h.status("Installiere Fabric API für die Client-Mods …");
+                let hh = h.clone();
+                match mods::install(client, mods::Kind::Mod, client_mods::FABRIC_API, version, loader, game, None, &[], move |l| hh.log(l)).await {
+                    Ok(list) => {
+                        if let Some(pid) = profile_id {
+                            shared.lock().unwrap_or_else(|e| e.into_inner()).finished.push((pid.to_string(), list));
+                        }
+                    }
+                    Err(e) => {
+                        h.log(format!("[Client-Mods] Fabric API konnte nicht installiert werden ({e:#}) – Client-Mods diesmal aus."));
+                        let _ = std::fs::remove_file(game.join("mods").join("peregrine-client.jar"));
+                        return;
+                    }
+                }
+            }
+            h.log("[Client-Mods] aktiv – FPS, CPS, Fadenkreuz, Zoom (C), Fullbright (G), Auto-Sprint (V)");
+        }
+        Ok(client_mods::Prepared::Unsupported) => h.log(format!(
+            "[Client-Mods] Für Minecraft {version} gibt es noch keine Client-Mods (unterstützt: {}).",
+            client_mods::supported().join(", ")
+        )),
+        Ok(client_mods::Prepared::Off) => {}
+        Err(e) => h.log(format!("[Client-Mods] Fehler: {e:#}")),
     }
 }
