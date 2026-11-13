@@ -200,17 +200,6 @@ impl App {
         });
     }
 
-    /// Client-Mod-Einstellungen in alle Spielordner schreiben, in denen die Mod liegt (wirkt sofort im Spiel).
-    fn sync_client_config(&self) {
-        let mut dirs = vec![std::path::PathBuf::from(&self.cfg.game_dir)];
-        dirs.extend(self.prof.list.iter().map(|p| profiles::dir(&self.cfg.game_dir, p)));
-        for d in dirs {
-            if d.join("mods").join("peregrine-client.jar").exists() {
-                let _ = client_mods::write_config(&d, &self.cfg.client);
-            }
-        }
-    }
-
     fn bg_texture(&mut self, ctx: &egui::Context) -> Option<egui::TextureHandle> {
         let path = self.cfg.look.image_path.trim().to_string();
         if path.is_empty() {
@@ -1153,9 +1142,6 @@ impl eframe::App for App {
             }
             None => {}
         }
-        if self.cfg.client != self.saved.client {
-            self.sync_client_config();
-        }
         if self.cfg != self.saved {
             config::save_config(&self.cfg);
             self.saved = self.cfg.clone();
@@ -1199,7 +1185,7 @@ async fn setup_client_mods(
                     }
                 }
             }
-            h.log("[Client-Mods] aktiv – FPS, CPS, Fadenkreuz, Zoom (C), Fullbright (G), Auto-Sprint (V)");
+            h.log("[Client-Mods] aktiv – im Spiel mit Rechts-Shift das Mod-Menü öffnen");
         }
         Ok(client_mods::Prepared::Unsupported) => h.log(format!(
             "[Client-Mods] Für Minecraft {version} gibt es noch keine Client-Mods (unterstützt: {}).",

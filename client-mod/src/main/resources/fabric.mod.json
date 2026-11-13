@@ -3,15 +3,21 @@
   "id": "peregrine",
   "version": "${version}",
   "name": "Peregrine Client",
-  "description": "Client-Mods des Peregrine Client: FPS, CPS, Koordinaten, Keystrokes, eigenes Fadenkreuz, Zoom, Fullbright und Auto-Sprint.",
-  "authors": ["Peregrine Client"],
+  "description": "Peregrine Client: Mod-Menü (Rechts-Shift) mit HUD-Modulen, eigenem Fadenkreuz, Zoom, Fullbright und mehr.",
+  "authors": [
+    "Peregrine Client"
+  ],
   "license": "MIT",
   "icon": "assets/peregrine/icon.png",
   "environment": "client",
   "entrypoints": {
-    "client": ["de.peregrine.client.PeregrineClient"]
+    "client": [
+      "de.peregrine.client.PeregrineClient"
+    ]
   },
-  "mixins": ["peregrine.mixins.json"],
+  "mixins": [
+    "peregrine.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.18.4",
     "fabric-api": "*",

@@ -1,6 +1,6 @@
 package de.peregrine.client;
 
-/** Weicher Zoom (wie OptiFine), solange die Zoom-Taste gedrueckt ist. */
+/** Zoom (wie OptiFine), solange die Zoom-Taste gedrueckt ist – optional weich. */
 public final class Zoom {
     private static boolean held;
     private static double current = 1.0;
@@ -10,18 +10,15 @@ public final class Zoom {
         held = h;
     }
 
-    public static boolean isHeld() {
-        return held;
-    }
-
     /** Faktor, durch den das Sichtfeld geteilt wird (1 = kein Zoom). */
     public static double factor() {
-        Config c = Config.get();
-        double target = (held && c.zoom) ? Math.max(1.0, c.zoomFactor) : 1.0;
+        var z = Modules.ZOOM;
+        double target = (held && z.enabled) ? Math.max(1.0, z.factor.d()) : 1.0;
         long now = System.nanoTime();
         double dt = Math.min(0.1, (now - lastNanos) / 1e9);
         lastNanos = now;
-        current += (target - current) * Math.min(1.0, dt * 14.0);
+        if (!z.smooth.on()) current = target;
+        else current += (target - current) * Math.min(1.0, dt * 14.0);
         if (Math.abs(current - target) < 0.001) current = target;
         return current;
     }

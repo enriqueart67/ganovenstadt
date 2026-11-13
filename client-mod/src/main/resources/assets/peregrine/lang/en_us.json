@@ -2,5 +2,7 @@
   "key.categories.peregrine.main": "Peregrine Client",
   "key.peregrine.zoom": "Zoom",
   "key.peregrine.fullbright": "Toggle Fullbright",
-  "key.peregrine.sprint": "Toggle Auto-Sprint"
+  "key.peregrine.sprint": "Toggle Auto-Sprint",
+  "key.peregrine.menu": "Open Peregrine menu",
+  "key.category.peregrine.main": "Peregrine Client"
 }
