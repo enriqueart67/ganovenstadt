@@ -28,6 +28,8 @@ pub struct Config {
     pub redirect_uri: String,
     pub close_on_launch: bool,
     pub look: crate::theme::Look,
+    pub cf_api_key: String,
+    pub active_profile: Option<String>,
 }
 
 impl Default for Config {
@@ -48,6 +50,8 @@ impl Default for Config {
             redirect_uri: "http://localhost:8765/callback".into(),
             close_on_launch: false,
             look: Default::default(),
+            cf_api_key: String::new(),
+            active_profile: None,
         }
     }
 }

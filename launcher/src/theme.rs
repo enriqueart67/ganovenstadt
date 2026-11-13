@@ -352,6 +352,7 @@ pub enum Icon {
     Console,
     Settings,
     Brush,
+    Grid,
     Close,
     Minimize,
     Maximize,
@@ -387,6 +388,11 @@ pub fn icon(p: &Painter, c: Pos2, s: f32, color: Color32, kind: Icon) {
                 p.circle_filled(pt(x, y), s * 0.07, color);
             }
             p.circle_filled(pt(0.14, 0.14), s * 0.1, color);
+        }
+        Icon::Grid => {
+            for (x, y) in [(-0.22, -0.22), (0.22, -0.22), (-0.22, 0.22), (0.22, 0.22)] {
+                p.rect_stroke(Rect::from_center_size(pt(x, y), vec2(s * 0.32, s * 0.32)), s * 0.06, st);
+            }
         }
         Icon::Close => {
             p.line_segment([pt(-0.28, -0.28), pt(0.28, 0.28)], st);

@@ -32,6 +32,9 @@ impl Ui {
     pub fn lock(&self) -> MutexGuard<'_, Shared> {
         self.s.lock().unwrap_or_else(|e| e.into_inner())
     }
+    pub fn ctx(&self) -> &eframe::egui::Context {
+        &self.ctx
+    }
     pub fn repaint(&self) {
         self.ctx.request_repaint();
     }

@@ -25,8 +25,10 @@ fn push_args(out: &mut Vec<String>, arr: &[Value], f: &Features) {
     }
 }
 
-pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>) -> Result<(PathBuf, Vec<String>)> {
+/// `run_dir`: eigener Spielordner (Profil) – sonst der gemeinsame Spielordner.
+pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>, run_dir: Option<&Path>) -> Result<(PathBuf, Vec<String>)> {
     let gd = PathBuf::from(&cfg.game_dir);
+    let run = run_dir.map(Path::to_path_buf).unwrap_or_else(|| gd.clone());
     let json = install::load_merged(&gd, launch_id)?;
     let demo = account.is_none();
     let f = Features { demo, custom_res: true };
@@ -65,7 +67,7 @@ pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>) -> Result
     let vars: HashMap<&str, String> = HashMap::from([
         ("auth_player_name", name),
         ("version_name", launch_id.to_string()),
-        ("game_directory", s(&gd)),
+        ("game_directory", s(&run)),
         ("assets_root", s(&assets)),
         ("game_assets", s(&game_assets)),
         ("assets_index_name", ai_id),
@@ -141,7 +143,7 @@ pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>) -> Result
     Ok((install::java_path(cfg, &json), args))
 }
 
-pub fn spawn(java: &Path, args: &[String], game_dir: &str, ui: Ui, detach: bool) -> Result<()> {
+pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool) -> Result<()> {
     std::fs::create_dir_all(game_dir)?;
     let mut cmd = Command::new(java);
     cmd.args(args).current_dir(game_dir).stdin(Stdio::null());

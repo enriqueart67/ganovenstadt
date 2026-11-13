@@ -5,7 +5,9 @@ mod config;
 mod gui;
 mod install;
 mod launch;
+mod mods;
 mod net;
+mod profiles;
 mod state;
 mod theme;
 

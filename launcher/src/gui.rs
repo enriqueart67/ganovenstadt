@@ -6,11 +6,16 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, Id, Rect, RichText, Sense,
 use crate::config::{self, Config};
 use crate::state::Ui as Handle;
 use crate::theme::{self, alpha, font, icon, Icon, Look, Pal, BAD, GOOD, WARN};
-use crate::{auth, install, launch, net};
+use crate::{auth, install, launch, net, profiles};
+
+#[path = "gui_profiles.rs"]
+mod profiles_ui;
+use profiles_ui::ProfilesUi;
 
 #[derive(PartialEq, Clone, Copy)]
 enum Page {
     Home,
+    Profiles,
     Look,
     Console,
     Settings,
@@ -40,6 +45,7 @@ pub struct App {
     version_search: String,
     focus_search: u8,
     logo: egui::TextureHandle,
+    prof: ProfilesUi,
 }
 
 impl App {
@@ -67,6 +73,7 @@ impl App {
             version_search: String::new(),
             focus_search: 0,
             logo: theme::load_logo(&cc.egui_ctx),
+            prof: ProfilesUi::new(),
         };
         app.load_versions();
         app.refresh_login();
@@ -130,7 +137,36 @@ impl App {
         });
     }
 
+    fn h_ctx(&self) -> egui::Context {
+        self.h.ctx().clone()
+    }
+
+    /// Das auf der Startseite gewaehlte Profil (falls eins aktiv ist).
+    fn active_profile(&self) -> Option<profiles::Profile> {
+        let id = self.cfg.active_profile.as_ref()?;
+        self.prof.list.iter().find(|p| &p.id == id).cloned()
+    }
+
     fn play(&mut self) {
+        match self.active_profile() {
+            Some(p) => self.play_profile(p),
+            None => {
+                let (v, l) = (self.cfg.version.clone(), self.cfg.loader.clone());
+                self.launch(v, l, None);
+            }
+        }
+    }
+
+    fn play_profile(&mut self, p: profiles::Profile) {
+        if self.h.lock().busy {
+            return;
+        }
+        let dir = profiles::dir(&self.cfg.game_dir, &p);
+        self.h.log(format!("[Launcher] Profil „{}“ ({} {})", p.name, p.loader, p.version));
+        self.launch(p.version, p.loader, Some(dir));
+    }
+
+    fn launch(&mut self, version: String, loader: String, run_dir: Option<std::path::PathBuf>) {
         config::save_config(&self.cfg);
         self.saved = self.cfg.clone();
         let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), self.cfg.clone(), self.repair);
@@ -139,11 +175,12 @@ impl App {
         h.set_busy(true);
         self.rt.spawn(async move {
             let res = async {
-                let id = install::prepare(&h, &client, &cfg, &cfg.version, &cfg.loader, repair).await?;
-                let (java, args) = launch::build(&cfg, &id, account.as_ref())?;
+                let id = install::prepare(&h, &client, &cfg, &version, &loader, repair).await?;
+                let (java, args) = launch::build(&cfg, &id, account.as_ref(), run_dir.as_deref())?;
                 h.log(format!("[Launcher] Starte {id} mit {}", java.display()));
                 h.status(format!("{id} läuft"));
-                launch::spawn(&java, &args, &cfg.game_dir, h.clone(), cfg.close_on_launch)?;
+                let dir = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
+                launch::spawn(&java, &args, &dir, h.clone(), cfg.close_on_launch)?;
                 anyhow::Ok(())
             }
             .await;
@@ -231,6 +268,7 @@ impl App {
         let mut y = r.top() + 12.0;
         for (page, kind, tip) in [
             (Page::Home, Icon::Home, "Start"),
+            (Page::Profiles, Icon::Grid, "Profile & Mods"),
             (Page::Look, Icon::Brush, "Aussehen"),
             (Page::Console, Icon::Console, "Konsole"),
             (Page::Settings, Icon::Settings, "Einstellungen"),
@@ -401,8 +439,13 @@ impl App {
         let p = ui.painter();
         p.rect_filled(vc, pal.r, if vresp.hovered() || self.version_open { pal.surface2 } else { alpha(pal.surface2, 140) });
         p.rect_stroke(vc, pal.r, Stroke::new(1.0_f32, if self.version_open { pal.accent } else { pal.border }));
-        p.text(pos2(vc.left() + 14.0, vc.top() + 17.0), Align2::LEFT_CENTER, "Version", font(11.5, "medium"), pal.muted);
-        let shown = if self.cfg.version.is_empty() { "Lädt …".to_string() } else { self.cfg.version.clone() };
+        let active = self.active_profile();
+        p.text(pos2(vc.left() + 14.0, vc.top() + 17.0), Align2::LEFT_CENTER, if active.is_some() { "Profil" } else { "Version" }, font(11.5, "medium"), pal.muted);
+        let shown = match &active {
+            Some(ap) => ap.name.clone(),
+            None if self.cfg.version.is_empty() => "Lädt …".to_string(),
+            None => self.cfg.version.clone(),
+        };
         let size = if shown.chars().count() > 9 { 14.5 } else { 19.0 };
         p.with_clip_rect(Rect::from_min_max(vc.min, pos2(vc.right() - 34.0, vc.bottom())))
             .text(pos2(vc.left() + 14.0, vc.top() + 41.0), Align2::LEFT_CENTER, shown, font(size, "semibold"), pal.text);
@@ -414,11 +457,19 @@ impl App {
         }
 
         let lx = vc.right() + 14.0;
-        p.text(pos2(lx + 2.0, vc.top() + 17.0), Align2::LEFT_CENTER, "Modloader", font(11.5, "medium"), pal.muted);
+        p.text(pos2(lx + 2.0, vc.top() + 17.0), Align2::LEFT_CENTER, if active.is_some() { "Profil-Details" } else { "Modloader" }, font(11.5, "medium"), pal.muted);
         let seg = Rect::from_min_size(pos2(lx, vc.top() + 30.0), vec2(246.0, 30.0));
-        let mut loader = self.cfg.loader.clone();
-        segmented_at(ui, pal, seg, "loader", &install::LOADERS, &mut loader);
-        self.cfg.loader = loader;
+        match &active {
+            Some(ap) => {
+                let n = ap.mods.len();
+                p.text(pos2(lx + 2.0, seg.center().y), Align2::LEFT_CENTER, format!("{} · {} · {} Mod{}", ap.loader, ap.version, n, if n == 1 { "" } else { "s" }), font(13.0, "medium"), pal.text);
+            }
+            None => {
+                let mut loader = self.cfg.loader.clone();
+                segmented_at(ui, pal, seg, "loader", &install::LOADERS, &mut loader);
+                self.cfg.loader = loader;
+            }
+        }
 
         let (busy, status, done, total) = {
             let s = self.h.lock();
@@ -468,7 +519,10 @@ impl App {
             }
             icon(p, pos2(play.left() + 34.0, play.center().y), 22.0, pal.on_accent, Icon::Play);
             p.text(pos2(play.left() + 56.0, play.center().y - 8.0), Align2::LEFT_CENTER, "Spielen", font(19.0, "bold"), pal.on_accent);
-            let sub = format!("{} · {}", if self.cfg.version.is_empty() { "–" } else { &self.cfg.version }, self.cfg.loader);
+            let sub = match &active {
+                Some(ap) => format!("{} · {}", ap.name, ap.version),
+                None => format!("{} · {}", if self.cfg.version.is_empty() { "–" } else { &self.cfg.version }, self.cfg.loader),
+            };
             p.text(pos2(play.left() + 57.0, play.center().y + 13.0), Align2::LEFT_CENTER, sub, font(11.0, "medium"), alpha(pal.on_accent, 200));
         }
         if resp.clicked() {
@@ -531,6 +585,7 @@ impl App {
                         if search.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                             if let Some(v) = shown.iter().find(|v| v.kind == "release").or(shown.first()) {
                                 self.cfg.version = v.id.clone();
+                                self.cfg.active_profile = None;
                                 self.version_open = false;
                             }
                         }
@@ -540,13 +595,28 @@ impl App {
                             chip(ui, pal, "Snapshots", &mut self.cfg.show_snapshots);
                             chip(ui, pal, "Beta & Alpha", &mut self.cfg.show_old);
                         });
+                        if !self.prof.list.is_empty() {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+                                ui.label(RichText::new("Profile").color(pal.muted).size(11.5));
+                                for pr in self.prof.list.clone() {
+                                    let mut on = self.cfg.active_profile.as_deref() == Some(pr.id.as_str());
+                                    let before = on;
+                                    chip(ui, pal, &pr.name, &mut on);
+                                    if on != before {
+                                        self.cfg.active_profile = if on { Some(pr.id.clone()) } else { None };
+                                        self.version_open = false;
+                                    }
+                                }
+                            });
+                        }
                         let row_h = 30.0;
                         let mut picked = None;
                         egui::ScrollArea::vertical().auto_shrink([false; 2]).show_rows(ui, row_h, shown.len(), |ui, range| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             for v in &shown[range] {
                                 let (rr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-                                let sel = v.id == self.cfg.version;
+                                let sel = self.cfg.active_profile.is_none() && v.id == self.cfg.version;
                                 let p = ui.painter();
                                 if sel {
                                     p.rect_filled(rr, pal.r, alpha(pal.accent, 45));
@@ -573,6 +643,7 @@ impl App {
                             ui.label(RichText::new(if all.is_empty() { "Versionsliste wird geladen …" } else { "Keine Version gefunden." }).color(pal.muted));
                         }
                         if let Some(id) = picked {
+                            self.cfg.active_profile = None;
                             self.cfg.version = id;
                             self.version_open = false;
                         }
@@ -830,6 +901,14 @@ impl App {
                     field(ui, pal, "Redirect-URI", &mut c.redirect_uri, "");
                 });
                 let repair = &mut self.repair;
+                card(ui, pal, "CurseForge", |ui| {
+                    ui.label(RichText::new("Für die Mod-Suche auf CurseForge brauchst du einen kostenlosen API-Key von console.curseforge.com (Modrinth geht ohne).").color(pal.muted).size(12.5));
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
+                        ui.label(RichText::new("CurseForge API-Key").color(pal.muted).size(12.0));
+                        ui.add(egui::TextEdit::singleline(&mut c.cf_api_key).password(true).hint_text("$2a$10$…").desired_width(440.0).margin(vec2(10.0, 6.0)));
+                    });
+                });
                 card(ui, pal, "Wartung", |ui| {
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, repair);
@@ -1001,6 +1080,7 @@ impl eframe::App for App {
                 self.cfg.version = v.id.clone();
             }
         }
+        self.collect_installs();
         let mut action = None;
 
         egui::CentralPanel::default().frame(egui::Frame::none().fill(pal.bg)).show(ctx, |ui| {
@@ -1010,6 +1090,7 @@ impl eframe::App for App {
             let content = Rect::from_min_max(pos2(side.right() + 12.0, title.bottom() + 12.0), pos2(full.right() - 12.0, full.bottom() - 12.0));
             match self.page {
                 Page::Home => self.home(ui, content, t, &pal, &account, &mut action),
+                Page::Profiles => self.profiles_page(ui, content, &pal),
                 Page::Look => self.look_page(ui, content, &pal),
                 Page::Console => self.console(ui, content, &pal),
                 Page::Settings => self.settings(ui, content, &pal),
@@ -1065,7 +1146,7 @@ impl eframe::App for App {
             config::save_config(&self.cfg);
             self.saved = self.cfg.clone();
         }
-        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landschaft") || busy {
+        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landschaft") || busy || self.prof.busy() {
             ctx.request_repaint_after(Duration::from_millis(33));
         }
     }

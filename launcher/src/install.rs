@@ -582,7 +582,7 @@ mod tests {
 
         // Kommandozeile bauen (Demo-Modus)
         let cfg = Config { game_dir: gd.to_string_lossy().into(), ..Default::default() };
-        let (_java, args) = crate::launch::build(&cfg, "fabric-loader-0.16-1.21", None).unwrap();
+        let (_java, args) = crate::launch::build(&cfg, "fabric-loader-0.16-1.21", None, None).unwrap();
         let joined = args.join(" ");
         assert!(joined.contains("-Xmx4096M"));
         assert!(joined.contains("KnotClient --username Demo"));
@@ -637,7 +637,7 @@ mod tests {
         assert!(libs[0].extract.is_some() && !libs[0].classpath);
         let acc = crate::config::Account { name: "Steve".into(), id: "uuid".into(), access_token: "tok".into(), refresh_token: String::new() };
         let cfg = Config { game_dir: dir.to_string_lossy().into(), ..Default::default() };
-        let (_j, args) = crate::launch::build(&cfg, "1.8.9", Some(&acc)).unwrap();
+        let (_j, args) = crate::launch::build(&cfg, "1.8.9", Some(&acc), None).unwrap();
         let joined = args.join(" ");
         assert!(joined.contains("-Djava.library.path="));
         assert!(joined.contains("--username Steve --session token:tok:uuid"));

@@ -21,6 +21,22 @@ Ein schneller Minecraft-Launcher, geschrieben in **Rust** – mit cleanem Design
 - **Startseite**: Titel, Untertitel und Slogan frei wählbar, Elemente ein-/ausblenden
 - **Design teilen**: als Code kopieren und bei Freunden einfügen; Zurücksetzen mit einem Klick
 
+## Profile & Mods (Seite „Profile & Mods“)
+- **Profile anlegen**: Name, Minecraft-Version und Modloader (Fabric, Quilt oder Vanilla).
+  Jedes Profil hat einen **eigenen Spielordner** – Welten, Einstellungen und Mods bleiben getrennt.
+- **Mods suchen und mit einem Klick installieren** – von **Modrinth** und **CurseForge**,
+  mit Icons, Beschreibung und Downloadzahlen. Es werden nur Mods angezeigt, die zur Version
+  und zum Loader des Profils passen.
+- **Abhängigkeiten** (z. B. Fabric API oder Sodium) werden automatisch mitinstalliert.
+- Installierte Mods **ein-/ausschalten** oder **entfernen**, Profil bearbeiten, Ordner öffnen.
+- Profile lassen sich auch auf der Startseite in der Versionsauswahl wählen und mit „Spielen“ starten.
+
+**CurseForge** erlaubt die Mod-Suche nur mit einem eigenen, kostenlosen API-Key:
+auf <https://console.curseforge.com> anmelden, einen Key erstellen und im Launcher unter
+**Einstellungen › CurseForge** eintragen. Modrinth funktioniert ohne Key.
+Manche CurseForge-Autoren verbieten Downloads über andere Launcher – dann zeigt der Launcher
+einen Hinweis, und du lädst den Mod auf curseforge.com herunter und legst ihn in den Mods-Ordner.
+
 ## Funktionen
 - **Alle Minecraft-Versionen**: Releases (auch die neuen Jahres-Versionen wie 26.1), Snapshots
   sowie die uralten Beta- und Alpha-Versionen – mit Suchfeld und Filtern
