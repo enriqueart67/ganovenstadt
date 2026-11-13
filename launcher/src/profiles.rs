@@ -41,12 +41,12 @@ pub fn new_id(name: &str, existing: &[Profile]) -> String {
         .to_lowercase()
         .chars()
         .map(|c| match c {
-            'a'..='z' | '0'..='9' => c,
-            'ä' => 'a',
-            'ö' => 'o',
-            'ü' => 'u',
-            'ß' => 's',
-            _ => '-',
+            'a'..='z' | '0'..='9' => c.to_string(),
+            'ä' => "ae".into(),
+            'ö' => "oe".into(),
+            'ü' => "ue".into(),
+            'ß' => "ss".into(),
+            _ => "-".into(),
         })
         .collect();
     slug = slug.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-");
@@ -79,7 +79,7 @@ mod tests {
     fn ids() {
         let p = |id: &str| Profile { id: id.into(), name: String::new(), version: String::new(), loader: String::new(), mods: vec![] };
         assert_eq!(new_id("Meine Mods!", &[]), "meine-mods");
-        assert_eq!(new_id("Größte Welt", &[]), "grosste-welt");
+        assert_eq!(new_id("Größte Welt", &[]), "groesste-welt");
         assert_eq!(new_id("Meine Mods", &[p("meine-mods")]), "meine-mods-2");
         assert_eq!(new_id("???", &[]), "profil");
     }
