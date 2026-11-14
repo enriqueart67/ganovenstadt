@@ -17,12 +17,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class AbstractClientPlayerMixin {
     @Inject(method = "getSkin", at = @At("RETURN"), cancellable = true)
     private void peregrine$cape(CallbackInfoReturnable<PlayerSkin> cir) {
-        if (!Modules.CAPE.enabled) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || (Object) this != mc.player) return;
+        // the wardrobe's try-on preview wins over the equipped cape
+        String preview = de.peregrine.client.CosmeticLayer.previewCape;
+        if (preview == null && !Modules.CAPE.enabled) return;
         PlayerSkin skin = cir.getReturnValue();
         if (skin == null) return;
-        String design = Modules.CAPE.design.get();
+        if ("None".equals(preview)) {
+            cir.setReturnValue(new PlayerSkin(skin.body(), null, skin.elytra(), skin.model(), skin.secure()));
+            return;
+        }
+        String design = preview != null ? preview : Modules.CAPE.design.get();
         Identifier tex;
         String name;
         if (CustomCapes.isCustom(design)) {

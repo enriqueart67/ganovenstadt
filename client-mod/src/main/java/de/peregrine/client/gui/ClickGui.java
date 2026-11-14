@@ -131,6 +131,10 @@ public final class ClickGui extends Screen {
             if (sel) g.fill(nx, y0 + bar - 2, nx + w, y0 + bar, t.accent);
             final Category target = c;
             hits.add(new Hit(nx - 4, y0, w + 8, bar, () -> {
+                if (target == Category.COSMETICS && minecraft.player != null) { // the wardrobe has its own screen with a preview
+                    Ui.open(new WardrobeScreen(this));
+                    return;
+                }
                 category = target;
                 lastCategory = target;
                 open = null;
