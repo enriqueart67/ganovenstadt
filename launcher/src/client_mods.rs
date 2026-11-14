@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 40] = [
+pub const MODULES: [(&str, &str, &str); 41] = [
     ("HUD", "FPS", "Frames per second"),
     ("HUD", "CPS", "Clicks per second (left | right)"),
     ("HUD", "Coordinates", "X, Y, Z and facing"),
@@ -69,7 +69,8 @@ pub const MODULES: [(&str, &str, &str); 40] = [
     ("Movement", "Auto-Sprint", "Always sprint (V)"),
     ("Movement", "Toggle sneak", "Press once instead of holding"),
     ("Cosmetics", "Cape", "Built-in designs or your own photo, also on the elytra"),
-    ("Cosmetics", "Emotes", "Wave, dab, clap, dance and more – hold B for the wheel"),
+    ("Cosmetics", "Effects", "Particle wings, halo, aura and trails"),
+    ("Cosmetics", "Emotes", "16 emotes – hold B, your figure previews the one you aim at"),
     ("Misc", "HUD style", "Colors and background of all HUD elements"),
 ];
 

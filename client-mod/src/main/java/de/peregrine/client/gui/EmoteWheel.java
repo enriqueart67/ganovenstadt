@@ -5,6 +5,7 @@ import de.peregrine.client.Emotes;
 import de.peregrine.client.PeregrineClient;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -21,7 +22,7 @@ public final class EmoteWheel extends Screen {
     private boolean hubHovered;
     private boolean keyHeld = true; // opened by key: releasing it picks the hovered emote
 
-    private static final int R_IN = 30, R_OUT = 92, POP = 6;
+    private static final int R_IN = 46, R_OUT = 112, POP = 6;
 
     public EmoteWheel() {
         super(Component.literal("Emotes"));
@@ -111,14 +112,15 @@ public final class EmoteWheel extends Screen {
             Type.center(g, at(i).name(), Type.BOLD, x, y - 3, 1f, fade(h ? t.onAccent : t.text, a));
         }
 
-        // ---------- hub
-        if (hovered >= 0) {
-            Type.center(g, "RELEASE", Type.MONO, cx, cy - 3, 0.7f, fade(t.muted, a));
-        } else if (Emotes.active() != null) {
-            Type.center(g, "STOP", Type.MONO, cx, cy - 3, 0.8f, fade(hubHovered ? t.onAccent : t.accent, a));
-        } else {
-            Type.center(g, "EMOTES", Type.MONO, cx, cy - 3, 0.7f, fade(t.text, a));
+        // ---------- hub: your own figure acts out the hovered emote
+        Emotes.setPreview(hovered >= 0 ? at(hovered) : null);
+        if (minecraft.player != null) {
+            int box = rIn - 6;
+            InventoryScreen.extractEntityInInventoryFollowsMouse(g, cx - box, cy - box, cx + box, cy + box + 4, (int) (box * 0.78f), 0.0625f,
+                    cx, cy - box * 0.25f, minecraft.player);
         }
+        String hubLabel = hovered >= 0 ? at(hovered).name().toUpperCase() : Emotes.active() != null ? (hubHovered ? "STOP" : "PLAYING") : "EMOTES";
+        Type.center(g, hubLabel, Type.MONO, cx, cy + rIn - 14, 0.62f, fade(hovered >= 0 || hubHovered ? t.accent : t.muted, a));
         String hint = "HOLD · AIM · RELEASE      1–" + n + "      SCROLL: PAGE " + (page + 1) + "/" + pages();
         Type.center(g, hint, Type.MONO, cx, Math.min(height - 12, cy + rOut + POP + 10), 0.7f, fade(0xFFFFFFFF, a * 0.9f));
     }
@@ -139,6 +141,12 @@ public final class EmoteWheel extends Screen {
             Emotes.stop();
             onClose();
         }
+    }
+
+    @Override
+    public void removed() {
+        Emotes.setPreview(null);
+        super.removed();
     }
 
     @Override

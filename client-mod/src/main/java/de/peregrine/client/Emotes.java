@@ -175,12 +175,28 @@ public final class Emotes {
         }
     }
 
-    /** Vom PlayerModel-Mixin aufgerufen: Pose auf das Modell des eigenen Spielers legen. */
+    // ---- preview in the emote wheel (the figure in the hub acts out the hovered emote)
+    private static Emote preview;
+    private static long previewNanos;
+
+    public static void setPreview(Emote e) {
+        if (e != preview) {
+            preview = e;
+            previewNanos = System.nanoTime();
+        }
+    }
+
+    /** True while something should be applied to the player model. */
+    public static boolean posing() {
+        return active != null || preview != null;
+    }
+
+    /** Called from the PlayerModel mixin: put the pose on the local player's model. */
     public static void apply(PlayerModel m) {
-        Emote e = active;
+        Emote e = preview != null ? preview : active;
         if (e == null) return;
-        // sanft ein- und ausblenden
-        float t = time();
+        float t = ((preview != null ? System.nanoTime() - previewNanos : System.nanoTime() - startNanos)) / 1_000_000_000f;
+        if (preview != null && e.seconds() > 0) t = t % e.seconds(); // loop in the preview
         e.pose().apply(m, t);
         float in = Math.min(1f, t / 0.15f);
         if (in < 1f) scale(m, in);
