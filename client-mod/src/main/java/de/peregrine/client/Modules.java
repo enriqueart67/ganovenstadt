@@ -661,23 +661,20 @@ public final class Modules {
         }
     }
 
-    public static final class EffectsModule extends Module {
-        static final String[] COLORS = {"Rainbow", "Orange", "Gold", "White", "Ice", "Violet", "Crimson", "Emerald", "Shadow"};
-        public final ModeSetting wings = add(new ModeSetting("wings", "Wings", "Classic", "Off", "Classic", "Large"));
-        public final ModeSetting wingColor = add(new ModeSetting("wingcolor", "Wing color", "Ice", COLORS));
-        public final ModeSetting halo = add(new ModeSetting("halo", "Halo", "Off", "Off", "On"));
-        public final ModeSetting haloColor = add(new ModeSetting("halocolor", "Halo color", "Gold", COLORS));
-        public final ModeSetting aura = add(new ModeSetting("aura", "Aura", "Off", "Off", "Stars", "Flames", "Soul", "Enchant", "Portal", "Snow", "Sparks"));
-        public final ModeSetting trail = add(new ModeSetting("trail", "Trail", "Rainbow", "Off", "Rainbow", "Hearts", "Cherry", "Notes", "Flames", "Stars"));
-        public final BoolSetting hideFirstPerson = add(new BoolSetting("hidefp", "Hide wings, halo and aura in first person", true));
+    public static final class WingsModule extends Module {
+        public final ModeSetting style = add(new ModeSetting("style", "Style", "Dragon", "Dragon", "Angel", "Demon", "Butterfly"));
+        public final ModeSetting size = add(new ModeSetting("size", "Size", "Normal", "Small", "Normal", "Large"));
 
-        EffectsModule() {
-            super("effects", "Effects", "Particle wings, halo, aura and trails – press F5 to see them", Category.COSMETICS, false);
+        WingsModule() {
+            super("wings", "Wings", "3D wings on your back that flap as you move – press F5", Category.COSMETICS, false);
         }
+    }
 
-        @Override
-        public void tick(Minecraft mc) {
-            Effects.tick(mc);
+    public static final class HeadwearModule extends Module {
+        public final ModeSetting style = add(new ModeSetting("style", "Style", "Top hat", "Top hat", "Crown", "Halo", "Horns", "Cat ears"));
+
+        HeadwearModule() {
+            super("headwear", "Headwear", "Top hat, crown, glowing halo, horns or cat ears", Category.COSMETICS, false);
         }
     }
 
@@ -747,14 +744,15 @@ public final class Modules {
     public static final MentionHighlight MENTION = new MentionHighlight();
     public static final MainMenu MAIN_MENU = new MainMenu();
     public static final Cape CAPE = new Cape();
-    public static final EffectsModule EFFECTS = new EffectsModule();
+    public static final WingsModule WINGS = new WingsModule();
+    public static final HeadwearModule HEADWEAR = new HeadwearModule();
     public static final EmoteModule EMOTES = new EmoteModule();
     public static final Style STYLE = new Style();
 
     public static final List<Module> ALL = List.of(
             FPS, CPS, COORDS, KEYSTROKES, ARMOR, POTIONS, CLOCK, PING, SERVER, SPEED, DAYS, MEMORY, REACH, COMBO,
             SATURATION, ARROWS, TOTEMS, BIOME, SESSION, PACKS, MINIMAP, FREELOOK, LOW_FIRE, BLOCK_OUTLINE, TIME, WAYPOINTS, CHAT_TIME, MENTION, AUTO_GG, MAIN_MENU,
-            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, EFFECTS, EMOTES, STYLE);
+            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, WINGS, HEADWEAR, EMOTES, STYLE);
 
     public static List<HudModule> huds() {
         List<HudModule> l = new ArrayList<>();

@@ -71,6 +71,14 @@ public final class PeregrineClient implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(PeregrineClient::onTick);
+        // 3D cosmetics on player models (only drawn for your own character)
+        net.fabricmc.fabric.api.client.rendering.v1.LivingEntityRenderLayerRegistrationCallback.EVENT.register((type, renderer, helper, ctx) -> {
+            if (renderer instanceof net.minecraft.client.renderer.entity.player.AvatarRenderer<?> avatar) {
+                @SuppressWarnings("unchecked")
+                var parent = (net.minecraft.client.renderer.entity.RenderLayerParent<net.minecraft.client.renderer.entity.state.AvatarRenderState, net.minecraft.client.model.player.PlayerModel>) (Object) avatar;
+                helper.register(new CosmeticLayer(parent));
+            }
+        });
         net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> de.peregrine.client.gui.TitleMenu.onScreenInit(mc, screen));
         LOG.info("Peregrine Client loaded – press Right Shift for the menu");
     }
