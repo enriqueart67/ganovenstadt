@@ -3,6 +3,8 @@ package de.peregrine.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.ModelLayerLocation;
+import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
@@ -10,6 +12,7 @@ import net.minecraft.client.model.geom.builders.MeshDefinition;
 import net.minecraft.client.model.geom.builders.PartDefinition;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
@@ -29,7 +32,7 @@ import java.util.Map;
  */
 public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerModel> {
     /** Try-on preview from the wardrobe (null = use the equipped item, "None" = show nothing). */
-    public static volatile String previewWings, previewHeadwear, previewCape;
+    public static volatile String previewWings, previewHeadwear, previewCape, previewPet;
 
     // ------------------------------------------------------------------ model building helpers
     private interface Builder {
@@ -203,8 +206,87 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
         }
     });
 
-    public CosmeticLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent) {
+    // ------------------------------------------------------------------ pets (vanilla models and textures)
+    /** Pet name → model layer, texture, scale and how high its feet float next to the head. */
+    public record PetDef(ModelLayerLocation layer, String texture, float scale, boolean flies) {
+    }
+
+    public static final Map<String, PetDef> PETS = new java.util.LinkedHashMap<>();
+
+    static {
+        PETS.put("Parrot", new PetDef(ModelLayers.PARROT, "parrot/parrot_red_blue", 0.8f, true));
+        PETS.put("Bee", new PetDef(ModelLayers.BEE, "bee/bee", 0.6f, true));
+        PETS.put("Allay", new PetDef(ModelLayers.ALLAY, "allay/allay", 0.65f, true));
+        PETS.put("Fox", new PetDef(ModelLayers.FOX, "fox/fox", 0.45f, false));
+        PETS.put("Axolotl", new PetDef(ModelLayers.AXOLOTL, "axolotl/axolotl_lucy", 0.55f, false));
+        PETS.put("Frog", new PetDef(ModelLayers.FROG, "frog/frog_temperate", 0.6f, false));
+        PETS.put("Copper golem", new PetDef(ModelLayers.COPPER_GOLEM, "copper_golem/copper_golem", 0.45f, false));
+    }
+
+    private final EntityRendererProvider.Context ctx;
+    private final Map<String, ModelPart> petModels = new HashMap<>();
+
+    public CosmeticLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent, EntityRendererProvider.Context ctx) {
         super(parent);
+        this.ctx = ctx;
+    }
+
+    private ModelPart petModel(String name, PetDef def) {
+        return petModels.computeIfAbsent(name, n -> {
+            try {
+                return ctx.bakeLayer(def.layer());
+            } catch (Throwable e) {
+                PeregrineClient.LOG.warn("Pet model {} unavailable: {}", n, e.toString());
+                return null;
+            }
+        });
+    }
+
+    /** Finds wing parts at the usual places of the vanilla models (root, body, bone). */
+    private static void flapWings(ModelPart root, float flap) {
+        for (String holder : new String[]{"", "body", "bone"}) {
+            ModelPart p = root;
+            if (!holder.isEmpty()) {
+                if (!root.hasChild(holder)) continue;
+                p = root.getChild(holder);
+            }
+            if (p.hasChild("left_wing")) p.getChild("left_wing").zRot = -flap;
+            if (p.hasChild("right_wing")) p.getChild("right_wing").zRot = flap;
+            if (p.hasChild("bone") && holder.isEmpty()) flapWings(p.getChild("bone"), flap);
+        }
+    }
+
+    private static String petStyle() {
+        String p = previewPet;
+        if (p != null) return p.equals("None") ? null : p;
+        return Modules.PET.enabled ? Modules.PET.style.get() : null;
+    }
+
+    private void drawPet(PoseStack pose, SubmitNodeCollector out, int light, AvatarRenderState state) {
+        String name = petStyle();
+        if (name == null) return;
+        PetDef def = PETS.get(name);
+        if (def == null) return;
+        ModelPart model = petModel(name, def);
+        if (model == null) return;
+        float t = state.ageInTicks;
+        model.resetPose();
+        if (def.flies()) flapWings(model, 0.35f + (float) Math.sin(t * 1.6f) * 0.55f);
+        int side = Modules.PET.side.is("Left") ? 1 : -1; // +x is the player's left
+        float bob = (float) Math.sin(t * 0.12f) * 0.06f;
+        pose.pushPose();
+        // next to the head, a little behind; it floats (or sits on the shoulder for walking animals)
+        if (def.flies()) {
+            pose.translate(side * 0.62f, -0.55f + bob, 0.12f);
+        } else {
+            pose.translate(side * 0.36f, -0.02f + bob * 0.3f, 0.02f); // on the shoulder
+        }
+        pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees((float) Math.sin(t * 0.05f) * 12f));
+        float sc = def.scale();
+        pose.scale(sc, sc, sc);
+        pose.translate(0, -1.5f, 0); // vanilla models stand with their feet at y = 24 px
+        draw(out, pose, model, RenderTypes.entityCutout(Identifier.withDefaultNamespace("textures/entity/" + def.texture() + ".png"), false), light);
+        pose.popPose();
     }
 
     /** Draws one model part with the current pose (version-independent: custom geometry). */
@@ -272,6 +354,8 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
             }
             pose.popPose();
         }
+
+        drawPet(pose, out, light, state);
 
         String hs = headStyle();
         if (hs != null) {

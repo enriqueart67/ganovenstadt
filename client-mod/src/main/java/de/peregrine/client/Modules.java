@@ -678,6 +678,15 @@ public final class Modules {
         }
     }
 
+    public static final class PetModule extends Module {
+        public final ModeSetting style = add(new ModeSetting("style", "Pet", "Parrot", CosmeticLayer.PETS.keySet().toArray(String[]::new)));
+        public final ModeSetting side = add(new ModeSetting("side", "Side", "Right", "Left", "Right"));
+
+        PetModule() {
+            super("pet", "Pet", "A little companion floating next to you or sitting on your shoulder", Category.COSMETICS, false);
+        }
+    }
+
     public static final class EmoteModule extends Module {
         public final BoolSetting camera = add(new BoolSetting("camera", "Turn camera to the front", true));
         public final BoolSetting stopOnMove = add(new BoolSetting("stop", "Cancel when moving", true));
@@ -746,13 +755,14 @@ public final class Modules {
     public static final Cape CAPE = new Cape();
     public static final WingsModule WINGS = new WingsModule();
     public static final HeadwearModule HEADWEAR = new HeadwearModule();
+    public static final PetModule PET = new PetModule();
     public static final EmoteModule EMOTES = new EmoteModule();
     public static final Style STYLE = new Style();
 
     public static final List<Module> ALL = List.of(
             FPS, CPS, COORDS, KEYSTROKES, ARMOR, POTIONS, CLOCK, PING, SERVER, SPEED, DAYS, MEMORY, REACH, COMBO,
             SATURATION, ARROWS, TOTEMS, BIOME, SESSION, PACKS, MINIMAP, FREELOOK, LOW_FIRE, BLOCK_OUTLINE, TIME, WAYPOINTS, CHAT_TIME, MENTION, AUTO_GG, MAIN_MENU,
-            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, WINGS, HEADWEAR, EMOTES, STYLE);
+            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, WINGS, HEADWEAR, PET, EMOTES, STYLE);
 
     public static List<HudModule> huds() {
         List<HudModule> l = new ArrayList<>();

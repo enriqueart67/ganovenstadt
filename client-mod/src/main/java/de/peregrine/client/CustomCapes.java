@@ -28,16 +28,78 @@ public final class CustomCapes {
 
     private static final Map<String, Loaded> LOADED = new HashMap<>();
 
-    private static Path dir() {
+    static Path dir() {
         Path h = Store.home();
-        return h == null ? null : h.resolve("capes");
+        return h != null ? h.resolve("capes") : net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("peregrine-capes");
+    }
+
+    /**
+     * Turns a picture into an HD cape texture (1024×512, the cape layout ×16 plus the elytra area) –
+     * the same conversion the launcher does – and stores it. Returns the new design name ("Photo: …").
+     */
+    public static String importPicture(Path src) throws java.io.IOException {
+        java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(src.toFile());
+        if (img == null) throw new java.io.IOException("not a supported picture (PNG, JPG, BMP or GIF)");
+        final int S = 16;
+        java.awt.image.BufferedImage out = new java.awt.image.BufferedImage(64 * S, 32 * S, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = out.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+        java.awt.image.BufferedImage face = fit(img, 10 * S, 16 * S);
+        // average colour for the edges
+        long r = 0, gg = 0, b = 0, n = 0;
+        for (int y = 0; y < face.getHeight(); y += 4) {
+            for (int x = 0; x < face.getWidth(); x += 4) {
+                int c = face.getRGB(x, y);
+                r += (c >> 16) & 255;
+                gg += (c >> 8) & 255;
+                b += c & 255;
+                n++;
+            }
+        }
+        java.awt.Color avg = new java.awt.Color((int) (r / n), (int) (gg / n), (int) (b / n));
+        g.setColor(avg);
+        g.fillRect(S, 0, 20 * S, S);
+        g.fillRect(0, S, S, 16 * S);
+        g.fillRect(11 * S, S, S, 16 * S);
+        g.drawImage(face, S, S, null);
+        g.drawImage(face, 12 * S + 10 * S, S, 12 * S, 17 * S, 0, 0, face.getWidth(), face.getHeight(), null); // inside, mirrored
+        g.drawImage(fit(img, 24 * S, 22 * S), 22 * S, 0, null);
+        g.dispose();
+
+        String stem = src.getFileName().toString().replaceFirst("\\.[^.]+$", "");
+        String base = stem.replaceAll("[^\\p{L}\\p{N} _-]", "").trim();
+        if (base.length() > 24) base = base.substring(0, 24).trim();
+        if (base.isEmpty()) base = "Cape";
+        Path d = dir();
+        Files.createDirectories(d);
+        String name = base;
+        for (int i = 2; Files.exists(d.resolve(name + ".png")); i++) name = base + " " + i;
+        javax.imageio.ImageIO.write(out, "png", d.resolve(name + ".png").toFile());
+        return "Photo: " + name;
+    }
+
+    /** Crops the picture to the aspect w:h (centred) and scales it. */
+    private static java.awt.image.BufferedImage fit(java.awt.image.BufferedImage img, int w, int h) {
+        int iw = img.getWidth(), ih = img.getHeight();
+        double target = w / (double) h;
+        int cw = iw, ch = ih;
+        if (iw / (double) ih > target) cw = Math.max(1, (int) Math.round(ih * target));
+        else ch = Math.max(1, (int) Math.round(iw / target));
+        int cx = (iw - cw) / 2, cy = (ih - ch) / 2;
+        java.awt.image.BufferedImage out = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = out.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.drawImage(img, 0, 0, w, h, cx, cy, cx + cw, cy + ch, null);
+        g.dispose();
+        return out;
     }
 
     /** Namen der hochgeladenen Umhänge (Dateiname ohne .png), alphabetisch. */
     public static List<String> names() {
         List<String> out = new ArrayList<>();
         Path d = dir();
-        if (d == null || !Files.isDirectory(d)) return out;
+        if (!Files.isDirectory(d)) return out;
         try (Stream<Path> s = Files.list(d)) {
             s.map(p -> p.getFileName().toString()).filter(n -> n.toLowerCase(Locale.ROOT).endsWith(".png"))
                     .map(n -> n.substring(0, n.length() - 4)).sorted(String.CASE_INSENSITIVE_ORDER).forEach(out::add);

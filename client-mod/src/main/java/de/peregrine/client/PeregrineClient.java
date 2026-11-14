@@ -76,7 +76,7 @@ public final class PeregrineClient implements ClientModInitializer {
             if (renderer instanceof net.minecraft.client.renderer.entity.player.AvatarRenderer<?> avatar) {
                 @SuppressWarnings("unchecked")
                 var parent = (net.minecraft.client.renderer.entity.RenderLayerParent<net.minecraft.client.renderer.entity.state.AvatarRenderState, net.minecraft.client.model.player.PlayerModel>) (Object) avatar;
-                helper.register(new CosmeticLayer(parent));
+                helper.register(new CosmeticLayer(parent, ctx));
             }
         });
         net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> de.peregrine.client.gui.TitleMenu.onScreenInit(mc, screen));

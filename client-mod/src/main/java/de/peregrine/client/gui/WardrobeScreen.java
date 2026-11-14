@@ -28,7 +28,7 @@ import java.util.List;
  * character. Hovering a tile tries it on, clicking equips it, dragging the preview turns the character.
  */
 public final class WardrobeScreen extends Screen {
-    private enum Tab { CAPES, WINGS, HEADWEAR }
+    private enum Tab { CAPES, WINGS, HEADWEAR, PETS }
 
     private static Tab tab = Tab.CAPES;
     private final Screen parent;
@@ -73,11 +73,19 @@ public final class WardrobeScreen extends Screen {
     private record Item(String name, String note) {
     }
 
+    private static final String UPLOAD = "Your photo";
+    private String message;
+    private long messageAt;
+
     private List<Item> items() {
         List<Item> l = new ArrayList<>();
         l.add(new Item("None", ""));
         switch (tab) {
+            case PETS -> {
+                for (String s : Modules.PET.style.modes) l.add(new Item(s, CosmeticLayer.PETS.containsKey(s) && s.matches("Parrot|Bee|Allay") ? "FLIES" : "SHOULDER"));
+            }
             case CAPES -> {
+                l.add(new Item(UPLOAD, "UPLOAD OR DROP"));
                 for (String d : Modules.CAPE.design.modes) {
                     l.add(new Item(d, CustomCapes.isCustom(d) ? "YOUR PHOTO" : ""));
                 }
@@ -97,6 +105,7 @@ public final class WardrobeScreen extends Screen {
             case CAPES -> Modules.CAPE;
             case WINGS -> Modules.WINGS;
             case HEADWEAR -> Modules.HEADWEAR;
+            case PETS -> Modules.PET;
         };
     }
 
@@ -105,6 +114,7 @@ public final class WardrobeScreen extends Screen {
             case CAPES -> Modules.CAPE.design;
             case WINGS -> Modules.WINGS.style;
             case HEADWEAR -> Modules.HEADWEAR.style;
+            case PETS -> Modules.PET.style;
         };
     }
 
@@ -113,6 +123,10 @@ public final class WardrobeScreen extends Screen {
     }
 
     private void equip(String name) {
+        if (name.equals(UPLOAD)) {
+            pickPhoto();
+            return;
+        }
         Module m = module();
         if (name.equals("None")) {
             if (m.enabled) m.toggle();
@@ -127,6 +141,44 @@ public final class WardrobeScreen extends Screen {
         CosmeticLayer.previewCape = tab == Tab.CAPES ? name : null;
         CosmeticLayer.previewWings = tab == Tab.WINGS ? name : null;
         CosmeticLayer.previewHeadwear = tab == Tab.HEADWEAR ? name : null;
+        CosmeticLayer.previewPet = tab == Tab.PETS ? name : null;
+        if (UPLOAD.equals(name)) CosmeticLayer.previewCape = null;
+    }
+
+    // ------------------------------------------------------------------ photo capes from inside the game
+    private void importPhoto(java.nio.file.Path file) {
+        try {
+            String design = CustomCapes.importPicture(file);
+            Modules.CAPE.refresh();
+            tab = Tab.CAPES;
+            equip(design);
+            say("Added " + design.substring("Photo: ".length()) + " – equipped");
+        } catch (Exception e) {
+            say("Could not use that picture: " + e.getMessage());
+        }
+    }
+
+    /** The system's file picker (bundled with Minecraft via LWJGL). */
+    private void pickPhoto() {
+        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            org.lwjgl.PointerBuffer filters = stack.mallocPointer(5);
+            for (String f : new String[]{"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif"}) filters.put(stack.UTF8(f));
+            filters.flip();
+            String path = org.lwjgl.util.tinyfd.TinyFileDialogs.tinyfd_openFileDialog("Choose a picture for your cape", "", filters, "Pictures", false);
+            if (path != null && !path.isBlank()) importPhoto(java.nio.file.Path.of(path.split("\\|")[0]));
+        } catch (Throwable e) {
+            say("No file picker on this system – drop a picture onto the game window instead.");
+        }
+    }
+
+    @Override
+    public void onFilesDrop(java.util.List<java.nio.file.Path> files) {
+        if (!files.isEmpty()) importPhoto(files.get(0));
+    }
+
+    private void say(String text) {
+        message = text;
+        messageAt = System.currentTimeMillis();
     }
 
     // ------------------------------------------------------------------ drawing
@@ -178,6 +230,7 @@ public final class WardrobeScreen extends Screen {
             case CAPES -> "Capes";
             case WINGS -> "Wings";
             case HEADWEAR -> "Headwear";
+            case PETS -> "Pets";
         };
         Type.left(g, title, Type.DISPLAY, gx, gy - 2, 2.0f, t.text);
         int top = gy + 26;
@@ -231,10 +284,30 @@ public final class WardrobeScreen extends Screen {
                 }));
                 sx += w + 14;
             }
+        } else if (tab == Tab.PETS) {
+            Type.left(g, "SIDE", Type.MONO, gx, fy2 + 2, 0.7f, t.muted);
+            int sx = gx + 34;
+            for (String s : Modules.PET.side.modes) {
+                int w = Type.width(up(s), Type.MONO, 0.75f);
+                boolean sel = Modules.PET.side.is(s), hov = Ui.in(mx, my, sx - 3, fy2 - 3, w + 6, 14);
+                Type.left(g, up(s), Type.MONO, sx, fy2 + 2, 0.75f, sel ? t.accent : hov ? t.text : t.muted);
+                if (sel) g.fill(sx, fy2 + 10, sx + w, fy2 + 11, t.accent);
+                hits.add(new Hit(sx - 3, fy2 - 3, w + 6, 14, () -> {
+                    Modules.PET.side.set(s);
+                    Store.save();
+                }));
+                sx += w + 14;
+            }
         } else if (tab == Tab.CAPES) {
-            Type.left(g, "ADD YOUR OWN PHOTO IN THE LAUNCHER: MODS › COSMETICS", Type.MONO, gx, fy2 + 2, 0.65f, t.muted);
+            Type.left(g, "DROP A PICTURE ON THIS WINDOW TO MAKE IT A CAPE", Type.MONO, gx, fy2 + 2, 0.65f, t.muted);
         } else {
             Type.left(g, "HOVER TO TRY ON  ·  CLICK TO EQUIP", Type.MONO, gx, fy2 + 2, 0.65f, t.muted);
+        }
+
+        if (message != null && System.currentTimeMillis() - messageAt < 4000) {
+            int mw = Type.width(message, Type.UI, 0.9f) + 16;
+            g.fill(x0 + 14, y0 + H - 50, x0 + 14 + mw, y0 + H - 34, t.text);
+            Type.left(g, message, Type.UI, x0 + 22, y0 + H - 46, 0.9f, t.bg | 0xFF000000);
         }
 
         // ---------- the character
@@ -255,6 +328,20 @@ public final class WardrobeScreen extends Screen {
         if (name.equals("None")) {
             g.fill(x, y, x + w, y + h, t.off);
             Type.center(g, "—", Type.UI, x + w / 2f, y + h / 2f - 5, 1.2f, t.muted);
+            return;
+        }
+        if (name.equals(UPLOAD)) {
+            g.fill(x, y, x + w, y + h, t.accent);
+            Type.center(g, "+", Type.UI, x + w / 2f, y + h / 2f - 8, 2f, t.onAccent);
+            return;
+        }
+        if (tab == Tab.PETS) {
+            var def = CosmeticLayer.PETS.get(name);
+            if (def == null) return;
+            Identifier id = Identifier.withDefaultNamespace("textures/entity/" + def.texture() + ".png");
+            g.fill(x, y, x + w, y + h, t.off);
+            int sz = Math.min(w, h) - 4;
+            g.blit(RenderPipelines.GUI_TEXTURED, id, x + (w - sz) / 2, y + (h - sz) / 2, 0, 0, sz, sz, 16, 16, 64, 64);
             return;
         }
         try {

@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 42] = [
+pub const MODULES: [(&str, &str, &str); 43] = [
     ("HUD", "FPS", "Frames per second"),
     ("HUD", "CPS", "Clicks per second (left | right)"),
     ("HUD", "Coordinates", "X, Y, Z and facing"),
@@ -71,6 +71,7 @@ pub const MODULES: [(&str, &str, &str); 42] = [
     ("Cosmetics", "Cape", "Built-in designs or your own photo, also on the elytra"),
     ("Cosmetics", "Wings", "3D dragon, angel, demon or butterfly wings"),
     ("Cosmetics", "Headwear", "Top hat, crown, glowing halo, horns or cat ears"),
+    ("Cosmetics", "Pet", "Parrot, bee, allay, fox, axolotl, frog or copper golem next to you"),
     ("Cosmetics", "Emotes", "16 emotes – hold B, your figure previews the one you aim at"),
     ("Misc", "HUD style", "Colors and background of all HUD elements"),
 ];
