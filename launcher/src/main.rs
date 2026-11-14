@@ -10,6 +10,7 @@ mod mods;
 mod net;
 mod prism;
 mod profiles;
+mod servers;
 mod state;
 mod theme;
 

@@ -34,6 +34,11 @@ pub struct Config {
     /// Nur zur Laufzeit: zusätzliche JVM-Argumente dieses Starts.
     #[serde(skip)]
     pub runtime_jvm: Vec<String>,
+    /// Runtime only: server to join right after this launch ("host[:port]").
+    #[serde(skip)]
+    pub runtime_server: Option<String>,
+    /// Saved servers for the Servers page.
+    pub servers: Vec<crate::servers::ServerEntry>,
     pub look: crate::theme::Look,
     pub active_profile: Option<String>,
     pub client: crate::client_mods::ClientMods,
@@ -59,6 +64,8 @@ impl Default for Config {
             use_prism: true,
             prism_path: String::new(),
             runtime_jvm: Vec::new(),
+            runtime_server: None,
+            servers: Vec::new(),
             look: Default::default(),
             active_profile: None,
             client: Default::default(),

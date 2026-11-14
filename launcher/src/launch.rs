@@ -137,6 +137,16 @@ pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>, run_dir: 
         push_args(&mut game, arr, &f);
     }
 
+    // Join a server right away: quick play on modern versions, --server/--port on legacy ones
+    if let Some(server) = &cfg.runtime_server {
+        let (host, port) = crate::servers::split_address(server);
+        if json["minecraftArguments"].is_string() {
+            game.extend(["--server".into(), host, "--port".into(), port.to_string()]);
+        } else {
+            game.extend(["--quickPlayMultiplayer".into(), format!("{host}:{port}")]);
+        }
+    }
+
     let main = json["mainClass"].as_str().context("mainClass missing")?.to_string();
     let mut args: Vec<String> = jvm.into_iter().map(&subst).collect();
     args.push(main);

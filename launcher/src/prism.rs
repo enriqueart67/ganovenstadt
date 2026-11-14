@@ -452,10 +452,13 @@ pub fn write_instance(p: &Prism, id: &str, name: &str, game: &Path, pack: &Value
 /// Startet die Instanz und liest das Spiel-Log mit, bis das Spiel beendet ist.
 /// Fortschritt (Spielen-Leiste) läuft bis das Minecraft-Fenster da ist; erst dann ist der Launcher
 /// wieder frei. Unter Windows werden alle Fenster der Hintergrund-Komponente versteckt.
-pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result<()> {
+pub fn launch(p: &Prism, id: &str, game: &Path, label: String, server: Option<&str>, ui: Ui) -> Result<()> {
     let started = SystemTime::now();
     let mut cmd = command(p);
     cmd.arg("--launch").arg(id);
+    if let Some(s) = server {
+        cmd.arg("--server").arg(s);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

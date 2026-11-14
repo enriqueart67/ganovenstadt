@@ -12,6 +12,8 @@ use crate::{auth, client_mods, install, launch, mods, net, prism, profiles};
 mod profiles_ui;
 #[path = "gui_client.rs"]
 mod client_ui;
+#[path = "gui_extra.rs"]
+mod extra_ui;
 use profiles_ui::ProfilesUi;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -19,6 +21,8 @@ enum Page {
     Home,
     Profiles,
     Client,
+    Servers,
+    Shots,
     Look,
     Console,
     Settings,
@@ -54,6 +58,7 @@ pub struct App {
     key_capture: Option<String>,
     cape_path: String,
     cape_msg: Option<String>,
+    extra: extra_ui::ExtraUi,
 }
 
 impl App {
@@ -90,6 +95,7 @@ impl App {
             key_capture: None,
             cape_path: String::new(),
             cape_msg: None,
+            extra: extra_ui::ExtraUi::default(),
         };
         app.load_versions();
         app.refresh_login();
@@ -272,6 +278,7 @@ impl App {
         }
         let mut cfg_rt = self.cfg.clone();
         cfg_rt.runtime_jvm = vec![client_mods::jvm_arg()];
+        cfg_rt.runtime_server = self.extra.join.take();
         let (h, client, cfg, repair) = (self.h.clone(), self.client.clone(), cfg_rt, self.repair);
         self.repair = false;
         let account = h.lock().account.clone();
@@ -325,7 +332,7 @@ impl App {
                     prism::write_instance(&pr, &id, &name, &game, &pack, &cfg, java.as_deref())?;
                     h.log(format!("[Launcher] Starting {} (account: {})", name.trim_start_matches("Peregrine · "), acc.unwrap_or_default()));
                     h.log("[Launcher] The first launch of a version downloads the game files – this takes a moment, once.");
-                    prism::launch(&pr, &id, &game, version.clone(), h.clone())?;
+                    prism::launch(&pr, &id, &game, version.clone(), cfg.runtime_server.as_deref(), h.clone())?;
                     anyhow::Ok(())
                 }
                 .await;
@@ -426,6 +433,8 @@ impl App {
             (Page::Home, "HOME"),
             (Page::Profiles, "PROFILES"),
             (Page::Client, "MODS"),
+            (Page::Servers, "SERVERS"),
+            (Page::Shots, "SCREENSHOTS"),
             (Page::Look, "APPEARANCE"),
             (Page::Console, "CONSOLE"),
             (Page::Settings, "SETTINGS"),
@@ -618,7 +627,7 @@ impl App {
         }
         // Loader als Text-Auswahl
         let lx = vc.right() + 40.0;
-        ui.painter().text(pos2(lx, vc.top()), Align2::LEFT_TOP, "MODLOADER", font(10.5, "mono"), pal.muted);
+        ui.painter().text(pos2(lx, vc.top()), Align2::LEFT_TOP, "MOD LOADER", font(10.5, "mono"), pal.muted);
         if active.is_none() {
             let mut ox = lx;
             for l in install::LOADERS {
@@ -654,7 +663,7 @@ impl App {
         let p = ui.painter();
         p.text(pos2(right.left(), ry), Align2::LEFT_TOP, "OVERVIEW", font(11.0, "mono"), pal.muted);
         ry += 22.0;
-        let java = if self.cfg.java_path.trim().is_empty() { "automatisch".to_string() } else { "custom path".into() };
+        let java = if self.cfg.java_path.trim().is_empty() { "automatic".to_string() } else { "custom path".into() };
         let prism_acc = if account.is_none() && self.cfg.use_prism { self.h.lock().prism_account.clone() } else { None };
         let konto = match (account, &prism_acc) {
             (Some(a), _) => (a.name.clone(), pal.text),
@@ -1146,7 +1155,7 @@ impl App {
                     });
                 });
                 card(ui, pal, "Java", |ui| {
-                    field(ui, pal, "Java path (empty = the right version is downloaded automatically)", &mut c.java_path, "automatisch");
+                    field(ui, pal, "Java path (empty = the right version is downloaded automatically)", &mut c.java_path, "automatic");
                 });
                 let (prism_found, prism_acc) = {
                     let s = self.h.lock();
@@ -1385,6 +1394,8 @@ impl eframe::App for App {
                 Page::Home => self.home(ui, content, t, &pal, &account, &mut action),
                 Page::Profiles => self.profiles_page(ui, content, &pal),
                 Page::Client => self.client_page(ui, content, &pal),
+                Page::Servers => self.servers_page(ui, content, &pal),
+                Page::Shots => self.shots_page(ui, content, &pal),
                 Page::Look => self.look_page(ui, content, &pal),
                 Page::Console => self.console(ui, content, &pal),
                 Page::Settings => self.settings(ui, content, &pal),

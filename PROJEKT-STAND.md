@@ -10,6 +10,19 @@
 
 ---
 
+## 0. Stand nach der großen Runde „Englisch + Look + Features“ (zuerst lesen)
+
+- **Sprache:** Launcher und Mod sind komplett **Englisch**. Alte deutsche Optionsnamen in `config.json` werden per `Look::migrate()` umgestellt. Mod-Modusnamen (z. B. „Left | Right“) sind englisch – alte gespeicherte Werte fallen auf den Standard zurück. `PROJEKT-STAND.md` bleibt deutsch (für den Nutzer).
+- **Look im Spiel:** Die Mod liefert IBM Plex als TTF mit (`assets/peregrine/font/*.json|ttf`, `gui/Type.java`). Mod-Menü (`gui/ClickGui`), Emote-Rad, Wegpunkt-Liste und der eigene Startbildschirm (`gui/TitleMenu`, ersetzt den Vanilla-Titel über `ScreenEvents.AFTER_INIT`; Modul „Main menu“, Link „VANILLA MENU“, bei Fehlern automatisch zurück zu Vanilla) nutzen dieselbe Typografie wie der Launcher: Haarlinien, Mono-Labels, eine Akzentfarbe, keine Emoji-Symbole. Farben kommen aus `theme.json` des Launchers.
+- **Neue Module (40 gesamt):** Minimap (`Minimap.java`, 128×128-Textur, 4×/s), Waypoints (`Waypoints.java`, Taste M → `gui/WaypointScreen`, Marker per Projektion im HUD + auf der Minimap, „Last death“), Time (`ClockMixin` auf `ClientClockManager.getTotalTicks`), Weather (Clear/Rain/Storm), Low fire (`FireOverlayMixin`), Block outline (`BlockOutlineMixin`), Mention highlight, Main menu; 16 Emotes auf 2 Seiten (Mausrad).
+- **Sicherheit bei Versionsunterschieden:** Alle neueren Mixins liegen in `peregrine.optional.mixins.json` (`required: false`). Getestet: Ein Mixin mit falscher Signatur wird nur übersprungen (WARN im Log), das Spiel startet trotzdem. Nur die 5 alten Kern-Mixins sind Pflicht. Versionsunterschiede bisher: `GameRenderer.mainCamera()` (26.1: `getMainCamera()`, per Reflection), `OptionsScreen`-Konstruktor (26.3 anders, per Reflection), Maustasten-Konstanten (26.3).
+- **Launcher neu:** Seite **Servers** (`servers.rs` Status-Ping, `gui_extra.rs`; „Join“ startet mit `--quickPlayMultiplayer` bzw. über Prism `--server`; `Config.servers`, `Config.runtime_server`), Seite **Screenshots** (alle Profile, Vorschaubilder im Hintergrund geladen, Öffnen/Löschen), **Profil-Vorlagen** (PvP/Shaders/Survival in `gui_profiles.rs`, `TEMPLATES` mit Modrinth-Projekt-IDs).
+- **Im Spiel getestet (nur 26.2, Demo-Modus):** Startbildschirm, Menü, Einstellungsseite, Emote-Rad, Minimap, Wegpunkt anlegen/umbenennen/Marker, Zeit, Blockumrandung, Chat-Zeitstempel. **Nicht getestet:** 26.1 und 26.3 im Spiel (bauen aber), Low fire (man müsste brennen), Wetter-Modi Rain/Storm, Mention highlight, Auto-GG, Server-„Join“ (Demo erlaubt kein Multiplayer), alles unter echtem Windows.
+- **Noch offen aus der Wunschliste:** Trefferfarbe, kleine Schild-/Item-Ansicht, Item-Physik, Hüte/Flügel, Auto-Text, Chat kopieren/zusammenfassen, Cosmetics-Server (andere sehen Umhang/Emotes), Minimap in Höhlen/Nether (zeigt dort nur die Oberfläche bzw. Decke).
+- **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
+
+---
+
 ## 1. Was ist der Peregrine Client?
 
 Ein eigener **Minecraft-Launcher in Rust** (Ordner `launcher/`) plus eine eigene **Fabric-Mod**

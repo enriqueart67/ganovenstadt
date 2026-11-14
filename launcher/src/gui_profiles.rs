@@ -227,6 +227,54 @@ impl App {
         });
     }
 
+    /// Creates a Fabric profile and installs the template's Modrinth projects into it.
+    fn start_template(&mut self, t: &'static Template) {
+        if self.h.lock().busy {
+            return;
+        }
+        // newest release the client mods support, else the version selected on Home
+        let version = {
+            let s = self.h.lock();
+            s.versions.iter().filter(|v| v.kind == "release").map(|v| v.id.clone()).find(|v| crate::client_mods::jar_for(v).is_some())
+        }
+        .unwrap_or_else(|| self.cfg.version.clone());
+        if version.is_empty() {
+            self.h.error("The version list has not loaded yet – try again in a moment.");
+            return;
+        }
+        let mut p = Profile {
+            id: profiles::new_id(t.name, &self.prof.list),
+            name: t.name.to_string(),
+            version: version.clone(),
+            loader: "Fabric".into(),
+            loader_version: None,
+            mods: Vec::new(),
+            icon: None,
+        };
+        let root = profiles::dir(&self.cfg.game_dir, &p);
+        let (shared, client, h) = (self.prof.shared.clone(), self.client.clone(), self.h.clone());
+        h.set_busy(true);
+        h.log(format!("[Templates] Creating “{}” for Minecraft {version} …", t.name));
+        self.rt.spawn(async move {
+            let total = t.items.len();
+            for (i, (kind, id, title)) in t.items.iter().enumerate() {
+                h.status(format!("Installing {title} …"));
+                h.progress(i, total);
+                let hh = h.clone();
+                match mods::install(&client, *kind, id, &version, "Fabric", &root, None, &p.mods, move |l| hh.log(l)).await {
+                    Ok(list) => p.mods.extend(list),
+                    Err(e) => h.log(format!("[Templates] Skipped {title}: {e:#}")),
+                }
+            }
+            let n = p.mods.len();
+            h.log(format!("[Templates] Profile “{}” created with {n} item{}", p.name, if n == 1 { "" } else { "s" }));
+            lock(&shared).new_profiles.push(p);
+            h.progress(0, 0);
+            h.status("Ready.");
+            h.set_busy(false);
+        });
+    }
+
     fn start_modpack(&mut self, hit: &Hit) {
         if self.h.lock().busy {
             return;
@@ -323,14 +371,39 @@ impl App {
             });
         });
         self.progress_line(ui, pal);
-        if self.prof.list.is_empty() {
-            card(ui, pal, "No profiles yet", |ui| {
-                ui.label(RichText::new("Create a profile or install a ready-made modpack. After that, “Discover” has mods, resource packs, shaders and data packs from Modrinth.").color(pal.muted));
-            });
-            return;
-        }
         let list = self.prof.list.clone();
+        let busy = self.h.lock().busy;
         egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+            if list.is_empty() {
+                card(ui, pal, "No profiles yet", |ui| {
+                    ui.label(RichText::new("Create a profile, start from a template below or install a ready-made modpack. After that, “Discover” has mods, resource packs, shaders and data packs from Modrinth.").color(pal.muted));
+                });
+            }
+            let mut chosen = None;
+            card(ui, pal, "Start from a template", |ui| {
+                ui.label(RichText::new("One click creates a Fabric profile and installs a small, hand-picked set from Modrinth. Turbo and the client mods are added on top automatically.").color(pal.muted).size(12.5));
+                ui.add_space(4.0);
+                for (i, t) in TEMPLATES.iter().enumerate() {
+                    let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), Sense::hover());
+                    let p = ui.painter();
+                    p.line_segment([row.left_bottom(), row.right_bottom()], Stroke::new(1.0_f32, pal.border));
+                    p.text(row.left_center() + vec2(0.0, -8.0), Align2::LEFT_CENTER, t.name, font(15.0, "semibold"), pal.text);
+                    p.text(row.left_center() + vec2(0.0, 10.0), Align2::LEFT_CENTER, t.about, font(12.0, "regular"), pal.muted);
+                    let b = Rect::from_min_size(pos2(row.right() - 96.0, row.center().y - 15.0), vec2(96.0, 30.0));
+                    let r = ui.interact(b, Id::new(("template", i)), if busy { Sense::hover() } else { Sense::click() });
+                    pal.primary(ui.painter(), b, r.hovered() && !busy, "Create");
+                    if r.clicked() {
+                        chosen = Some(i);
+                    }
+                }
+            });
+            if let Some(i) = chosen {
+                self.start_template(&TEMPLATES[i]);
+            }
+            if !list.is_empty() {
+                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+                ui.painter().rect_filled(r, 0.0, pal.border);
+            }
             for p in &list {
                 let (rr, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
                 let active = self.cfg.active_profile.as_deref() == Some(p.id.as_str());
@@ -710,6 +783,42 @@ impl App {
         clicked
     }
 }
+
+/// A starter profile: name, one-line description, Modrinth projects (kind, project id, title).
+struct Template {
+    name: &'static str,
+    about: &'static str,
+    items: &'static [(Kind, &'static str, &'static str)],
+}
+
+const TEMPLATES: [Template; 3] = [
+    Template {
+        name: "PvP",
+        about: "Lean and fast: Dynamic FPS, Continuity for PvP texture packs, Mod Menu",
+        items: &[(Kind::Mod, "LQ3K71Q1", "Dynamic FPS"), (Kind::Mod, "1IjD5062", "Continuity"), (Kind::Mod, "mOgUt4GM", "Mod Menu")],
+    },
+    Template {
+        name: "Shaders",
+        about: "Iris with Complementary Reimagined and BSL, dynamic lights, connected textures",
+        items: &[
+            (Kind::Shader, "HVnmMxH1", "Complementary Reimagined"),
+            (Kind::Shader, "Q1vvjJYV", "BSL Shaders"),
+            (Kind::Mod, "yBW8D80W", "LambDynamicLights"),
+            (Kind::Mod, "1IjD5062", "Continuity"),
+        ],
+    },
+    Template {
+        name: "Survival",
+        about: "Quality of life: AppleSkin, Jade, Mouse Tweaks, Shulker Box Tooltip, Mod Menu",
+        items: &[
+            (Kind::Mod, "EsAfCjCV", "AppleSkin"),
+            (Kind::Mod, "nvQzSEkH", "Jade"),
+            (Kind::Mod, "aC3cM3Vq", "Mouse Tweaks"),
+            (Kind::Mod, "2M01OLQq", "Shulker Box Tooltip"),
+            (Kind::Mod, "mOgUt4GM", "Mod Menu"),
+        ],
+    },
+];
 
 pub(super) fn accent_button(ui: &mut egui::Ui, pal: &Pal, label: &str) -> egui::Response {
     let g = ui.fonts(|f| f.layout_no_wrap(label.to_uppercase(), font(11.5, "monom"), Color32::WHITE));
