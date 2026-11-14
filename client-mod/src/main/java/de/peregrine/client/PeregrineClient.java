@@ -25,7 +25,7 @@ public final class PeregrineClient implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Peregrine");
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("peregrine", "main"));
 
-    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey;
+    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey, assistantKey;
 
     @Override
     public void onInitializeClient() {
@@ -37,6 +37,7 @@ public final class PeregrineClient implements ClientModInitializer {
         emoteKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.emote", InputConstants.KEY_B, CATEGORY));
         freelookKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.freelook", InputConstants.KEY_LALT, CATEGORY));
         waypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.waypoints", InputConstants.KEY_M, CATEGORY));
+        assistantKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.assistant", InputConstants.KEY_K, CATEGORY));
         net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
             if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
         });
@@ -93,6 +94,8 @@ public final class PeregrineClient implements ClientModInitializer {
     }
 
     private static void onTick(Minecraft mc) {
+        while (assistantKey.consumeClick()) if (mc.player != null) Ui.open(new de.peregrine.client.gui.AssistantScreen());
+        de.peregrine.client.bot.Bot.tick(mc);
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
         while (waypointKey.consumeClick()) if (Modules.WAYPOINTS.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.WaypointScreen());

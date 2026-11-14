@@ -10,7 +10,8 @@
     "ChatComponentMixin",
     "ClockMixin",
     "FireOverlayMixin",
-    "BlockOutlineMixin"
+    "BlockOutlineMixin",
+    "BotAttackMixin"
   ],
   "injectors": {
     "defaultRequire": 0

@@ -104,7 +104,7 @@ pub const TURBO: [(&str, &str, &str); 5] = [
     ("entityculling", "Entity Culling", "skips mobs and chests you cannot see"),
 ];
 /// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
-pub const KEYS: [(&str, &str, &str); 7] = [
+pub const KEYS: [(&str, &str, &str); 8] = [
     ("key.peregrine.menu", "Open mod menu", "key.keyboard.right.shift"),
     ("key.peregrine.zoom", "Zoom (hold)", "key.keyboard.c"),
     ("key.peregrine.fullbright", "Toggle fullbright", "key.keyboard.g"),
@@ -112,6 +112,7 @@ pub const KEYS: [(&str, &str, &str); 7] = [
     ("key.peregrine.emote", "Emote wheel", "key.keyboard.b"),
     ("key.peregrine.freelook", "Freelook (hold)", "key.keyboard.left.alt"),
     ("key.peregrine.waypoints", "Waypoints", "key.keyboard.m"),
+    ("key.peregrine.assistant", "AI assistant", "key.keyboard.k"),
 ];
 
 /// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).
