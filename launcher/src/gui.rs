@@ -55,6 +55,7 @@ pub struct App {
     logo: egui::TextureHandle,
     prof: ProfilesUi,
     prism_check: Option<(Instant, String)>,
+    prism_warm_tries: u32,
     key_capture: Option<String>,
     cape_path: String,
     cape_msg: Option<String>,
@@ -92,6 +93,7 @@ impl App {
             logo: theme::load_logo(&cc.egui_ctx),
             prof: ProfilesUi::new(),
             prism_check: None,
+            prism_warm_tries: 0,
             key_capture: None,
             cape_path: String::new(),
             cape_msg: None,
@@ -147,6 +149,18 @@ impl App {
         self.prism_check = Some((Instant::now(), self.cfg.prism_path.clone()));
         let found = prism::find(&self.cfg.prism_path);
         let acc = found.as_ref().and_then(prism::account_name);
+        // signed in through the component and no direct account: keep it warm in the background
+        // (again after a game, a sign-in or a settings change – at most a few times if it keeps failing)
+        if let (Some(p), Some(_)) = (&found, &acc) {
+            let direct = self.h.lock().account.is_some();
+            let busy = self.h.lock().busy;
+            if self.cfg.use_prism && !direct && !busy && self.prism_warm_tries < 5 && !prism::game_running() && !prism::prestart_alive() {
+                self.prism_warm_tries += 1;
+                if !prism::prestart(p, &self.h) {
+                    self.prism_warm_tries = 5;
+                }
+            }
+        }
         let mut s = self.h.lock();
         s.prism = found;
         s.prism_account = acc;
@@ -1463,6 +1477,7 @@ impl eframe::App for App {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         config::save_config(&self.cfg);
+        prism::stop_prestart(false);
     }
 }
 

@@ -156,7 +156,74 @@ fn accounts_stamp(p: &Prism) -> Option<SystemTime> {
 
 /// Öffnet Prism nur zum Anmelden: sobald dort ein Konto hinzugefügt wurde, schließt Peregrine Prism
 /// wieder. `on_done` bekommt den Kontonamen (oder `None`, wenn Prism ohne Anmeldung geschlossen wurde).
+// ------------------------------------------------------------------ pre-start
+/// The sign-in component started in the background when the launcher opens, so "Play" only has to hand
+/// the launch over to an already running process. Windows only (its windows are kept hidden).
+struct Prestarted {
+    child: std::process::Child,
+    hider: std::sync::Arc<std::sync::atomic::AtomicU8>,
+}
+
+static PRESTARTED: std::sync::Mutex<Option<Prestarted>> = std::sync::Mutex::new(None);
+/// Set while a game started through the component is running (then it must not be stopped).
+static GAME_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn prestarted() -> std::sync::MutexGuard<'static, Option<Prestarted>> {
+    PRESTARTED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Starts the component hidden in the background (no-op if it already runs or outside Windows).
+pub fn prestart(p: &Prism, ui: &Ui) -> bool {
+    if !cfg!(windows) {
+        return false;
+    }
+    let mut slot = prestarted();
+    if let Some(running) = slot.as_mut() {
+        if matches!(running.child.try_wait(), Ok(None)) {
+            return true;
+        }
+    }
+    preset(p);
+    let hider = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(HIDE_FAST));
+    match command(p).spawn() {
+        Ok(child) => {
+            hide_windows_while(child.id(), hider.clone());
+            *slot = Some(Prestarted { child, hider });
+            ui.log("[Launcher] Sign-in component pre-started in the background – Play hands over instantly.");
+            true
+        }
+        Err(e) => {
+            ui.log(format!("[Launcher] Could not pre-start the sign-in component: {e}"));
+            false
+        }
+    }
+}
+
+/// Is the background instance alive?
+pub fn prestart_alive() -> bool {
+    prestarted().as_mut().is_some_and(|p| matches!(p.child.try_wait(), Ok(None)))
+}
+
+pub fn game_running() -> bool {
+    GAME_RUNNING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Stops the pre-started component (before signing in, and when the launcher closes – unless a game runs).
+pub fn stop_prestart(even_if_game_runs: bool) {
+    use std::sync::atomic::Ordering;
+    if !even_if_game_runs && GAME_RUNNING.load(Ordering::Relaxed) {
+        return;
+    }
+    if let Some(mut p) = prestarted().take() {
+        p.hider.store(STOP, Ordering::Relaxed);
+        let _ = p.child.kill();
+        let _ = p.child.wait();
+    }
+}
+
 pub fn login(p: &Prism, ui: Ui, on_done: impl FnOnce(Option<String>) + Send + 'static) -> Result<()> {
+    // a hidden background instance would swallow the sign-in window – stop it first
+    stop_prestart(true);
     preset(p);
     let before = accounts_stamp(p);
     let had = account_name(p);
@@ -443,9 +510,20 @@ fn remove_link(p: &Path) -> Result<()> {
 pub fn write_instance(p: &Prism, id: &str, name: &str, game: &Path, pack: &Value, cfg: &Config, java: Option<&Path>) -> Result<PathBuf> {
     let inst = p.instances().join(id);
     std::fs::create_dir_all(&inst).with_context(|| format!("Folder {} is not writable", inst.display()))?;
-    std::fs::write(inst.join("instance.cfg"), instance_cfg(name, cfg, java))?;
-    std::fs::write(inst.join("mmc-pack.json"), serde_json::to_vec_pretty(pack)?)?;
+    let files = [(inst.join("instance.cfg"), instance_cfg(name, cfg, java).into_bytes()), (inst.join("mmc-pack.json"), serde_json::to_vec_pretty(pack)?)];
+    let mut changed = false;
+    for (path, data) in files {
+        if std::fs::read(&path).ok().as_deref() != Some(&data[..]) {
+            std::fs::write(&path, data)?;
+            changed = true;
+        }
+    }
     link_game_dir(&inst, game)?;
+    // A component already running in the background keeps the old instance settings in memory –
+    // restart it so the new ones (memory, Java, version …) are used.
+    if changed {
+        stop_prestart(false);
+    }
     Ok(inst)
 }
 
@@ -471,8 +549,16 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, server: Option<&s
     ui.status("Checking your account …");
     ui.progress(35, 100);
     let log = game.join("logs").join("latest.log");
+    GAME_RUNNING.store(true, std::sync::atomic::Ordering::Relaxed);
     std::thread::spawn(move || {
         use std::sync::atomic::Ordering;
+        struct Done;
+        impl Drop for Done {
+            fn drop(&mut self) {
+                GAME_RUNNING.store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        let _done = Done;
         let t0 = Instant::now();
         let mut pos: Option<u64> = None;
         let mut prism_done = false;
