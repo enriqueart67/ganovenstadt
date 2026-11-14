@@ -30,40 +30,47 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 33] = [
-    ("HUD", "FPS", "Bilder pro Sekunde"),
-    ("HUD", "CPS", "Klicks pro Sekunde (links | rechts)"),
-    ("HUD", "Koordinaten", "X, Y, Z und Himmelsrichtung"),
-    ("HUD", "Keystrokes", "W A S D, Maustasten mit CPS, Leertaste"),
-    ("HUD", "Rüstung", "Rüstung und Waffe mit Haltbarkeit"),
-    ("HUD", "Trank-Effekte", "Aktive Effekte mit Restzeit"),
-    ("HUD", "Uhrzeit", "Echte Uhrzeit"),
-    ("HUD", "Ping", "Verbindung zum Server in ms"),
-    ("HUD", "Server-Adresse", "Auf welchem Server du bist"),
-    ("HUD", "Geschwindigkeit", "Blöcke pro Sekunde"),
-    ("HUD", "Tageszähler", "Vergangene Minecraft-Tage"),
-    ("HUD", "Arbeitsspeicher", "RAM-Verbrauch"),
-    ("HUD", "Reichweite", "Abstand deines letzten Treffers"),
-    ("HUD", "Combo-Zähler", "Treffer in Folge"),
-    ("HUD", "Sättigung", "Versteckte Sättigung deines Hungers"),
-    ("HUD", "Pfeil-Zähler", "Pfeile im Inventar"),
-    ("HUD", "Totem-Zähler", "Totems der Unsterblichkeit im Inventar"),
-    ("HUD", "Biom", "Aktuelles Biom"),
-    ("HUD", "Spielzeit", "Wie lange du schon spielst"),
-    ("HUD", "Ressourcenpakete", "Aktive Ressourcenpakete"),
-    ("PvP", "Freelook", "Umsehen ohne dich zu drehen (Links-Alt halten)"),
-    ("Sonstiges", "Chat-Zeitstempel", "Uhrzeit vor Chat-Nachrichten"),
-    ("Sonstiges", "Auto-GG", "Schreibt „gg“ am Rundenende"),
-    ("PvP", "Fadenkreuz", "Eigene Form, Größe, Farbe"),
-    ("PvP", "Kein Schadens-Wackeln", "Kamera wackelt nicht bei Treffern"),
-    ("Grafik", "Zoom", "Taste C, Stärke einstellbar, weich"),
-    ("Grafik", "Fullbright", "Alles hell (Taste G)"),
-    ("Grafik", "Kein Regen", "Regen/Gewitter nur bei dir aus"),
-    ("Bewegung", "Auto-Sprint", "Automatisch sprinten (Taste V)"),
-    ("Bewegung", "Schleichen umschalten", "Einmal drücken statt halten"),
-    ("Cosmetics", "Umhang", "8 eigene Umhänge, auch auf der Elytra (F5 zum Ansehen)"),
-    ("Cosmetics", "Emotes", "Winken, Dab, Klatschen, Tanzen u. a. – Rad mit Taste B"),
-    ("Sonstiges", "HUD-Stil", "Farben und Hintergrund aller Anzeigen"),
+pub const MODULES: [(&str, &str, &str); 40] = [
+    ("HUD", "FPS", "Frames per second"),
+    ("HUD", "CPS", "Clicks per second (left | right)"),
+    ("HUD", "Coordinates", "X, Y, Z and facing"),
+    ("HUD", "Keystrokes", "W A S D, mouse buttons with CPS, space"),
+    ("HUD", "Armor", "Armor and held item with durability"),
+    ("HUD", "Potion effects", "Active effects and time left"),
+    ("HUD", "Clock", "Real-world time"),
+    ("HUD", "Ping", "Latency in ms"),
+    ("HUD", "Server address", "The server you are on"),
+    ("HUD", "Speed", "Blocks per second"),
+    ("HUD", "Day counter", "Minecraft days passed"),
+    ("HUD", "Memory", "Memory usage"),
+    ("HUD", "Reach", "Distance of your last hit"),
+    ("HUD", "Combo counter", "Hits in a row"),
+    ("HUD", "Saturation", "Hidden saturation of your hunger bar"),
+    ("HUD", "Arrow counter", "Arrows in your inventory"),
+    ("HUD", "Totem counter", "Totems of Undying in your inventory"),
+    ("HUD", "Biome", "Current biome"),
+    ("HUD", "Session time", "Time spent in this session"),
+    ("HUD", "Resource packs", "Active resource packs"),
+    ("PvP", "Freelook", "Look around without turning (hold Left Alt)"),
+    ("HUD", "Minimap", "Top-down map of your surroundings with waypoints"),
+    ("World", "Waypoints", "Save places and find them again (M)"),
+    ("World", "Time", "Choose the time of day you see"),
+    ("PvP", "Low fire", "Fire overlay moved down so you can see"),
+    ("Visuals", "Block outline", "Colored outline of the targeted block"),
+    ("Misc", "Mention highlight", "Highlights chat messages with your name"),
+    ("Misc", "Main menu", "Peregrine's own title screen"),
+    ("Misc", "Chat timestamps", "Time in front of chat messages"),
+    ("Misc", "Auto-GG", "Sends “gg” when a round ends"),
+    ("PvP", "Crosshair", "Custom shape, size and color"),
+    ("PvP", "No hurt cam", "No camera shake when hit"),
+    ("Visuals", "Zoom", "Hold C, adjustable strength, smooth"),
+    ("Visuals", "Fullbright", "Full brightness (G)"),
+    ("World", "Weather", "Choose the weather you see"),
+    ("Movement", "Auto-Sprint", "Always sprint (V)"),
+    ("Movement", "Toggle sneak", "Press once instead of holding"),
+    ("Cosmetics", "Cape", "Built-in designs or your own photo, also on the elytra"),
+    ("Cosmetics", "Emotes", "Wave, dab, clap, dance and more – hold B for the wheel"),
+    ("Misc", "HUD style", "Colors and background of all HUD elements"),
 ];
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -87,34 +94,35 @@ impl Default for ClientMods {
 
 /// Leistungs-Mods von Modrinth: (Slug, Name, Wirkung).
 pub const TURBO: [(&str, &str, &str); 5] = [
-    ("sodium", "Sodium", "neuer Grafik-Motor – meist 2–4× mehr FPS"),
-    ("lithium", "Lithium", "schnellere Spiel-Logik (Physik, KI, Ticks)"),
-    ("ferrite-core", "FerriteCore", "weniger Arbeitsspeicher"),
-    ("immediatelyfast", "ImmediatelyFast", "schnelleres Zeichnen von HUD, Text und Items"),
-    ("entityculling", "Entity Culling", "verdeckte Tiere/Truhen werden nicht gezeichnet"),
+    ("sodium", "Sodium", "modern renderer – usually 2–4× the FPS"),
+    ("lithium", "Lithium", "faster game logic (physics, AI, ticks)"),
+    ("ferrite-core", "FerriteCore", "lower memory use"),
+    ("immediatelyfast", "ImmediatelyFast", "faster HUD, text and item rendering"),
+    ("entityculling", "Entity Culling", "skips mobs and chests you cannot see"),
 ];
 /// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
-pub const KEYS: [(&str, &str, &str); 6] = [
-    ("key.peregrine.menu", "Mod-Menü öffnen", "key.keyboard.right.shift"),
-    ("key.peregrine.zoom", "Zoom (halten)", "key.keyboard.c"),
-    ("key.peregrine.fullbright", "Fullbright an/aus", "key.keyboard.g"),
-    ("key.peregrine.sprint", "Auto-Sprint an/aus", "key.keyboard.v"),
-    ("key.peregrine.emote", "Emote-Rad", "key.keyboard.b"),
-    ("key.peregrine.freelook", "Freelook (halten)", "key.keyboard.left.alt"),
+pub const KEYS: [(&str, &str, &str); 7] = [
+    ("key.peregrine.menu", "Open mod menu", "key.keyboard.right.shift"),
+    ("key.peregrine.zoom", "Zoom (hold)", "key.keyboard.c"),
+    ("key.peregrine.fullbright", "Toggle fullbright", "key.keyboard.g"),
+    ("key.peregrine.sprint", "Toggle auto-sprint", "key.keyboard.v"),
+    ("key.peregrine.emote", "Emote wheel", "key.keyboard.b"),
+    ("key.peregrine.freelook", "Freelook (hold)", "key.keyboard.left.alt"),
+    ("key.peregrine.waypoints", "Waypoints", "key.keyboard.m"),
 ];
 
 /// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).
 pub const SPECIAL_KEYS: [(&str, &str); 10] = [
-    ("key.keyboard.right.shift", "Rechts-Shift"),
-    ("key.keyboard.left.shift", "Links-Shift"),
-    ("key.keyboard.right.control", "Rechts-Strg"),
-    ("key.keyboard.left.control", "Links-Strg"),
-    ("key.keyboard.left.alt", "Links-Alt"),
+    ("key.keyboard.right.shift", "Right Shift"),
+    ("key.keyboard.left.shift", "Left Shift"),
+    ("key.keyboard.right.control", "Right Ctrl"),
+    ("key.keyboard.left.control", "Left Ctrl"),
+    ("key.keyboard.left.alt", "Left Alt"),
     ("key.keyboard.right.alt", "Alt Gr"),
-    ("key.mouse.middle", "Mittlere Maustaste"),
-    ("key.mouse.4", "Maustaste 4"),
-    ("key.mouse.5", "Maustaste 5"),
-    ("key.keyboard.caps.lock", "Feststelltaste"),
+    ("key.mouse.middle", "Middle mouse"),
+    ("key.mouse.4", "Mouse 4"),
+    ("key.mouse.5", "Mouse 5"),
+    ("key.keyboard.caps.lock", "Caps Lock"),
 ];
 
 /// Lesbarer Name einer Minecraft-Taste ("key.keyboard.c" -> "C").
@@ -124,15 +132,15 @@ pub fn key_label(k: &str) -> String {
     }
     let rest = k.trim_start_matches("key.keyboard.").trim_start_matches("key.mouse.");
     match rest {
-        "space" => "Leertaste".into(),
+        "space" => "Space".into(),
         "tab" => "Tab".into(),
         "enter" => "Enter".into(),
-        "backspace" => "Rücktaste".into(),
-        "up" => "Pfeil hoch".into(),
-        "down" => "Pfeil runter".into(),
-        "left" => "Pfeil links".into(),
-        "right" => "Pfeil rechts".into(),
-        "unknown" => "keine".into(),
+        "backspace" => "Backspace".into(),
+        "up" => "Arrow up".into(),
+        "down" => "Arrow down".into(),
+        "left" => "Arrow left".into(),
+        "right" => "Arrow right".into(),
+        "unknown" => "none".into(),
         r => r.replace('.', " ").to_uppercase(),
     }
 }
@@ -261,7 +269,7 @@ fn fit(img: &image::RgbaImage, w: u32, h: u32) -> image::RgbaImage {
 /// Macht aus einem Foto eine Umhang-Textur (HD, 1024×512 im Minecraft-Umhang-Layout inkl. Elytra)
 /// und speichert sie unter capes/<name>.png. Gibt den Namen zurück.
 pub fn import_cape(src: &Path) -> Result<String> {
-    let img = image::open(src).map_err(|e| anyhow::anyhow!("Bild konnte nicht gelesen werden: {e}"))?.to_rgba8();
+    let img = image::open(src).map_err(|e| anyhow::anyhow!("Could not read the image: {e}"))?.to_rgba8();
     const S: u32 = 16; // 16 Pixel pro Minecraft-Texel
     let mut out = image::RgbaImage::new(64 * S, 32 * S);
     let face = fit(&img, 10 * S, 16 * S);
@@ -292,11 +300,11 @@ pub fn import_cape(src: &Path) -> Result<String> {
     let ely = fit(&img, 24 * S, 22 * S);
     image::imageops::overlay(&mut out, &ely, (22 * S) as i64, 0);
 
-    let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Umhang".into());
+    let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Cape".into());
     let mut base: String = stem.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_')).take(24).collect();
     base = base.trim().to_string();
     if base.is_empty() {
-        base = "Umhang".into();
+        base = "Cape".into();
     }
     let dir = capes_dir();
     std::fs::create_dir_all(&dir)?;
@@ -365,7 +373,7 @@ mod tests {
         assert_eq!(key_from_egui("C").as_deref(), Some("key.keyboard.c"));
         assert_eq!(key_from_egui("F5").as_deref(), Some("key.keyboard.f5"));
         assert_eq!(key_from_egui("ArrowUp").as_deref(), Some("key.keyboard.up"));
-        assert_eq!(key_label("key.keyboard.right.shift"), "Rechts-Shift");
+        assert_eq!(key_label("key.keyboard.right.shift"), "Right Shift");
         assert_eq!(key_label("key.keyboard.c"), "C");
         let dir = std::env::temp_dir().join(format!("pc-keys-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();

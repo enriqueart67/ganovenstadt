@@ -3,7 +3,7 @@
   "id": "peregrine",
   "version": "${version}",
   "name": "Peregrine Client",
-  "description": "Peregrine Client: Mod-Menü (Rechts-Shift) mit HUD-Modulen, eigenem Fadenkreuz, Zoom, Fullbright und mehr.",
+  "description": "Peregrine Client: in-game mod menu (Right Shift) with HUD modules, waypoints, minimap, cosmetics and more.",
   "authors": [
     "Peregrine Client"
   ],
@@ -16,7 +16,8 @@
     ]
   },
   "mixins": [
-    "peregrine.mixins.json"
+    "peregrine.mixins.json",
+    "peregrine.optional.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.18.4",

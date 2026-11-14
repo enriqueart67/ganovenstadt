@@ -76,7 +76,7 @@ def kristall(x, y, u, v):
     d = (x + y) % 6 == 0 or (x - y) % 6 == 0
     return (220, 255, 255) if d else lerp((40, 200, 210), (20, 90, 140), v)
 
-for n, f in [("falke", falke), ("nacht", nacht), ("papier", papier), ("flamme", flamme),
-             ("ozean", ozean), ("galaxie", galaxie), ("regenbogen", regenbogen), ("kristall", kristall)]:
+for n, f in [("falcon", falke), ("night", nacht), ("paper", papier), ("flame", flamme),
+             ("ocean", ozean), ("galaxy", galaxie), ("rainbow", regenbogen), ("crystal", kristall)]:
     cape(n, f)
 print("ok")

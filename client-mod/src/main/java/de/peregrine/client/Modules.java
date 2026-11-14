@@ -32,7 +32,7 @@ public final class Modules {
     // ================================================================== HUD
     public static final class Fps extends TextHud {
         Fps() {
-            super("fps", "FPS", "Bilder pro Sekunde", true, 0.005, 0.01);
+            super("fps", "FPS", "Frames per second", true, 0.005, 0.01);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
@@ -41,24 +41,24 @@ public final class Modules {
     }
 
     public static final class Cps extends TextHud {
-        final ModeSetting mode = add(new ModeSetting("mode", "Anzeige", "Links | Rechts", "Links | Rechts", "Nur links"));
+        final ModeSetting mode = add(new ModeSetting("mode", "Display", "Left | Right", "Left | Right", "Left only"));
 
         Cps() {
-            super("cps", "CPS", "Klicks pro Sekunde", true, 0.005, 0.08);
+            super("cps", "CPS", "Clicks per second", true, 0.005, 0.08);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
-            String v = mode.is("Nur links") ? String.valueOf(Clicks.left()) : Clicks.left() + " | " + Clicks.right();
+            String v = mode.is("Left only") ? String.valueOf(Clicks.left()) : Clicks.left() + " | " + Clicks.right();
             return List.<String[]>of(new String[]{"CPS", v});
         }
     }
 
     public static final class Coords extends TextHud {
-        final BoolSetting direction = add(new BoolSetting("direction", "Himmelsrichtung", true));
-        final BoolSetting compact = add(new BoolSetting("compact", "Kompakt (eine Zeile)", false));
+        final BoolSetting direction = add(new BoolSetting("direction", "Show direction", true));
+        final BoolSetting compact = add(new BoolSetting("compact", "Compact (one line)", false));
 
         Coords() {
-            super("coords", "Koordinaten", "X, Y, Z und Blickrichtung", true, 0.005, 0.15);
+            super("coords", "Coordinates", "X, Y, Z and facing", true, 0.005, 0.15);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
@@ -74,35 +74,35 @@ public final class Modules {
             }
             if (direction.on()) {
                 String d = switch (pl.getDirection()) {
-                    case NORTH -> "Norden (-Z)";
-                    case SOUTH -> "Süden (+Z)";
-                    case EAST -> "Osten (+X)";
-                    case WEST -> "Westen (-X)";
+                    case NORTH -> "North (-Z)";
+                    case SOUTH -> "South (+Z)";
+                    case EAST -> "East (+X)";
+                    case WEST -> "West (-X)";
                     default -> pl.getDirection().toString();
                 };
-                l.add(new String[]{"Richtung", d});
+                l.add(new String[]{"Facing", d});
             }
             return l;
         }
     }
 
     public static final class Clock extends TextHud {
-        final BoolSetting seconds = add(new BoolSetting("seconds", "Sekunden", false));
+        final BoolSetting seconds = add(new BoolSetting("seconds", "Seconds", false));
 
         Clock() {
-            super("clock", "Uhrzeit", "Echte Uhrzeit", false, 0.005, 0.32);
+            super("clock", "Clock", "Real-world time", false, 0.005, 0.32);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             LocalTime t = LocalTime.now();
             String v = seconds.on() ? String.format("%02d:%02d:%02d", t.getHour(), t.getMinute(), t.getSecond()) : String.format("%02d:%02d", t.getHour(), t.getMinute());
-            return List.<String[]>of(new String[]{"Uhrzeit", v});
+            return List.<String[]>of(new String[]{"Clock", v});
         }
     }
 
     public static final class Ping extends TextHud {
         Ping() {
-            super("ping", "Ping", "Verbindung zum Server in Millisekunden", false, 0.005, 0.38);
+            super("ping", "Ping", "Latency to the server in milliseconds", false, 0.005, 0.38);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
@@ -117,48 +117,48 @@ public final class Modules {
 
     public static final class Server extends TextHud {
         Server() {
-            super("server", "Server-Adresse", "Zeigt, auf welchem Server du bist", false, 0.005, 0.44);
+            super("server", "Server address", "Shows which server you are on", false, 0.005, 0.44);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             var s = mc.getCurrentServer();
-            return List.<String[]>of(new String[]{"Server", s != null ? s.ip : "Einzelspieler"});
+            return List.<String[]>of(new String[]{"Server", s != null ? s.ip : "Singleplayer"});
         }
     }
 
     public static final class Speed extends TextHud {
         Speed() {
-            super("speed", "Geschwindigkeit", "Wie schnell du dich bewegst (Blöcke/s)", false, 0.005, 0.50);
+            super("speed", "Speed", "How fast you move (blocks/s)", false, 0.005, 0.50);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             if (mc.player == null) return List.of();
             Vec3 v = mc.player.getDeltaMovement();
             double bps = Math.sqrt(v.x * v.x + v.z * v.z) * 20.0;
-            return List.<String[]>of(new String[]{"Tempo", String.format("%.2f B/s", bps).replace('.', ',')});
+            return List.<String[]>of(new String[]{"Speed", String.format("%.2f B/s", bps)});
         }
     }
 
     public static final class Days extends TextHud {
         Days() {
-            super("days", "Tageszähler", "Wie viele Minecraft-Tage vergangen sind", false, 0.005, 0.56);
+            super("days", "Day counter", "Minecraft days passed in this world", false, 0.005, 0.56);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             if (mc.level == null) return List.of();
-            return List.<String[]>of(new String[]{"Tag", String.valueOf(mc.level.getOverworldClockTime() / 24000L + 1)});
+            return List.<String[]>of(new String[]{"Day", String.valueOf(mc.level.getOverworldClockTime() / 24000L + 1)});
         }
     }
 
     public static final class Memory extends TextHud {
         Memory() {
-            super("memory", "Arbeitsspeicher", "RAM-Verbrauch von Minecraft", false, 0.005, 0.62);
+            super("memory", "Memory", "Memory used by Minecraft", false, 0.005, 0.62);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             Runtime r = Runtime.getRuntime();
             long used = (r.totalMemory() - r.freeMemory()) / 1048576, max = r.maxMemory() / 1048576;
-            return List.<String[]>of(new String[]{"RAM", used + " / " + max + " MB (" + (used * 100 / Math.max(1, max)) + " %)"});
+            return List.<String[]>of(new String[]{"RAM", used + " / " + max + " MB (" + (used * 100 / Math.max(1, max)) + "%)"});
         }
     }
 
@@ -167,12 +167,12 @@ public final class Modules {
         static long lastTime;
 
         Reach() {
-            super("reach", "Reichweite", "Abstand deines letzten Treffers", false, 0.005, 0.68);
+            super("reach", "Reach", "Distance of your last hit", false, 0.005, 0.68);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             boolean fresh = last >= 0 && System.currentTimeMillis() - lastTime < 3000;
-            return List.<String[]>of(new String[]{"Reichweite", fresh ? String.format("%.2f m", last).replace('.', ',') : "–"});
+            return List.<String[]>of(new String[]{"Reach", fresh ? String.format("%.2f m", last) : "–"});
         }
     }
 
@@ -182,7 +182,7 @@ public final class Modules {
         static int lastTarget;
 
         Combo() {
-            super("combo", "Combo-Zähler", "Treffer in Folge, ohne selbst getroffen zu werden", false, 0.005, 0.74);
+            super("combo", "Combo counter", "Hits in a row without being hit", false, 0.005, 0.74);
         }
 
         @Override
@@ -192,13 +192,13 @@ public final class Modules {
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
-            return List.<String[]>of(new String[]{"Combo", combo + (combo == 1 ? " Treffer" : " Treffer")});
+            return List.<String[]>of(new String[]{"Combo", combo + (combo == 1 ? " hit" : " hits")});
         }
     }
 
     public static final class Potions extends TextHud {
         Potions() {
-            super("potions", "Trank-Effekte", "Aktive Effekte mit Restzeit", false, 0.80, 0.30);
+            super("potions", "Potion effects", "Active effects and time left", false, 0.80, 0.30);
             anchor = Anchor.RIGHT;
         }
 
@@ -212,7 +212,7 @@ public final class Modules {
                     l.add(new String[]{name, time});
                 }
             }
-            if (l.isEmpty() && p) l.add(new String[]{"Schnelligkeit II", "1:30"});
+            if (l.isEmpty() && p) l.add(new String[]{"Speed II", "1:30"});
             return l;
         }
 
@@ -228,19 +228,19 @@ public final class Modules {
     }
 
     public static final class Armor extends HudModule {
-        final BoolSetting durability = add(new BoolSetting("durability", "Haltbarkeit anzeigen", true));
-        final ModeSetting layout = add(new ModeSetting("layout", "Anordnung", "Untereinander", "Untereinander", "Nebeneinander"));
+        final BoolSetting durability = add(new BoolSetting("durability", "Show durability", true));
+        final ModeSetting layout = add(new ModeSetting("layout", "Layout", "Vertical", "Vertical", "Horizontal"));
         private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.MAINHAND};
 
         Armor() {
-            super("armor", "Rüstung", "Rüstung und Waffe mit Haltbarkeit", false, 0.90, 0.60);
+            super("armor", "Armor", "Armor and held item with durability", false, 0.90, 0.60);
             anchor = Anchor.RIGHT;
         }
 
         protected int[] draw(GuiGraphicsExtractor g, Minecraft mc, boolean preview) {
             if (mc.player == null) return new int[]{0, 0};
             Font f = mc.font;
-            boolean vertical = layout.is("Untereinander");
+            boolean vertical = layout.is("Vertical");
             int x = 0, y = 0, w = 0, h = 0, shown = 0;
             for (EquipmentSlot slot : SLOTS) {
                 ItemStack st = mc.player.getItemBySlot(slot);
@@ -267,21 +267,21 @@ public final class Modules {
                 }
             }
             if (shown == 0 && preview) {
-                g.text(f, "Rüstung", 0, 4, 0xFFFFFFFF, true);
-                return new int[]{f.width("Rüstung"), 16};
+                g.text(f, "Armor", 0, 4, 0xFFFFFFFF, true);
+                return new int[]{f.width("Armor"), 16};
             }
             return new int[]{w, h};
         }
     }
 
     public static final class Keystrokes extends HudModule {
-        final BoolSetting mouse = add(new BoolSetting("mouse", "Maustasten mit CPS", true));
-        final BoolSetting space = add(new BoolSetting("space", "Leertaste", true));
-        final ColorSetting pressed = add(new ColorSetting("pressed", "Farbe gedrückt", 0xFF4F8CFF));
+        final BoolSetting mouse = add(new BoolSetting("mouse", "Mouse buttons with CPS", true));
+        final BoolSetting space = add(new BoolSetting("space", "Space bar", true));
+        final ColorSetting pressed = add(new ColorSetting("pressed", "Pressed color", 0xFFFF4F00));
         private static final int K = 20, GAP = 2;
 
         Keystrokes() {
-            super("keystrokes", "Keystrokes", "Zeigt W A S D, Maustasten und Leertaste", true, 0.99, 0.62);
+            super("keystrokes", "Keystrokes", "Shows W A S D, mouse buttons and space", true, 0.99, 0.62);
             anchor = Anchor.BOTTOM_RIGHT;
         }
 
@@ -319,16 +319,16 @@ public final class Modules {
 
     // ================================================================== PvP
     public static final class Crosshair extends Module {
-        public final ModeSetting style = add(new ModeSetting("style", "Form", "Kreuz", "Kreuz", "T", "Punkt", "Kreis"));
-        public final NumberSetting size = add(new NumberSetting("size", "Größe", 5, 1, 15, 1, ""));
-        public final NumberSetting gap = add(new NumberSetting("gap", "Abstand", 2, 0, 10, 1, ""));
-        public final NumberSetting thickness = add(new NumberSetting("thickness", "Dicke", 1, 1, 4, 1, ""));
-        public final ColorSetting color = add(new ColorSetting("color", "Farbe", 0xFFFFFFFF));
-        public final BoolSetting outline = add(new BoolSetting("outline", "Umrandung", true));
-        public final BoolSetting dot = add(new BoolSetting("dot", "Punkt in der Mitte", false));
+        public final ModeSetting style = add(new ModeSetting("style", "Shape", "Cross", "Cross", "T", "Dot", "Circle"));
+        public final NumberSetting size = add(new NumberSetting("size", "Size", 5, 1, 15, 1, ""));
+        public final NumberSetting gap = add(new NumberSetting("gap", "Gap", 2, 0, 10, 1, ""));
+        public final NumberSetting thickness = add(new NumberSetting("thickness", "Thickness", 1, 1, 4, 1, ""));
+        public final ColorSetting color = add(new ColorSetting("color", "Color", 0xFFFFFFFF));
+        public final BoolSetting outline = add(new BoolSetting("outline", "Outline", true));
+        public final BoolSetting dot = add(new BoolSetting("dot", "Center dot", false));
 
         Crosshair() {
-            super("crosshair", "Fadenkreuz", "Eigenes Fadenkreuz: Form, Größe, Farbe", Category.PVP, true);
+            super("crosshair", "Crosshair", "Custom crosshair: shape, size, color", Category.PVP, true);
         }
 
         public void draw(GuiGraphicsExtractor g) {
@@ -336,8 +336,8 @@ public final class Modules {
             int t = thickness.i(), s = size.i(), gp = gap.i(), lo = t / 2, hi = t - lo;
             List<int[]> r = new ArrayList<>();
             switch (style.get()) {
-                case "Punkt" -> r.add(new int[]{cx - lo - s / 2, cy - lo - s / 2, cx + hi + s / 2, cy + hi + s / 2});
-                case "Kreis" -> {
+                case "Dot" -> r.add(new int[]{cx - lo - s / 2, cy - lo - s / 2, cx + hi + s / 2, cy + hi + s / 2});
+                case "Circle" -> {
                     int rad = gp + s;
                     for (int a = 0; a < 360; a += 4) {
                         double rr = Math.toRadians(a);
@@ -352,7 +352,7 @@ public final class Modules {
                     r.add(new int[]{cx + gp + (hi - lo), cy - lo, cx + gp + s + (hi - lo), cy + hi});
                 }
             }
-            if (dot.on() && !style.is("Punkt")) r.add(new int[]{cx - lo, cy - lo, cx + hi, cy + hi});
+            if (dot.on() && !style.is("Dot")) r.add(new int[]{cx - lo, cy - lo, cx + hi, cy + hi});
             if (outline.on()) for (int[] q : r) g.fill(q[0] - 1, q[1] - 1, q[2] + 1, q[3] + 1, 0xC0000000);
             for (int[] q : r) g.fill(q[0], q[1], q[2], q[3], color.argb());
         }
@@ -360,17 +360,17 @@ public final class Modules {
 
     public static final class NoHurtCam extends Module {
         NoHurtCam() {
-            super("nohurtcam", "Kein Schadens-Wackeln", "Kamera wackelt nicht, wenn du Schaden bekommst", Category.PVP, false);
+            super("nohurtcam", "No hurt cam", "Stops the camera shake when you take damage", Category.PVP, false);
         }
     }
 
     // ================================================================== Grafik
     public static final class Zoom extends Module {
-        public final NumberSetting factor = add(new NumberSetting("factor", "Stärke", 4, 2, 10, 0.5, "×"));
-        public final BoolSetting smooth = add(new BoolSetting("smooth", "Weich zoomen", true));
+        public final NumberSetting factor = add(new NumberSetting("factor", "Strength", 4, 2, 10, 0.5, "×"));
+        public final BoolSetting smooth = add(new BoolSetting("smooth", "Smooth zoom", true));
 
         Zoom() {
-            super("zoom", "Zoom", "Taste C gedrückt halten zum Heranzoomen", Category.GRAPHICS, true);
+            super("zoom", "Zoom", "Hold the zoom key (C) to zoom in", Category.GRAPHICS, true);
         }
     }
 
@@ -378,7 +378,7 @@ public final class Modules {
         private Double saved;
 
         Fullbright() {
-            super("fullbright", "Fullbright", "Alles hell – auch in Höhlen und nachts (Taste G)", Category.GRAPHICS, false);
+            super("fullbright", "Fullbright", "Full brightness in caves and at night (G)", Category.GRAPHICS, false);
         }
 
         @Override
@@ -396,15 +396,72 @@ public final class Modules {
     }
 
     public static final class NoWeather extends Module {
+        public final ModeSetting weather = add(new ModeSetting("weather", "Weather", "Clear", "Clear", "Rain", "Storm"));
+
         NoWeather() {
-            super("noweather", "Kein Regen", "Regen und Gewitter nur bei dir ausblenden", Category.GRAPHICS, false);
+            super("noweather", "Weather", "Choose the weather you see – clear, rain or storm", Category.WORLD, false);
+        }
+    }
+
+    public static final class TimeChanger extends Module {
+        public final ModeSetting time = add(new ModeSetting("time", "Time of day", "Noon", "Sunrise", "Morning", "Noon", "Sunset", "Night", "Midnight"));
+
+        TimeChanger() {
+            super("time", "Time", "Choose the time of day you see – only on your screen", Category.WORLD, false);
+        }
+
+        public long ticks() {
+            return switch (time.get()) {
+                case "Sunrise" -> 23000L;
+                case "Morning" -> 1000L;
+                case "Sunset" -> 12500L;
+                case "Night" -> 15000L;
+                case "Midnight" -> 18000L;
+                default -> 6000L;
+            };
+        }
+    }
+
+    public static final class LowFire extends Module {
+        public final NumberSetting height = add(new NumberSetting("height", "Lower by", 0.3, 0.1, 0.6, 0.05, ""));
+
+        LowFire() {
+            super("lowfire", "Low fire", "Moves the fire overlay down so you can see while burning", Category.PVP, true);
+        }
+    }
+
+    public static final class BlockOutline extends Module {
+        public final ColorSetting color = add(new ColorSetting("color", "Color", 0xFFFF4F00));
+
+        BlockOutline() {
+            super("outline", "Block outline", "Colors the outline of the block you are looking at", Category.GRAPHICS, false);
+        }
+    }
+
+    public static final class WaypointsModule extends Module {
+        public final BoolSetting names = add(new BoolSetting("names", "Always show names", false));
+        public final BoolSetting death = add(new BoolSetting("death", "Mark where you died", true));
+
+        WaypointsModule() {
+            super("waypoints", "Waypoints", "Save places and find them again – press M for the list", Category.WORLD, true);
+        }
+
+        @Override
+        public void tick(Minecraft mc) {
+            Waypoints.tick(mc);
+        }
+    }
+
+    public static final class MentionHighlight extends Module {
+        MentionHighlight() {
+            super("mention", "Mention highlight", "Highlights chat messages that contain your name", Category.OTHER, false);
         }
     }
 
     // ================================================================== Bewegung
     public static final class ToggleSprint extends Module {
         ToggleSprint() {
-            super("togglesprint", "Auto-Sprint", "Automatisch sprinten beim Vorwärtslaufen (Taste V)", Category.MOVEMENT, false);
+            super("togglesprint", "Auto-Sprint", "Always sprint when walking forward (V)", Category.MOVEMENT, false);
         }
 
         @Override
@@ -419,7 +476,7 @@ public final class Modules {
         private boolean sneaking;
 
         ToggleSneak() {
-            super("togglesneak", "Schleichen umschalten", "Schleichtaste einmal drücken statt halten", Category.MOVEMENT, false);
+            super("togglesneak", "Toggle sneak", "Press sneak once instead of holding it", Category.MOVEMENT, false);
         }
 
         @Override
@@ -453,30 +510,30 @@ public final class Modules {
 
     public static final class Saturation extends TextHud {
         Saturation() {
-            super("saturation", "Sättigung", "Versteckte Sättigung deines Hungers", false, 0.005, 0.86);
+            super("saturation", "Saturation", "Hidden saturation of your hunger bar", false, 0.005, 0.86);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             if (mc.player == null) return List.of();
             float s = mc.player.getFoodData().getSaturationLevel();
-            return List.<String[]>of(new String[]{"Sättigung", String.format("%.1f", s).replace('.', ',')});
+            return List.<String[]>of(new String[]{"Saturation", String.format("%.1f", s)});
         }
     }
 
     public static final class Arrows extends TextHud {
         Arrows() {
-            super("arrows", "Pfeil-Zähler", "Wie viele Pfeile du dabei hast", false, 0.90, 0.80);
+            super("arrows", "Arrow counter", "Arrows in your inventory", false, 0.90, 0.80);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             int n = countItems(mc, net.minecraft.world.item.Items.ARROW, net.minecraft.world.item.Items.SPECTRAL_ARROW, net.minecraft.world.item.Items.TIPPED_ARROW);
-            return List.<String[]>of(new String[]{"Pfeile", String.valueOf(n)});
+            return List.<String[]>of(new String[]{"Arrows", String.valueOf(n)});
         }
     }
 
     public static final class Totems extends TextHud {
         Totems() {
-            super("totems", "Totem-Zähler", "Wie viele Totems der Unsterblichkeit du hast", false, 0.90, 0.86);
+            super("totems", "Totem counter", "Totems of Undying in your inventory", false, 0.90, 0.86);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
@@ -487,7 +544,7 @@ public final class Modules {
 
     public static final class Biome extends TextHud {
         Biome() {
-            super("biome", "Biom", "In welchem Biom du gerade bist", false, 0.005, 0.92);
+            super("biome", "Biome", "The biome you are standing in", false, 0.005, 0.92);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
@@ -496,7 +553,7 @@ public final class Modules {
             String name = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
             name = name.replace('_', ' ');
             if (!name.isEmpty()) name = Character.toUpperCase(name.charAt(0)) + name.substring(1);
-            return List.<String[]>of(new String[]{"Biom", name});
+            return List.<String[]>of(new String[]{"Biome", name});
         }
     }
 
@@ -504,7 +561,7 @@ public final class Modules {
         private long start;
 
         Session() {
-            super("session", "Spielzeit", "Wie lange du schon in dieser Welt/auf diesem Server bist", false, 0.005, 0.98);
+            super("session", "Session time", "Time spent in this world or server", false, 0.005, 0.98);
         }
 
         @Override
@@ -515,13 +572,13 @@ public final class Modules {
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
             long s = start == 0 ? 0 : (System.currentTimeMillis() - start) / 1000;
-            return List.<String[]>of(new String[]{"Zeit", String.format("%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)});
+            return List.<String[]>of(new String[]{"Time", String.format("%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)});
         }
     }
 
     public static final class Packs extends TextHud {
         Packs() {
-            super("packs", "Ressourcenpakete", "Zeigt, welche Ressourcenpakete aktiv sind", false, 0.80, 0.02);
+            super("packs", "Resource packs", "Lists the active resource packs", false, 0.80, 0.02);
         }
 
         protected List<String[]> lines(Minecraft mc, boolean p) {
@@ -532,18 +589,18 @@ public final class Modules {
                 if (!(id.startsWith("file/") || id.equals("programmer_art") || id.equals("high_contrast"))) continue;
                 l.add(new String[]{"", pack.getTitle().getString()});
             }
-            if (l.isEmpty()) l.add(new String[]{"Pakete", "keine"});
+            if (l.isEmpty()) l.add(new String[]{"Packs", "none"});
             return l;
         }
     }
 
     // ================================================================== Neue Funktionen
     public static final class Freelook extends Module {
-        public final BoolSetting thirdPerson = add(new BoolSetting("third", "Dabei in die Ansicht von hinten wechseln", true));
-        public final BoolSetting invert = add(new BoolSetting("invert", "Maus umkehren (hoch/runter)", false));
+        public final BoolSetting thirdPerson = add(new BoolSetting("third", "Switch to third person while held", true));
+        public final BoolSetting invert = add(new BoolSetting("invert", "Invert vertical mouse", false));
 
         Freelook() {
-            super("freelook", "Freelook", "Umsehen, ohne dich zu drehen – Taste (Links-Alt) halten", Category.PVP, true);
+            super("freelook", "Freelook", "Look around without turning – hold Left Alt", Category.PVP, true);
         }
     }
 
@@ -551,17 +608,17 @@ public final class Modules {
         public final ModeSetting format = add(new ModeSetting("format", "Format", "HH:mm", "HH:mm", "HH:mm:ss"));
 
         ChatTime() {
-            super("chattime", "Chat-Zeitstempel", "Uhrzeit vor jeder Chat-Nachricht", Category.OTHER, false);
+            super("chattime", "Chat timestamps", "Shows the time in front of every chat message", Category.OTHER, false);
         }
     }
 
     public static final class AutoGG extends Module {
-        public final ModeSetting text = add(new ModeSetting("text", "Nachricht", "gg", "gg", "GG", "gg wp", "Good Game"));
+        public final ModeSetting text = add(new ModeSetting("text", "Message", "gg", "gg", "GG", "gg wp", "Good Game"));
         private static final String[] TRIGGERS = {"won the game", "winner", "victory", "hat gewonnen", "gewinner", "1st killer", "#1", "you won", "du hast gewonnen", "game over"};
         private long last;
 
         AutoGG() {
-            super("autogg", "Auto-GG", "Schreibt „gg“ in den Chat, wenn eine Runde vorbei ist", Category.OTHER, false);
+            super("autogg", "Auto-GG", "Sends “gg” when a round ends", Category.OTHER, false);
         }
 
         public void onMessage(String msg) {
@@ -577,14 +634,25 @@ public final class Modules {
         }
     }
 
+    public static final class MainMenu extends Module {
+        MainMenu() {
+            super("mainmenu", "Main menu", "Peregrine's own title screen instead of the vanilla one", Category.OTHER, true);
+        }
+
+        @Override
+        protected void onToggle() {
+            de.peregrine.client.gui.TitleMenu.bypass = false;
+        }
+    }
+
     // ================================================================== Cosmetics
     public static final class Cape extends Module {
-        public static final String[] DESIGNS = {"Falke", "Nacht", "Papier", "Flamme", "Ozean", "Galaxie", "Regenbogen", "Kristall"};
-        public final ModeSetting design = add(new ModeSetting("design", "Design", "Falke", CustomCapes.allDesigns()));
-        public final BoolSetting elytra = add(new BoolSetting("elytra", "Auch auf der Elytra", true));
+        public static final String[] DESIGNS = {"Falcon", "Night", "Paper", "Flame", "Ocean", "Galaxy", "Rainbow", "Crystal"};
+        public final ModeSetting design = add(new ModeSetting("design", "Design", "Falcon", CustomCapes.allDesigns()));
+        public final BoolSetting elytra = add(new BoolSetting("elytra", "Also on the elytra", true));
 
         Cape() {
-            super("cape", "Umhang", "Eigener Umhang oder eigenes Foto (im Launcher hochladen) – F5 zum Ansehen", Category.COSMETICS, true);
+            super("cape", "Cape", "Built-in designs or your own photo (upload in the launcher) – press F5 to see it", Category.COSMETICS, true);
         }
 
         /** Neu im Launcher hochgeladene Bilder in die Auswahl übernehmen. */
@@ -594,11 +662,11 @@ public final class Modules {
     }
 
     public static final class EmoteModule extends Module {
-        public final BoolSetting camera = add(new BoolSetting("camera", "Kamera nach vorne drehen", true));
-        public final BoolSetting stopOnMove = add(new BoolSetting("stop", "Beim Laufen abbrechen", true));
+        public final BoolSetting camera = add(new BoolSetting("camera", "Turn camera to the front", true));
+        public final BoolSetting stopOnMove = add(new BoolSetting("stop", "Cancel when moving", true));
 
         EmoteModule() {
-            super("emotes", "Emotes", "Animationen für deine Spielfigur – Rad mit Taste B", Category.COSMETICS, true);
+            super("emotes", "Emotes", "Animations for your character – hold B for the wheel", Category.COSMETICS, true);
         }
 
         @Override
@@ -609,14 +677,14 @@ public final class Modules {
 
     // ================================================================== Sonstiges
     public static final class Style extends Module {
-        public final ColorSetting labelColor = add(new ColorSetting("label", "Farbe Beschriftung", 0xFF4F8CFF));
-        public final ColorSetting valueColor = add(new ColorSetting("value", "Farbe Werte", 0xFFFFFFFF));
-        public final BoolSetting background = add(new BoolSetting("background", "Hintergrund", true));
-        public final NumberSetting opacity = add(new NumberSetting("opacity", "Deckkraft Hintergrund", 0.55, 0.1, 1.0, 0.05, ""));
-        public final BoolSetting shadow = add(new BoolSetting("shadow", "Textschatten", true));
+        public final ColorSetting labelColor = add(new ColorSetting("label", "Label color", 0xFFFF4F00));
+        public final ColorSetting valueColor = add(new ColorSetting("value", "Value color", 0xFFFFFFFF));
+        public final BoolSetting background = add(new BoolSetting("background", "Background", true));
+        public final NumberSetting opacity = add(new NumberSetting("opacity", "Background opacity", 0.55, 0.1, 1.0, 0.05, ""));
+        public final BoolSetting shadow = add(new BoolSetting("shadow", "Text shadow", true));
 
         Style() {
-            super("style", "HUD-Stil", "Farben und Hintergrund aller Anzeigen", Category.OTHER, true);
+            super("style", "HUD style", "Colors and background of all HUD elements", Category.OTHER, true);
         }
     }
 
@@ -651,13 +719,20 @@ public final class Modules {
     public static final Freelook FREELOOK = new Freelook();
     public static final ChatTime CHAT_TIME = new ChatTime();
     public static final AutoGG AUTO_GG = new AutoGG();
+    public static final TimeChanger TIME = new TimeChanger();
+    public static final LowFire LOW_FIRE = new LowFire();
+    public static final BlockOutline BLOCK_OUTLINE = new BlockOutline();
+    public static final WaypointsModule WAYPOINTS = new WaypointsModule();
+    public static final Minimap MINIMAP = new Minimap();
+    public static final MentionHighlight MENTION = new MentionHighlight();
+    public static final MainMenu MAIN_MENU = new MainMenu();
     public static final Cape CAPE = new Cape();
     public static final EmoteModule EMOTES = new EmoteModule();
     public static final Style STYLE = new Style();
 
     public static final List<Module> ALL = List.of(
             FPS, CPS, COORDS, KEYSTROKES, ARMOR, POTIONS, CLOCK, PING, SERVER, SPEED, DAYS, MEMORY, REACH, COMBO,
-            SATURATION, ARROWS, TOTEMS, BIOME, SESSION, PACKS, FREELOOK, CHAT_TIME, AUTO_GG,
+            SATURATION, ARROWS, TOTEMS, BIOME, SESSION, PACKS, MINIMAP, FREELOOK, LOW_FIRE, BLOCK_OUTLINE, TIME, WAYPOINTS, CHAT_TIME, MENTION, AUTO_GG, MAIN_MENU,
             CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, EMOTES, STYLE);
 
     public static List<HudModule> huds() {

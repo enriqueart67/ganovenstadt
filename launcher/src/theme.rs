@@ -20,20 +20,20 @@ pub fn c(rgb: Rgb) -> Color32 {
 }
 
 // ------------------------------------------------------------------ Einstellbares Aussehen
-pub const PRESETS: [&str; 6] = ["Papier", "Nacht", "Graphit", "OLED", "Mitternacht", "Hell"];
-pub const BACKGROUNDS: [&str; 5] = ["Keine", "Landschaft", "Verlauf", "Einfarbig", "Bild"];
-pub const SCENES: [&str; 3] = ["Abend", "Tag", "Nacht"];
+pub const PRESETS: [&str; 6] = ["Paper", "Night", "Graphite", "OLED", "Midnight", "Light"];
+pub const BACKGROUNDS: [&str; 5] = ["None", "Landscape", "Gradient", "Solid", "Image"];
+pub const SCENES: [&str; 3] = ["Evening", "Day", "Night"];
 pub const FONTS: [&str; 3] = ["Plex", "Poppins", "Standard"];
 pub const ACCENTS: [(&str, Rgb); 9] = [
-    ("Signal-Orange", [255, 79, 0]),
-    ("Blau", [79, 140, 255]),
-    ("Türkis", [45, 200, 180]),
-    ("Grün", [74, 200, 110]),
-    ("Gelb", [245, 196, 30]),
+    ("Signal orange", [255, 79, 0]),
+    ("Blue", [79, 140, 255]),
+    ("Teal", [45, 200, 180]),
+    ("Green", [74, 200, 110]),
+    ("Yellow", [245, 196, 30]),
     ("Orange", [250, 140, 50]),
-    ("Rot", [240, 90, 90]),
+    ("Red", [240, 90, 90]),
     ("Pink", [240, 110, 175]),
-    ("Weiß", [236, 236, 240]),
+    ("White", [236, 236, 240]),
 ];
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -87,31 +87,44 @@ impl Default for Look {
             rounding: 2.0,
             ui_scale: 1.0,
             font: "Plex".into(),
-            background: "Keine".into(),
-            scene: "Nacht".into(),
+            background: "None".into(),
+            scene: "Night".into(),
             image_path: String::new(),
             dim: 0.25,
             title: "PEREGRINE".into(),
             subtitle: "CLIENT".into(),
-            tagline: "Minecraft-Launcher  ·  Fabric & Quilt  ·  Java inklusive".into(),
+            tagline: "Minecraft launcher  ·  Fabric & Quilt  ·  Java included".into(),
             show_badge: false,
             show_tagline: true,
             show_logo: false,
         };
-        l.apply_preset("Papier");
+        l.apply_preset("Paper");
         l
     }
 }
 
 impl Look {
+    /// Settings saved by the earlier German version stored the German option names – map them over.
+    pub fn migrate(&mut self) {
+        let map = |v: &mut String, pairs: &[(&str, &str)]| {
+            if let Some((_, en)) = pairs.iter().find(|(de, _)| *de == v.as_str()) {
+                *v = (*en).to_string();
+            }
+        };
+        map(&mut self.preset, &[("Papier", "Paper"), ("Nacht", "Night"), ("Graphit", "Graphite"), ("Mitternacht", "Midnight"), ("Hell", "Light")]);
+        map(&mut self.background, &[("Keine", "None"), ("Landschaft", "Landscape"), ("Verlauf", "Gradient"), ("Einfarbig", "Solid"), ("Bild", "Image")]);
+        map(&mut self.scene, &[("Abend", "Evening"), ("Tag", "Day"), ("Nacht", "Night")]);
+        map(&mut self.tagline, &[("Minecraft-Launcher  ·  Fabric & Quilt  ·  Java inklusive", "Minecraft launcher  ·  Fabric & Quilt  ·  Java included")]);
+    }
+
     pub fn apply_preset(&mut self, name: &str) {
         let (bg, s, s2, b, t, m): (Rgb, Rgb, Rgb, Rgb, Rgb, Rgb) = match name {
             // Peregrine-Design: warmes Papier bzw. tiefe Nacht, Flaechen = Hintergrund (nur Haarlinien)
-            "Papier" => ([243, 241, 236], [243, 241, 236], [231, 228, 221], [210, 206, 197], [17, 17, 16], [112, 108, 100]),
-            "Nacht" => ([14, 14, 13], [14, 14, 13], [29, 28, 26], [46, 45, 42], [237, 235, 230], [140, 136, 128]),
+            "Paper" => ([243, 241, 236], [243, 241, 236], [231, 228, 221], [210, 206, 197], [17, 17, 16], [112, 108, 100]),
+            "Night" => ([14, 14, 13], [14, 14, 13], [29, 28, 26], [46, 45, 42], [237, 235, 230], [140, 136, 128]),
             "OLED" => ([0, 0, 0], [10, 10, 11], [20, 20, 22], [32, 32, 36], [240, 240, 242], [130, 130, 138]),
-            "Mitternacht" => ([10, 14, 26], [16, 22, 40], [24, 32, 56], [34, 44, 74], [230, 234, 245], [136, 146, 176]),
-            "Hell" => ([244, 244, 246], [255, 255, 255], [236, 236, 240], [222, 222, 228], [20, 20, 24], [105, 105, 115]),
+            "Midnight" => ([10, 14, 26], [16, 22, 40], [24, 32, 56], [34, 44, 74], [230, 234, 245], [136, 146, 176]),
+            "Light" => ([244, 244, 246], [255, 255, 255], [236, 236, 240], [222, 222, 228], [20, 20, 24], [105, 105, 115]),
             _ => ([17, 17, 19], [24, 24, 27], [33, 33, 37], [42, 42, 47], [237, 237, 239], [139, 139, 147]),
         };
         (self.bg, self.surface, self.surface2, self.border, self.text, self.muted) = (bg, s, s2, b, t, m);
@@ -426,7 +439,7 @@ struct Scene {
 fn scene(name: &str) -> Scene {
     let rgb = Color32::from_rgb;
     match name {
-        "Tag" => Scene {
+        "Day" => Scene {
             sky: [(0.0, rgb(70, 140, 220)), (0.45, rgb(130, 185, 240)), (0.8, rgb(200, 228, 250)), (1.0, rgb(220, 238, 252))],
             stars: 0.0,
             sun: rgb(255, 248, 210),
@@ -439,7 +452,7 @@ fn scene(name: &str) -> Scene {
                 (rgb(46, 98, 52), rgb(86, 150, 70)),
             ],
         },
-        "Abend" => Scene {
+        "Evening" => Scene {
             sky: [(0.0, rgb(28, 22, 48)), (0.4, rgb(70, 46, 100)), (0.75, rgb(190, 104, 112)), (1.0, rgb(238, 160, 112))],
             stars: 0.6,
             sun: rgb(255, 222, 170),

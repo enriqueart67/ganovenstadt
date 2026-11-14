@@ -314,10 +314,10 @@ pub fn java_path(cfg: &Config, json: &Value) -> PathBuf {
 async fn java_jobs(ui: &Ui, client: &Client, component: &str) -> Result<(Vec<Job>, Vec<(PathBuf, String)>)> {
     let all = get_json(client, JAVA_ALL).await?;
     let Some(entry) = all[java_platform()][component].as_array().and_then(|a| a.first()) else {
-        ui.log(format!("[Launcher] Kein Java '{component}' für diese Plattform – nutze installiertes Java."));
+        ui.log(format!("[Launcher] No Java '{component}' for this platform – using the installed Java."));
         return Ok((vec![], vec![]));
     };
-    let url = entry["manifest"]["url"].as_str().context("Java-Manifest fehlt")?;
+    let url = entry["manifest"]["url"].as_str().context("Java manifest missing")?;
     let manifest = get_json(client, url).await?;
     let root = base_dir().join("runtime").join(component);
     let (mut jobs, mut links) = (Vec::new(), Vec::new());
@@ -348,7 +348,7 @@ pub async fn loader_version(client: &Client, mc: &str, loader: &str, pinned: Opt
     let base = match loader {
         "Fabric" => "https://meta.fabricmc.net/v2",
         "Quilt" => "https://meta.quiltmc.org/v3",
-        _ => bail!("Unbekannter Loader {loader}"),
+        _ => bail!("Unknown loader {loader}"),
     };
     if let Some(v) = pinned {
         return Ok((base, v.to_string()));
@@ -380,9 +380,9 @@ pub async fn loader_version(client: &Client, mc: &str, loader: &str, pinned: Opt
 async fn loader_version_online(client: &Client, base: &'static str, mc: &str, loader: &str) -> Result<(&'static str, String)> {
     let pinned: Option<&str> = None;
     let list = get_json(client, &format!("{base}/versions/loader/{mc}")).await
-        .with_context(|| format!("{loader} unterstützt Minecraft {mc} nicht"))?;
+        .with_context(|| format!("{loader} does not support Minecraft {mc}"))?;
     let arr = list.as_array().filter(|a| !a.is_empty())
-        .with_context(|| format!("{loader} unterstützt Minecraft {mc} nicht"))?;
+        .with_context(|| format!("{loader} does not support Minecraft {mc}"))?;
     let pick = arr.iter()
         .find(|e| e["loader"]["stable"].as_bool() == Some(true))
         .or_else(|| arr.iter().find(|e| !e["loader"]["version"].as_str().unwrap_or("").contains("beta")))
@@ -390,7 +390,7 @@ async fn loader_version_online(client: &Client, base: &'static str, mc: &str, lo
     // Modpacks geben eine feste Loader-Version vor, sonst die neueste stabile
     let lv = match pinned {
         Some(v) => v,
-        None => pick["loader"]["version"].as_str().context("Loader-Version fehlt")?,
+        None => pick["loader"]["version"].as_str().context("Loader version missing")?,
     };
     Ok((base, lv.to_string()))
 }
@@ -398,7 +398,7 @@ async fn loader_version_online(client: &Client, base: &'static str, mc: &str, lo
 async fn install_loader(client: &Client, gd: &Path, mc: &str, loader: &str, pinned: Option<&str>) -> Result<String> {
     let (base, lv) = loader_version(client, mc, loader, pinned).await?;
     let profile = get_json(client, &format!("{base}/versions/loader/{mc}/{lv}/profile/json")).await?;
-    let id = profile["id"].as_str().context("Profil-ID fehlt")?.to_string();
+    let id = profile["id"].as_str().context("Profile ID missing")?.to_string();
     let p = version_json_path(gd, &id);
     std::fs::create_dir_all(p.parent().unwrap())?;
     std::fs::write(&p, serde_json::to_vec_pretty(&profile)?)?;
@@ -414,24 +414,24 @@ pub async fn prepare_java(ui: &Ui, client: &Client, cfg: &Config, version: &str)
     let gd = PathBuf::from(&cfg.game_dir);
     let vj = version_json_path(&gd, version);
     if !vj.exists() {
-        ui.status("Lade Versionsinfos …");
+        ui.status("Downloading version info …");
         let manifest = fetch_manifest(client).await?;
         let entry = manifest.iter().find(|e| e.id == version)
-            .with_context(|| format!("Version {version} nicht gefunden"))?;
+            .with_context(|| format!("Version {version} not found"))?;
         let job = Job { url: entry.url.clone(), path: vj.clone(), sha1: Some(entry.sha1.clone()), size: None, exec: false };
-        run_jobs(ui, client, vec![job], true, "Lade Versionsinfos …").await?;
+        run_jobs(ui, client, vec![job], true, "Downloading version info …").await?;
     }
     let json = read_json(&vj)?;
     let java = java_path(cfg, &json);
     if java.is_absolute() && java.exists() {
         return Ok(Some(java));
     }
-    ui.status("Prüfe Java …");
+    ui.status("Checking Java …");
     let (jobs, links) = java_jobs(ui, client, &java_component(&json)).await?;
     if jobs.is_empty() {
         return Ok(None);
     }
-    run_jobs(ui, client, jobs, false, "Lade Java …").await?;
+    run_jobs(ui, client, jobs, false, "Downloading Java …").await?;
     #[cfg(unix)]
     for (dest, target) in links {
         if std::fs::symlink_metadata(&dest).is_err() {
@@ -461,23 +461,23 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
     if !repair {
         if let Ok(id) = std::fs::read_to_string(&mark) {
             if version_json_path(&gd, id.trim()).exists() {
-                ui.log("[Launcher] Schnellstart – Version ist bereits installiert.");
+                ui.log("[Launcher] Quick start – this version is already installed.");
                 return Ok(id.trim().to_string());
             }
         }
     }
     let t0 = std::time::Instant::now();
-    ui.status("Lade Versionsinfos …");
+    ui.status("Downloading version info …");
     let manifest = fetch_manifest(client).await?;
     let entry = manifest.iter().find(|e| e.id == version)
-        .with_context(|| format!("Version {version} nicht gefunden"))?;
+        .with_context(|| format!("Version {version} not found"))?;
     let vj = Job { url: entry.url.clone(), path: version_json_path(&gd, version), sha1: Some(entry.sha1.clone()), size: None, exec: false };
-    run_jobs(ui, client, vec![vj], true, "Lade Versionsinfos …").await?;
+    run_jobs(ui, client, vec![vj], true, "Downloading version info …").await?;
 
     let launch_id = if loader == "Vanilla" {
         version.to_string()
     } else {
-        ui.status(format!("Installiere {loader} …"));
+        ui.status(format!("Installing {loader} …"));
         install_loader(client, &gd, version, loader, loader_version).await?
     };
     let json = load_merged(&gd, &launch_id)?;
@@ -487,10 +487,10 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
 
     // Asset-Index zuerst (wird gebraucht, um die Asset-Liste zu kennen)
     let ai = &json["assetIndex"];
-    let ai_id = ai["id"].as_str().context("assetIndex fehlt")?;
+    let ai_id = ai["id"].as_str().context("assetIndex missing")?;
     let index_path = assets.join("indexes").join(format!("{ai_id}.json"));
     let ij = Job { url: ai["url"].as_str().unwrap_or("").into(), path: index_path.clone(), sha1: ai["sha1"].as_str().map(String::from), size: None, exec: false };
-    run_jobs(ui, client, vec![ij], true, "Lade Asset-Index …").await?;
+    run_jobs(ui, client, vec![ij], true, "Downloading the asset index …").await?;
     let index = read_json(&index_path)?;
 
     let mut jobs = Vec::new();
@@ -528,13 +528,13 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
     }
     let mut links = Vec::new();
     if cfg.java_path.trim().is_empty() {
-        ui.status("Prüfe Java …");
+        ui.status("Checking Java …");
         let (jj, ll) = java_jobs(ui, client, &java_component(&json)).await?;
         jobs.extend(jj);
         links = ll;
     }
     let n = jobs.len();
-    run_jobs(ui, client, jobs, repair, "Lade Spieldateien …").await?;
+    run_jobs(ui, client, jobs, repair, "Downloading game files …").await?;
 
     #[cfg(unix)]
     for (dest, target) in links {
@@ -548,7 +548,7 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
     #[cfg(not(unix))]
     let _ = links;
 
-    ui.status("Entpacke Natives …");
+    ui.status("Extracting natives …");
     let natives = gd.join("versions").join(&launch_id).join("natives");
     let _ = std::fs::remove_dir_all(&natives);
     std::fs::create_dir_all(&natives)?;
@@ -560,7 +560,7 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
     let virt = index["virtual"].as_bool().unwrap_or(false);
     let res = index["map_to_resources"].as_bool().unwrap_or(false);
     if virt || res {
-        ui.status("Bereite alte Assets vor …");
+        ui.status("Preparing legacy assets …");
         let target = if res { gd.join("resources") } else { assets.join("virtual").join("legacy") };
         for (name, o) in index["objects"].as_object().into_iter().flatten() {
             let Some(h) = o["hash"].as_str() else { continue };
@@ -574,7 +574,7 @@ pub async fn prepare(ui: &Ui, client: &Client, cfg: &Config, version: &str, load
         }
     }
     std::fs::write(&mark, &launch_id)?;
-    ui.log(format!("[Launcher] {n} Dateien geprüft/geladen in {:.1} s", t0.elapsed().as_secs_f32()));
+    ui.log(format!("[Launcher] {n} files checked/downloaded in {:.1} s", t0.elapsed().as_secs_f32()));
     Ok(launch_id)
 }
 

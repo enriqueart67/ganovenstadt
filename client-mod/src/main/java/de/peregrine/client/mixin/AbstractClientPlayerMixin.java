@@ -30,7 +30,7 @@ public class AbstractClientPlayerMixin {
             if (tex == null) return;
             name = tex.getPath();
         } else {
-            name = design.toLowerCase().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue");
+            name = design.toLowerCase();
             tex = Identifier.fromNamespaceAndPath("peregrine", "textures/cape/" + name + ".png");
         }
         ClientAsset.ResourceTexture cape = new ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath("peregrine", "cape/" + name), tex);

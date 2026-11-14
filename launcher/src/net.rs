@@ -56,7 +56,7 @@ pub async fn run_jobs(ui: &Ui, client: &Client, jobs: Vec<Job>, verify: bool, la
             async move {
                 ensure(&client, &j, verify)
                     .await
-                    .with_context(|| format!("Download fehlgeschlagen: {}", j.url))
+                    .with_context(|| format!("Download failed: {}", j.url))
             }
         })
         .buffer_unordered(PARALLEL)
@@ -87,9 +87,9 @@ async fn ensure(client: &Client, j: &Job, verify: bool) -> Result<()> {
         }
     }
     if j.url.is_empty() {
-        bail!("keine Download-Adresse für {}", j.path.display());
+        bail!("no download URL for {}", j.path.display());
     }
-    let mut last = anyhow!("unbekannter Fehler");
+    let mut last = anyhow!("unknown error");
     for attempt in 0..3u64 {
         if attempt > 0 {
             tokio::time::sleep(Duration::from_millis(400 * attempt)).await;
@@ -103,7 +103,7 @@ async fn ensure(client: &Client, j: &Job, verify: bool) -> Result<()> {
         };
         if let Some(h) = &j.sha1 {
             if !sha1_hex(&bytes).eq_ignore_ascii_case(h) {
-                last = anyhow!("Prüfsumme stimmt nicht");
+                last = anyhow!("Checksum mismatch");
                 continue;
             }
         }

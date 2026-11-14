@@ -25,12 +25,12 @@ fn random_b64(n: usize) -> String {
 
 pub async fn login(client: &Client, client_id: &str, redirect: &str) -> Result<Account> {
     if client_id.trim().is_empty() {
-        bail!("Keine Azure Client-ID eingetragen (Einstellungen).");
+        bail!("No Azure client ID set (Settings).");
     }
-    let red = Url::parse(redirect).context("Ungültige Redirect-URI")?;
+    let red = Url::parse(redirect).context("Invalid redirect URI")?;
     let host = red.host_str().unwrap_or("").to_string();
     if host != "localhost" && host != "127.0.0.1" {
-        bail!("Die Redirect-URI muss auf http://localhost:<port>/… zeigen.");
+        bail!("The redirect URI must point to http://localhost:<port>/…");
     }
     let port = red.port_or_known_default().unwrap_or(80);
     let verifier = random_b64(48);
@@ -48,8 +48,8 @@ pub async fn login(client: &Client, client_id: &str, redirect: &str) -> Result<A
         .append_pair("prompt", "select_account");
 
     let listener = TcpListener::bind(("127.0.0.1", port))
-        .with_context(|| format!("Port {port} ist belegt"))?;
-    open::that(url.as_str()).context("Browser konnte nicht geöffnet werden")?;
+        .with_context(|| format!("Port {port} is in use"))?;
+    open::that(url.as_str()).context("Could not open the browser")?;
     let code = tokio::task::spawn_blocking(move || wait_for_code(listener, &state)).await??;
 
     let tok: Value = client
@@ -89,7 +89,7 @@ async fn finish(client: &Client, tok: Value) -> Result<Account> {
     if let Some(e) = tok["error"].as_str() {
         bail!("Microsoft: {}", tok["error_description"].as_str().unwrap_or(e));
     }
-    let ms = tok["access_token"].as_str().context("Kein Microsoft-Token")?;
+    let ms = tok["access_token"].as_str().context("No Microsoft token")?;
     let refresh_token = tok["refresh_token"].as_str().unwrap_or("").to_string();
 
     let xbl: Value = client
@@ -98,10 +98,10 @@ async fn finish(client: &Client, tok: Value) -> Result<Account> {
             "Properties": {"AuthMethod": "RPS", "SiteName": "user.auth.xboxlive.com", "RpsTicket": format!("d={ms}")},
             "RelyingParty": "http://auth.xboxlive.com", "TokenType": "JWT"
         }))
-        .send().await?.error_for_status().context("Xbox-Live-Anmeldung fehlgeschlagen")?
+        .send().await?.error_for_status().context("Xbox Live sign-in failed")?
         .json().await?;
-    let xbl_token = xbl["Token"].as_str().context("Kein Xbox-Token")?;
-    let uhs = xbl["DisplayClaims"]["xui"][0]["uhs"].as_str().context("Kein Xbox-Userhash")?;
+    let xbl_token = xbl["Token"].as_str().context("No Xbox token")?;
+    let uhs = xbl["DisplayClaims"]["xui"][0]["uhs"].as_str().context("No Xbox user hash")?;
 
     let resp = client
         .post("https://xsts.auth.xboxlive.com/xsts/authorize")
@@ -114,36 +114,36 @@ async fn finish(client: &Client, tok: Value) -> Result<Account> {
     let xsts: Value = resp.json().await.unwrap_or(Value::Null);
     if !status.is_success() {
         let msg = match xsts["XErr"].as_u64() {
-            Some(2148916233) => "Dieses Microsoft-Konto hat kein Xbox-Profil. Bitte einmal auf minecraft.net anmelden.",
-            Some(2148916235) => "Xbox Live ist in deinem Land nicht verfügbar.",
-            Some(2148916238) => "Kinderkonto: Ein Erwachsener muss das Konto zu einer Microsoft-Familie hinzufügen.",
-            _ => "Xbox-Anmeldung (XSTS) fehlgeschlagen.",
+            Some(2148916233) => "This Microsoft account has no Xbox profile. Sign in once at minecraft.net.",
+            Some(2148916235) => "Xbox Live is not available in your country.",
+            Some(2148916238) => "Child account: an adult has to add it to a Microsoft family.",
+            _ => "Xbox sign-in (XSTS) failed.",
         };
         bail!("{msg}");
     }
-    let xsts_token = xsts["Token"].as_str().context("Kein XSTS-Token")?;
+    let xsts_token = xsts["Token"].as_str().context("No XSTS token")?;
 
     let resp = client
         .post("https://api.minecraftservices.com/authentication/login_with_xbox")
         .json(&json!({"identityToken": format!("XBL3.0 x={uhs};{xsts_token}")}))
         .send().await?;
     if resp.status().as_u16() == 403 {
-        bail!("Deine Azure-App ist noch nicht für Minecraft freigeschaltet (siehe README: aka.ms/mce-reviewappid).");
+        bail!("Your Azure app is not approved for Minecraft yet (see README: aka.ms/mce-reviewappid).");
     }
-    let mc: Value = resp.error_for_status().context("Minecraft-Anmeldung fehlgeschlagen")?.json().await?;
-    let access = mc["access_token"].as_str().context("Kein Minecraft-Token")?.to_string();
+    let mc: Value = resp.error_for_status().context("Minecraft sign-in failed")?.json().await?;
+    let access = mc["access_token"].as_str().context("No Minecraft token")?.to_string();
 
     let resp = client
         .get("https://api.minecraftservices.com/minecraft/profile")
         .bearer_auth(&access)
         .send().await?;
     if resp.status().as_u16() == 404 {
-        bail!("Dieses Microsoft-Konto besitzt Minecraft: Java Edition nicht.");
+        bail!("This Microsoft account does not own Minecraft: Java Edition.");
     }
     let prof: Value = resp.error_for_status()?.json().await?;
     Ok(Account {
-        name: prof["name"].as_str().context("Kein Spielername")?.into(),
-        id: prof["id"].as_str().context("Keine UUID")?.into(),
+        name: prof["name"].as_str().context("No player name")?.into(),
+        id: prof["id"].as_str().context("No UUID")?.into(),
         access_token: access,
         refresh_token,
     })
@@ -159,7 +159,7 @@ fn wait_for_code(l: TcpListener, state: &str) -> Result<String> {
     let start = Instant::now();
     loop {
         if start.elapsed() > Duration::from_secs(300) {
-            bail!("Anmeldung: Zeit abgelaufen.");
+            bail!("Sign-in timed out.");
         }
         match l.accept() {
             Ok((mut s, _)) => {
@@ -173,15 +173,15 @@ fn wait_for_code(l: TcpListener, state: &str) -> Result<String> {
                 let q: HashMap<String, String> = u.query_pairs().into_owned().collect();
                 if let Some(code) = q.get("code") {
                     if q.get("state").map(String::as_str) != Some(state) {
-                        respond(&mut s, "Ungültige Anfrage.");
-                        bail!("Anmeldung: Sicherheitsprüfung (state) fehlgeschlagen.");
+                        respond(&mut s, "Invalid request.");
+                        bail!("Sign-in: security check (state) failed.");
                     }
-                    respond(&mut s, "Anmeldung erfolgreich – du kannst dieses Fenster schließen.");
+                    respond(&mut s, "Signed in – you can close this window.");
                     return Ok(code.clone());
                 }
                 if let Some(e) = q.get("error") {
-                    respond(&mut s, "Anmeldung abgebrochen.");
-                    bail!("Anmeldung abgebrochen: {}", q.get("error_description").unwrap_or(e));
+                    respond(&mut s, "Sign-in cancelled.");
+                    bail!("Sign-in cancelled: {}", q.get("error_description").unwrap_or(e));
                 }
                 respond(&mut s, "…");
             }

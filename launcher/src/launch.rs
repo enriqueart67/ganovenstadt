@@ -137,7 +137,7 @@ pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>, run_dir: 
         push_args(&mut game, arr, &f);
     }
 
-    let main = json["mainClass"].as_str().context("mainClass fehlt")?.to_string();
+    let main = json["mainClass"].as_str().context("mainClass missing")?.to_string();
     let mut args: Vec<String> = jvm.into_iter().map(&subst).collect();
     args.push(main);
     args.extend(game.into_iter().map(&subst));
@@ -158,7 +158,7 @@ pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
-    let mut child = cmd.spawn().with_context(|| format!("Java konnte nicht gestartet werden: {}", java.display()))?;
+    let mut child = cmd.spawn().with_context(|| format!("Could not start Java: {}", java.display()))?;
     if detach {
         return Ok(());
     }
@@ -176,8 +176,8 @@ pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool
     }
     std::thread::spawn(move || {
         let code = child.wait().map(|s| s.to_string()).unwrap_or_default();
-        ui.log(format!("[Launcher] Spiel beendet ({code})"));
-        ui.status("Bereit.");
+        ui.log(format!("[Launcher] Game closed ({code})"));
+        ui.status("Ready.");
     });
     Ok(())
 }

@@ -19,7 +19,7 @@ public final class HudEditor extends Screen {
     private double offX, offY;
 
     public HudEditor(Screen parent) {
-        super(Component.literal("HUD bearbeiten"));
+        super(Component.literal("Edit HUD layout"));
         this.parent = parent;
     }
 
@@ -50,13 +50,13 @@ public final class HudEditor extends Screen {
             if (!h.enabled) continue;
             h.render(g, minecraft, true);
             boolean hov = h == drag || Ui.in(mx, my, h.lastX, h.lastY, Math.max(h.lastW, 8), Math.max(h.lastH, 8));
-            Ui.border(g, h.lastX - 1, h.lastY - 1, Math.max(h.lastW, 8) + 2, Math.max(h.lastH, 8) + 2, hov ? Ui.ACCENT : 0x80FFFFFF);
-            if (hov) Ui.small(g, font, h.name + " · " + Math.round(h.scale.d() * 100) + " %", h.lastX, h.lastY - 8, Ui.TEXT);
+            Ui.border(g, h.lastX - 1, h.lastY - 1, Math.max(h.lastW, 8) + 2, Math.max(h.lastH, 8) + 2, hov ? 0xFFFF4F00 : 0x80FFFFFF);
+            if (hov) Type.left(g, h.name.toUpperCase() + "  " + Math.round(h.scale.d() * 100) + "%", Type.MONO, h.lastX, h.lastY - 9, 0.75f, 0xFFFFFFFF);
         }
-        String t = "HUD-Editor – Anzeigen ziehen · Mausrad: Größe · Esc: fertig";
-        int w = font.width(t) + 16;
-        g.fill((width - w) / 2, 6, (width + w) / 2, 22, 0xD0141418);
-        g.text(font, t, (width - font.width(t)) / 2, 10, Ui.TEXT, false);
+        String hint = "DRAG TO MOVE   ·   SCROLL TO RESIZE   ·   ESC WHEN DONE";
+        int w = Type.width(hint, Type.MONO, 0.8f) + 20;
+        g.fill((width - w) / 2, 6, (width + w) / 2, 22, 0xE0101010);
+        Type.center(g, hint, Type.MONO, width / 2f, 11, 0.8f, 0xFFFFFFFF);
     }
 
     private HudModule at(double mx, double my) {
@@ -83,7 +83,7 @@ public final class HudEditor extends Screen {
     public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
         if (drag == null) return super.mouseDragged(e, dx, dy);
         double nx = e.x() - offX, ny = e.y() - offY;
-        // an Bildschirmraender und Mitte einrasten
+        // snap to screen edges and centre
         int snap = 4;
         if (Math.abs(nx) < snap) nx = 0;
         if (Math.abs(ny) < snap) ny = 0;

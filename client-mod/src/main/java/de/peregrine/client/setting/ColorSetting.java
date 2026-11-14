@@ -7,7 +7,7 @@ import com.google.gson.JsonPrimitive;
 public final class ColorSetting extends Setting<Integer> {
     public static final int[] PALETTE = {
             0xFFFFFFFF, 0xFFAAAAAA, 0xFF4F8CFF, 0xFF2DC8B4, 0xFF4AC86E, 0xFFF5C41E,
-            0xFFFA8C32, 0xFFF05A5A, 0xFFF06EAF, 0xFFA06EF0, 0xFF55FF55, 0xFF000000
+            0xFFFF4F00, 0xFFF05A5A, 0xFFF06EAF, 0xFFA06EF0, 0xFF55FF55, 0xFF000000
     };
 
     public ColorSetting(String id, String name, int def) {

@@ -1,0 +1,18 @@
+{
+  "required": false,
+  "package": "de.peregrine.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "AbstractClientPlayerMixin",
+    "PlayerModelMixin",
+    "EntityTurnMixin",
+    "CameraRotationMixin",
+    "ChatComponentMixin",
+    "ClockMixin",
+    "FireOverlayMixin",
+    "BlockOutlineMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

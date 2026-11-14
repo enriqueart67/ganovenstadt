@@ -10,8 +10,8 @@ public final class Emotes {
     private Emotes() {
     }
 
-    /** Eine Animation: Name, Symbol, Dauer in Sekunden (0 = bis man sich bewegt). */
-    public record Emote(String name, String icon, float seconds, Pose pose) {
+    /** One animation: name, length in seconds (0 = until you move), pose function. */
+    public record Emote(String name, float seconds, Pose pose) {
     }
 
     @FunctionalInterface
@@ -24,12 +24,12 @@ public final class Emotes {
     }
 
     public static final Emote[] ALL = {
-            new Emote("Winken", "✋", 2.5f, (m, t) -> {
+            new Emote("Wave", 2.5f, (m, t) -> {
                 m.rightArm.xRot = -2.9f;
                 m.rightArm.zRot = 0.35f * s(t, 11f);
                 m.head.zRot = 0.08f * s(t, 4f);
             }),
-            new Emote("Dab", "➚", 1.6f, (m, t) -> {
+            new Emote("Dab", 1.6f, (m, t) -> {
                 m.head.xRot = 0.65f;
                 m.head.yRot = 0.55f;
                 m.rightArm.xRot = -2.35f;
@@ -37,14 +37,14 @@ public final class Emotes {
                 m.leftArm.xRot = -1.55f;
                 m.leftArm.yRot = 0.95f;
             }),
-            new Emote("Klatschen", "👏", 3f, (m, t) -> {
+            new Emote("Clap", 3f, (m, t) -> {
                 float c = 0.35f + 0.25f * Math.abs(s(t, 9f));
                 m.rightArm.xRot = -1.35f;
                 m.leftArm.xRot = -1.35f;
                 m.rightArm.yRot = -c;
                 m.leftArm.yRot = c;
             }),
-            new Emote("Tanzen", "♪", 0f, (m, t) -> {
+            new Emote("Dance", 0f, (m, t) -> {
                 float w = s(t, 6f);
                 m.body.yRot = 0.3f * w;
                 m.head.zRot = 0.2f * w;
@@ -53,18 +53,18 @@ public final class Emotes {
                 m.rightLeg.xRot = 0.35f * w;
                 m.leftLeg.xRot = -0.35f * w;
             }),
-            new Emote("Salutieren", "✦", 2.2f, (m, t) -> {
+            new Emote("Salute", 2.2f, (m, t) -> {
                 m.rightArm.xRot = -2.25f;
                 m.rightArm.yRot = -0.75f;
                 m.rightArm.zRot = 0.35f;
                 m.head.xRot = -0.1f;
             }),
-            new Emote("Facepalm", "☹", 2.5f, (m, t) -> {
+            new Emote("Facepalm", 2.5f, (m, t) -> {
                 m.head.xRot = 0.55f;
                 m.rightArm.xRot = -2.1f;
                 m.rightArm.yRot = -0.55f;
             }),
-            new Emote("Jubeln", "★", 3f, (m, t) -> {
+            new Emote("Cheer", 3f, (m, t) -> {
                 float w = s(t, 12f);
                 m.rightArm.xRot = -3.0f;
                 m.leftArm.xRot = -3.0f;
@@ -72,8 +72,63 @@ public final class Emotes {
                 m.leftArm.zRot = -0.35f - 0.2f * w;
                 m.head.xRot = -0.3f;
             }),
-            new Emote("Nicken", "✓", 2f, (m, t) -> m.head.xRot = 0.45f + 0.35f * s(t, 8f)),
+            new Emote("Nod", 2f, (m, t) -> m.head.xRot = 0.45f + 0.35f * s(t, 8f)),
+            // ---- second page
+            new Emote("Shrug", 2f, (m, t) -> {
+                float lift = 0.5f + 0.5f * Math.min(1f, t * 4f);
+                m.rightArm.zRot = 0.75f * lift;
+                m.leftArm.zRot = -0.75f * lift;
+                m.rightArm.xRot = -0.5f * lift;
+                m.leftArm.xRot = -0.5f * lift;
+                m.head.zRot = 0.18f;
+            }),
+            new Emote("Point", 2f, (m, t) -> {
+                m.rightArm.xRot = -1.57f;
+                m.rightArm.yRot = -0.1f;
+                m.head.xRot = 0.05f;
+            }),
+            new Emote("T-Pose", 3f, (m, t) -> {
+                m.rightArm.xRot = 0f;
+                m.leftArm.xRot = 0f;
+                m.rightArm.zRot = 1.57f;
+                m.leftArm.zRot = -1.57f;
+                m.rightLeg.xRot = 0f;
+                m.leftLeg.xRot = 0f;
+            }),
+            new Emote("Bow", 2f, (m, t) -> {
+                float b = 0.7f * (float) Math.sin(Math.min(1f, t / 2f) * Math.PI);
+                m.body.xRot = b;
+                m.head.xRot = b * 1.3f;
+                m.head.y += b * 3f;
+                m.head.z -= b * 5f;
+                m.rightArm.z -= b * 5f;
+                m.leftArm.z -= b * 5f;
+                m.rightArm.xRot = b * 0.6f;
+                m.leftArm.xRot = b * 0.6f;
+            }),
+            new Emote("Zombie", 0f, (m, t) -> {
+                m.rightArm.xRot = -1.5f + 0.08f * s(t, 3f);
+                m.leftArm.xRot = -1.5f - 0.08f * s(t, 3f);
+                m.head.zRot = 0.25f * s(t, 1.5f);
+            }),
+            new Emote("Flex", 2.5f, (m, t) -> {
+                float p = 0.12f * s(t, 8f);
+                m.rightArm.xRot = -0.2f;
+                m.leftArm.xRot = -0.2f;
+                m.rightArm.zRot = 2.2f + p;
+                m.leftArm.zRot = -2.2f - p;
+            }),
+            new Emote("Think", 3f, (m, t) -> {
+                m.rightArm.xRot = -1.9f;
+                m.rightArm.yRot = -0.45f;
+                m.head.xRot = 0.25f;
+                m.head.zRot = 0.15f + 0.04f * s(t, 2f);
+            }),
+            new Emote("No", 2f, (m, t) -> m.head.yRot = 0.55f * s(t, 9f)),
     };
+
+    /** Emotes per wheel page. */
+    public static final int PAGE = 8;
 
     private static Emote active;
     private static long startNanos;

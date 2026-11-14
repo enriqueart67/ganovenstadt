@@ -29,7 +29,7 @@ pub struct Ui {
 
 impl Ui {
     pub fn new(ctx: eframe::egui::Context) -> Self {
-        let shared = Shared { status: "Bereit.".into(), ..Default::default() };
+        let shared = Shared { status: "Ready.".into(), ..Default::default() };
         Self { s: Arc::new(Mutex::new(shared)), ctx }
     }
     pub fn lock(&self) -> MutexGuard<'_, Shared> {
@@ -68,9 +68,9 @@ impl Ui {
     }
     pub fn error(&self, e: impl Into<String>) {
         let e = e.into();
-        self.log(format!("[Fehler] {e}"));
+        self.log(format!("[Error] {e}"));
         let mut s = self.lock();
-        s.status = "Fehler – siehe Log.".into();
+        s.status = "Error – see the console.".into();
         s.error = Some(e);
         drop(s);
         self.repaint();

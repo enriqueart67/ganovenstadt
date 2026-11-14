@@ -65,6 +65,7 @@ impl App {
         if cfg.look.design < theme::DESIGN {
             cfg.look = Look::default(); // einmalig auf das neue Peregrine-Design umstellen
         }
+        cfg.look.migrate();
         theme::setup_fonts(&cc.egui_ctx, &cfg.look.font);
         let app = Self {
             saved: cfg.clone(),
@@ -102,7 +103,7 @@ impl App {
             let list = match install::fetch_manifest(&client).await {
                 Ok(v) => v,
                 Err(e) => {
-                    h.log(format!("[Launcher] Offline? Zeige installierte Versionen ({e:#})"));
+                    h.log(format!("[Launcher] Offline? Showing installed versions ({e:#})"));
                     install::installed(&gd)
                 }
             };
@@ -121,10 +122,10 @@ impl App {
             match auth::refresh(&client, &cid, &acc.refresh_token).await {
                 Ok(a) => {
                     config::save_account(Some(&a));
-                    h.log(format!("[Launcher] Sitzung erneuert für {}", a.name));
+                    h.log(format!("[Launcher] Session refreshed for {}", a.name));
                     h.lock().account = Some(a);
                 }
-                Err(e) => h.log(format!("[Launcher] Sitzung konnte nicht erneuert werden ({e:#}) – ggf. neu anmelden.")),
+                Err(e) => h.log(format!("[Launcher] Could not refresh the session ({e:#}) – you may need to sign in again.")),
             }
             h.repaint();
         });
@@ -155,7 +156,7 @@ impl App {
         let found = self.h.lock().prism.clone();
         if found.is_none() && !prism::can_install() {
             self.h.error(format!(
-                "Die Anmeldung braucht auf diesem System eine Zusatzkomponente. Bitte von {} installieren (der Browser wird geöffnet).",
+                "Signing in needs an extra component on this system. Please install it from {} (opening your browser).",
                 prism::DOWNLOAD_URL
             ));
             let _ = open::that(prism::DOWNLOAD_URL);
@@ -169,15 +170,15 @@ impl App {
                     Some(p) => p,
                     None => {
                         let p = prism::install(&h).await?;
-                        h.log("[Anmeldung] Bereit.");
+                        h.log("[Account] Ready.");
                         p
                     }
                 };
-                h.status("Warte auf Anmeldung …");
+                h.status("Waiting for sign-in …");
                 let hh = h.clone();
                 prism::login(&p, h.clone(), move |name| {
                     hh.lock().prism_account = name.clone();
-                    hh.status(if name.is_some() { "Bereit." } else { "Nicht angemeldet." });
+                    hh.status(if name.is_some() { "Ready." } else { "Not signed in." });
                     hh.set_busy(false);
                 })?;
                 anyhow::Ok(())
@@ -196,19 +197,19 @@ impl App {
             if self.cfg.use_prism {
                 self.open_prism();
             } else {
-                self.h.error("Für den direkten Microsoft-Login brauchst du eine eigene Azure Client-ID (Einstellungen › Microsoft-Login). Oder schalte unter Einstellungen › Anmeldung „Einfache Anmeldung“ ein.");
+                self.h.error("Direct Microsoft sign-in needs your own Azure client ID (Settings › Microsoft sign-in). Or turn on “Easy sign-in” under Settings › Account.");
                 self.page = Page::Settings;
             }
             return;
         }
         let (h, client) = (self.h.clone(), self.client.clone());
         let (cid, redirect) = (self.cfg.client_id.clone(), self.cfg.redirect_uri.clone());
-        h.log("[Launcher] Browser wird zur Microsoft-Anmeldung geöffnet …");
+        h.log("[Launcher] Opening your browser for the Microsoft sign-in …");
         self.rt.spawn(async move {
             match auth::login(&client, &cid, &redirect).await {
                 Ok(a) => {
                     config::save_account(Some(&a));
-                    h.log(format!("[Launcher] Angemeldet als {}", a.name));
+                    h.log(format!("[Launcher] Signed in as {}", a.name));
                     h.lock().account = Some(a);
                     h.repaint();
                 }
@@ -220,8 +221,8 @@ impl App {
     fn import_cape(&mut self, path: &std::path::Path) {
         match client_mods::import_cape(path) {
             Ok(name) => {
-                self.h.log(format!("[Cosmetics] Umhang „{name}“ hochgeladen – im Spiel unter Cosmetics › Umhang › Design „Foto: {name}“ wählen."));
-                self.cape_msg = Some(format!("„{name}“ hinzugefügt – im Spiel unter Umhang › Design wählen."));
+                self.h.log(format!("[Cosmetics] Cape “{name}” added – in game pick Cosmetics › Cape › Design “Photo: {name}”."));
+                self.cape_msg = Some(format!("“{name}” added – pick it in game under Cape › Design."));
             }
             Err(e) => self.h.error(format!("{e:#}")),
         }
@@ -252,7 +253,7 @@ impl App {
             return;
         }
         let dir = profiles::dir(&self.cfg.game_dir, &p);
-        self.h.log(format!("[Launcher] Profil „{}“ ({} {})", p.name, p.loader, p.version));
+        self.h.log(format!("[Launcher] Profile “{}” ({} {})", p.name, p.loader, p.version));
         self.launch(p.version, p.loader, p.loader_version, Some(dir), Some(p.id));
     }
 
@@ -260,14 +261,14 @@ impl App {
         // Client-Mods (Mod-Menü, HUD) brauchen Fabric: bei Vanilla automatisch mit Fabric starten
         let mut loader = loader;
         if loader == "Vanilla" && self.cfg.client.enabled && client_mods::jar_for(&version).is_some() {
-            self.h.log("[Client-Mods] Vanilla gewählt – starte mit Fabric, damit die Client-Mods (Rechts-Shift) funktionieren.");
+            self.h.log("[Mods] Vanilla selected – starting with Fabric so the client mods (Right Shift) work.");
             loader = "Fabric".into();
         }
         config::save_config(&self.cfg);
         self.saved = self.cfg.clone();
         // Mod-Menü im Launcher-Design, Einstellungen für alle Profile gemeinsam
         if let Err(e) = client_mods::write_theme(&Pal::from(&self.cfg.look)) {
-            self.h.log(format!("[Client-Mods] Design konnte nicht übertragen werden: {e:#}"));
+            self.h.log(format!("[Mods] Could not pass the theme to the game: {e:#}"));
         }
         let mut cfg_rt = self.cfg.clone();
         cfg_rt.runtime_jvm = vec![client_mods::jvm_arg()];
@@ -283,7 +284,7 @@ impl App {
                 (s.prism.clone(), s.prism_account.clone())
             };
             let (Some(pr), true) = (found, acc.is_some()) else {
-                h.log("[Launcher] Noch nicht angemeldet – Anmeldefenster wird geöffnet. Danach noch einmal auf Spielen klicken.");
+                h.log("[Launcher] Not signed in yet – opening the sign-in window. Click Play again afterwards.");
                 self.open_prism();
                 return;
             };
@@ -292,25 +293,25 @@ impl App {
                 None => String::new(),
             };
             if loader != "Vanilla" && loader != "Fabric" && loader != "Quilt" {
-                h.error(format!("{loader} wird nicht unterstützt."));
+                h.error(format!("{loader} is not supported."));
                 return;
             }
             h.set_busy(true);
             self.rt.spawn(async move {
                 let res = async {
-                    h.status("Bereite Start vor …");
+                    h.status("Preparing launch …");
                     h.progress(3, 100);
                     let java = install::prepare_java(&h, &client, &cfg, &version).await?;
                     h.progress(15, 100);
                     let lv = if loader == "Vanilla" {
                         None
                     } else {
-                        h.status(format!("Suche {loader}-Version …"));
+                        h.status(format!("Looking up the {loader} version …"));
                         Some(install::loader_version(&client, &version, &loader, loader_version.as_deref()).await?.1)
                     };
                     let game = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
                     h.progress(20, 100);
-                    h.status("Bereite Client-Mods vor …");
+                    h.status("Preparing client mods …");
                     setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
                     h.progress(25, 100);
                     setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo, &cfg.client.turbo_off).await;
@@ -322,8 +323,8 @@ impl App {
                     let id = prism::instance_id(&key);
                     let pack = prism::pack_json(&version, &loader, lv.as_deref())?;
                     prism::write_instance(&pr, &id, &name, &game, &pack, &cfg, java.as_deref())?;
-                    h.log(format!("[Launcher] Starte {} (Konto: {})", name.trim_start_matches("Peregrine · "), acc.unwrap_or_default()));
-                    h.log("[Launcher] Beim ersten Start einer Version werden die Spieldateien geladen – das dauert einmalig etwas.");
+                    h.log(format!("[Launcher] Starting {} (account: {})", name.trim_start_matches("Peregrine · "), acc.unwrap_or_default()));
+                    h.log("[Launcher] The first launch of a version downloads the game files – this takes a moment, once.");
                     prism::launch(&pr, &id, &game, version.clone(), h.clone())?;
                     anyhow::Ok(())
                 }
@@ -349,8 +350,8 @@ impl App {
                 setup_client_mods(&h, &client, &game, &version, &loader, &cfg.client, profile_id.as_deref(), &shared).await;
                 setup_turbo(&h, &client, &game, &version, &loader, cfg.client.turbo, &cfg.client.turbo_off).await;
                 let (java, args) = launch::build(&cfg, &id, account.as_ref(), run_dir.as_deref())?;
-                h.log(format!("[Launcher] Starte {id} mit {}", java.display()));
-                h.status(format!("{id} läuft"));
+                h.log(format!("[Launcher] Starting {id} with {}", java.display()));
+                h.status(format!("{id} running"));
                 let dir = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
                 launch::spawn(&java, &args, &dir, h.clone(), cfg.close_on_launch)?;
                 anyhow::Ok(())
@@ -422,12 +423,12 @@ impl App {
         // Navigation
         let mut nx = r.left() + 250.0;
         for (page, label) in [
-            (Page::Home, "START"),
-            (Page::Profiles, "PROFILE"),
-            (Page::Client, "CLIENT-MODS"),
-            (Page::Look, "AUSSEHEN"),
-            (Page::Console, "KONSOLE"),
-            (Page::Settings, "EINSTELLUNGEN"),
+            (Page::Home, "HOME"),
+            (Page::Profiles, "PROFILES"),
+            (Page::Client, "MODS"),
+            (Page::Look, "APPEARANCE"),
+            (Page::Console, "CONSOLE"),
+            (Page::Settings, "SETTINGS"),
         ] {
             let g = ui.painter().layout_no_wrap(label.into(), font(11.5, "monom"), pal.text);
             let tr = Rect::from_min_size(pos2(nx, r.top()), vec2(g.size().x, r.height()));
@@ -475,18 +476,18 @@ impl App {
         let label = match (account, &prism_acc) {
             (Some(a), _) => a.name.to_uppercase(),
             (None, Some(n)) => n.to_uppercase(),
-            (None, None) => "ANMELDEN".to_string(),
+            (None, None) => "SIGN IN".to_string(),
         };
         let g = ui.painter().layout_no_wrap(label.clone(), font(11.5, "monom"), pal.text);
         let ar = Rect::from_min_size(pos2(x - 16.0 - g.size().x - 18.0, r.center().y - 12.0), vec2(g.size().x + 18.0, 24.0));
         let resp = ui.interact(ar, Id::new("acct"), Sense::click()).on_hover_text(if account.is_some() {
-            "Klicken zum Abmelden"
+            "Click to sign out"
         } else if prism_acc.is_some() {
-            "Angemeldet – klicken, um das Konto zu wechseln"
+            "Signed in – click to switch account"
         } else if self.cfg.use_prism && self.cfg.client_id.is_empty() {
-            "Mit Microsoft anmelden (nur einmal nötig)"
+            "Sign in with Microsoft (only needed once)"
         } else {
-            "Mit Microsoft anmelden"
+            "Sign in with Microsoft"
         });
         let p = ui.painter();
         p.rect_stroke(ar, pal.r, Stroke::new(1.0_f32, if resp.hovered() { pal.text } else { pal.border }));
@@ -507,10 +508,10 @@ impl App {
     fn visual(&mut self, ui: &mut egui::Ui, rect: Rect, t: f32, pal: &Pal) {
         let look = self.cfg.look.clone();
         let ctx = ui.ctx().clone();
-        let tex = if look.background == "Bild" { self.bg_texture(&ctx) } else { None };
+        let tex = if look.background == "Image" { self.bg_texture(&ctx) } else { None };
         let p = ui.painter().with_clip_rect(rect);
         match look.background.as_str() {
-            "Bild" => match &tex {
+            "Image" => match &tex {
                 Some(tex) => {
                     let [w, h] = tex.size();
                     let (ia, ra) = (w as f32 / h as f32, rect.width() / rect.height());
@@ -526,19 +527,19 @@ impl App {
                 None => {
                     p.rect_filled(rect, 0.0, pal.surface2);
                     let msg = match &self.bg_err {
-                        Some((_, e)) => format!("Bild nicht ladbar: {e}"),
-                        None => "Bild ins Fenster ziehen".into(),
+                        Some((_, e)) => format!("Could not load the image: {e}"),
+                        None => "Drop an image on the window".into(),
                     };
                     p.text(rect.center(), Align2::CENTER_CENTER, msg, font(11.0, "mono"), pal.muted);
                 }
             },
-            "Verlauf" => theme::vertical_gradient(&p, rect, &[(0.0, theme::lerp_color(pal.bg, pal.accent, 0.55)), (1.0, theme::lerp_color(pal.bg, pal.accent, 0.08))]),
-            "Einfarbig" => {
+            "Gradient" => theme::vertical_gradient(&p, rect, &[(0.0, theme::lerp_color(pal.bg, pal.accent, 0.55)), (1.0, theme::lerp_color(pal.bg, pal.accent, 0.08))]),
+            "Solid" => {
                 p.rect_filled(rect, 0.0, pal.accent);
             }
             _ => theme::paint_landscape(&p, rect, t, &look.scene),
         }
-        if matches!(look.background.as_str(), "Landschaft" | "Bild") && look.dim > 0.0 {
+        if matches!(look.background.as_str(), "Landscape" | "Image") && look.dim > 0.0 {
             p.rect_filled(rect, 0.0, alpha(Color32::BLACK, (look.dim.clamp(0.0, 0.9) * 255.0) as u8));
         }
         ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, pal.border));
@@ -571,12 +572,12 @@ impl App {
             Some(ap) => {
                 let n = ap.mods.len();
                 let lv = ap.loader_version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
-                (ap.name.clone(), format!("Profil  ·  {}{lv}  ·  Minecraft {}  ·  {n} Inhalt{}", ap.loader, ap.version, if n == 1 { "" } else { "e" }))
+                (ap.name.clone(), format!("Profile  ·  {}{lv}  ·  Minecraft {}  ·  {n} item{}", ap.loader, ap.version, if n == 1 { "" } else { "s" }))
             }
             None => {
                 let v = if self.cfg.version.is_empty() { "…".to_string() } else { self.cfg.version.clone() };
                 let newest = latest.as_deref() == Some(self.cfg.version.as_str());
-                (v, format!("Minecraft Java Edition  ·  {}{}", self.cfg.loader, if newest { "  ·  neueste Version" } else { "" }))
+                (v, format!("Minecraft Java Edition  ·  {}{}", self.cfg.loader, if newest { "  ·  latest version" } else { "" }))
             }
         };
         // Riesige Zahl/Name – automatisch passend zur Breite
@@ -599,7 +600,7 @@ impl App {
         let vc = Rect::from_min_size(pos2(left.left(), y), vec2(200.0, 52.0));
         let vresp = ui.interact(vc, Id::new("vercard"), Sense::click());
         let p = ui.painter();
-        p.text(pos2(vc.left(), vc.top()), Align2::LEFT_TOP, if active.is_some() { "PROFIL" } else { "VERSION" }, font(10.5, "mono"), pal.muted);
+        p.text(pos2(vc.left(), vc.top()), Align2::LEFT_TOP, if active.is_some() { "PROFILE" } else { "VERSION" }, font(10.5, "mono"), pal.muted);
         let shown = match &active {
             Some(ap) => ap.name.clone(),
             None => self.cfg.version.clone(),
@@ -637,7 +638,7 @@ impl App {
             }
         } else {
             let resp = ui.interact(Rect::from_min_size(pos2(lx, vc.top() + 16.0), vec2(170.0, 36.0)), Id::new("leaveprof"), Sense::click());
-            ui.painter().text(pos2(lx, vc.top() + 30.0), Align2::LEFT_CENTER, "aus Profil  ·  zurück", font(16.0, "regular"), if resp.hovered() { pal.text } else { pal.muted });
+            ui.painter().text(pos2(lx, vc.top() + 30.0), Align2::LEFT_CENTER, "from profile  ·  back", font(16.0, "regular"), if resp.hovered() { pal.text } else { pal.muted });
             if resp.clicked() {
                 self.cfg.active_profile = None;
             }
@@ -645,30 +646,30 @@ impl App {
 
         // ---------- rechts: Daten
         let mut ry = right.top() + 4.0;
-        if look.background != "Keine" {
+        if look.background != "None" {
             let vis = Rect::from_min_size(pos2(right.left(), ry), vec2(right.width(), (right.height() * 0.42).min(200.0)));
             self.visual(ui, vis, t, pal);
             ry = vis.bottom() + 18.0;
         }
         let p = ui.painter();
-        p.text(pos2(right.left(), ry), Align2::LEFT_TOP, "ÜBERSICHT", font(11.0, "mono"), pal.muted);
+        p.text(pos2(right.left(), ry), Align2::LEFT_TOP, "OVERVIEW", font(11.0, "mono"), pal.muted);
         ry += 22.0;
-        let java = if self.cfg.java_path.trim().is_empty() { "automatisch".to_string() } else { "eigener Pfad".into() };
+        let java = if self.cfg.java_path.trim().is_empty() { "automatisch".to_string() } else { "custom path".into() };
         let prism_acc = if account.is_none() && self.cfg.use_prism { self.h.lock().prism_account.clone() } else { None };
         let konto = match (account, &prism_acc) {
             (Some(a), _) => (a.name.clone(), pal.text),
             (None, Some(n)) => (n.clone(), pal.text),
-            (None, None) => ("Gast · Demo".into(), pal.accent),
+            (None, None) => ("Guest · Demo".into(), pal.accent),
         };
         let mut rows: Vec<(&str, String, Color32)> = vec![
-            ("KONTO", konto.0, konto.1),
-            ("ARBEITSSPEICHER", format!("{:.1} GB", self.cfg.ram_mb as f32 / 1024.0).replace('.', ","), pal.text),
+            ("ACCOUNT", konto.0, konto.1),
+            ("MEMORY", format!("{:.1} GB", self.cfg.ram_mb as f32 / 1024.0), pal.text),
             ("JAVA", java, pal.text),
-            ("CLIENT-MODS", if self.cfg.client.enabled { "an  ·  Rechts-Shift".into() } else { "aus".into() }, pal.text),
-            ("PROFILE", nprof.to_string(), pal.text),
+            ("MODS", if self.cfg.client.enabled { "on  ·  Right Shift".into() } else { "off".into() }, pal.text),
+            ("PROFILES", nprof.to_string(), pal.text),
         ];
         if look.show_badge {
-            rows.push(("NEUESTE VERSION", latest.clone().unwrap_or_else(|| "–".into()), pal.text));
+            rows.push(("LATEST VERSION", latest.clone().unwrap_or_else(|| "–".into()), pal.text));
         }
         for (k, v, col) in rows {
             if ry + 30.0 > right.bottom() {
@@ -684,7 +685,7 @@ impl App {
         // Schnellstart: Profile direkt waehlen
         if !self.prof.list.is_empty() && ry + 70.0 < right.bottom() {
             ry += 26.0;
-            ui.painter().text(pos2(right.left(), ry), Align2::LEFT_TOP, "SCHNELLSTART", font(11.0, "mono"), pal.muted);
+            ui.painter().text(pos2(right.left(), ry), Align2::LEFT_TOP, "QUICK START", font(11.0, "mono"), pal.muted);
             ry += 22.0;
             let list = self.prof.list.clone();
             for pr in list.iter() {
@@ -717,19 +718,19 @@ impl App {
         p.text(pos2(area.left(), sy), Align2::LEFT_CENTER, "STATUS", font(10.5, "mono"), pal.muted);
         let (line, col) = if busy {
             (status.clone(), pal.text)
-        } else if status.starts_with("Fehler") {
+        } else if status.starts_with("Error") {
             (status.clone(), BAD)
-        } else if status.ends_with("läuft") {
+        } else if status.ends_with("running") {
             (status.clone(), GOOD)
         } else {
-            ("Bereit".to_string(), pal.text)
+            ("Ready".to_string(), pal.text)
         };
         p.text(pos2(area.left() + 62.0, sy), Align2::LEFT_CENTER, line, font(13.0, "medium"), col);
         if account.is_none() && prism_acc.is_none() {
             let hint = if self.cfg.use_prism {
-                "NOCH NICHT ANGEMELDET — OBEN RECHTS AUF ANMELDEN KLICKEN"
+                "NOT SIGNED IN — CLICK SIGN IN AT THE TOP RIGHT"
             } else {
-                "DEMO-MODUS — FÜR DIE VOLLVERSION OBEN RECHTS ANMELDEN"
+                "DEMO MODE — SIGN IN AT THE TOP RIGHT FOR THE FULL GAME"
             };
             p.text(pos2(area.right(), sy), Align2::RIGHT_CENTER, hint, font(10.5, "mono"), pal.muted);
         }
@@ -758,7 +759,7 @@ impl App {
                 }
                 ui.ctx().request_repaint();
             }
-            let txt = if total > 0 { format!("LÄDT  {:.0} %", f * 100.0) } else { "STARTET …".into() };
+            let txt = if total > 0 { format!("LOADING  {:.0}%", f * 100.0) } else { "STARTING …".into() };
             p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, txt, font(30.0, "display"), if f > 0.15 { Color32::WHITE } else { pal.text });
             let right = if total == 100 { status.to_uppercase() } else if total > 0 { format!("{done} / {total}") } else { String::new() };
             p.text(pos2(play.right() - 28.0, play.center().y), Align2::RIGHT_CENTER, right, font(12.0, "mono"), if f > 0.9 { Color32::WHITE } else { pal.muted });
@@ -767,7 +768,7 @@ impl App {
             let fill = theme::lerp_color(ink, pal.accent, hov);
             p.rect_filled(play, pal.r, fill);
             let fg = if hov > 0.5 { Color32::WHITE } else { paper };
-            p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, "SPIELEN", font(34.0, "display"), fg);
+            p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, "PLAY", font(34.0, "display"), fg);
             let what = match &active {
                 Some(ap) => format!("{}  ·  {} {}", ap.name, ap.loader, ap.version).to_uppercase(),
                 None => format!("{}  ·  {}", self.cfg.version, self.cfg.loader).to_uppercase(),
@@ -820,14 +821,14 @@ impl App {
                             })
                             .collect();
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("Versionen").font(font(14.0, "semibold")));
+                            ui.label(RichText::new("Versions").font(font(14.0, "semibold")));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 ui.label(RichText::new(format!("{} von {}", shown.len(), all.len())).color(pal.muted).size(11.5));
                             });
                         });
                         let search = ui.add(
                             egui::TextEdit::singleline(&mut self.version_search)
-                                .hint_text("Suchen … z. B. 26.1, 1.8.9, b1.7")
+                                .hint_text("Search … e.g. 26.1, 1.8.9, b1.7")
                                 .desired_width(f32::INFINITY)
                                 .margin(vec2(10.0, 6.0)),
                         );
@@ -851,7 +852,7 @@ impl App {
                         if !self.prof.list.is_empty() {
                             ui.horizontal_wrapped(|ui| {
                                 ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-                                ui.label(RichText::new("Profile").color(pal.muted).size(11.5));
+                                ui.label(RichText::new("Profiles").color(pal.muted).size(11.5));
                                 for pr in self.prof.list.clone() {
                                     let mut on = self.cfg.active_profile.as_deref() == Some(pr.id.as_str());
                                     let before = on;
@@ -883,7 +884,7 @@ impl App {
                                     "snapshot" => Some(("Snapshot", WARN)),
                                     "old_beta" => Some(("Beta", pal.muted)),
                                     "old_alpha" => Some(("Alpha", pal.muted)),
-                                    _ => Some(("Sonstige", pal.muted)),
+                                    _ => Some(("Other", pal.muted)),
                                 };
                                 if let Some((t, c)) = tag {
                                     p.text(pos2(rr.right() - 10.0, rr.center().y), Align2::RIGHT_CENTER, t, font(10.5, "medium"), c);
@@ -894,7 +895,7 @@ impl App {
                             }
                         });
                         if shown.is_empty() {
-                            ui.label(RichText::new(if all.is_empty() { "Versionsliste wird geladen …" } else { "Keine Version gefunden." }).color(pal.muted));
+                            ui.label(RichText::new(if all.is_empty() { "Loading the version list …" } else { "No version found." }).color(pal.muted));
                         }
                         if let Some(id) = picked {
                             self.cfg.active_profile = None;
@@ -912,11 +913,11 @@ impl App {
     fn look_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
         let bg_err = self.bg_err.clone();
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
-            header(ui, pal, "Aussehen", "Alles hier wird sofort übernommen und gespeichert");
+            header(ui, pal, "Appearance", "Everything here applies and saves instantly");
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
                 let l = &mut self.cfg.look;
 
-                card(ui, pal, "Farbschema", |ui| {
+                card(ui, pal, "Color scheme", |ui| {
                     ui.horizontal_wrapped(|ui| {
                         for name in theme::PRESETS {
                             let mut preview = l.clone();
@@ -927,7 +928,7 @@ impl App {
                         }
                     });
                     ui.add_space(4.0);
-                    ui.label(RichText::new("Akzentfarbe").color(pal.muted).size(12.0));
+                    ui.label(RichText::new("Accent color").color(pal.muted).size(12.0));
                     ui.horizontal_wrapped(|ui| {
                         for (name, rgb) in theme::ACCENTS {
                             if swatch(ui, pal, rgb, l.accent == rgb).on_hover_text(name).clicked() {
@@ -935,26 +936,26 @@ impl App {
                             }
                         }
                         ui.add_space(6.0);
-                        egui::color_picker::color_edit_button_srgb(ui, &mut l.accent).on_hover_text("Eigene Farbe");
+                        egui::color_picker::color_edit_button_srgb(ui, &mut l.accent).on_hover_text("Custom color");
                     });
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut l.gradients);
-                        ui.label("Farbverlauf auf Buttons");
+                        ui.label("Gradient on buttons");
                         if l.gradients {
-                            ui.label(RichText::new("zweite Farbe").color(pal.muted).size(12.0));
+                            ui.label(RichText::new("second color").color(pal.muted).size(12.0));
                             egui::color_picker::color_edit_button_srgb(ui, &mut l.accent2);
                         }
                     });
-                    egui::CollapsingHeader::new(RichText::new("Eigene Farben für alles").color(pal.text)).show(ui, |ui| {
+                    egui::CollapsingHeader::new(RichText::new("Custom colors for everything").color(pal.text)).show(ui, |ui| {
                         egui::Grid::new("colors").num_columns(4).spacing([14.0, 8.0]).show(ui, |ui| {
                             let mut changed = false;
                             for (i, (label, field)) in [
-                                ("Hintergrund", &mut l.bg),
-                                ("Flächen", &mut l.surface),
-                                ("Felder", &mut l.surface2),
-                                ("Rahmen", &mut l.border),
+                                ("Background", &mut l.bg),
+                                ("Surfaces", &mut l.surface),
+                                ("Fields", &mut l.surface2),
+                                ("Borders", &mut l.border),
                                 ("Text", &mut l.text),
-                                ("Text (blass)", &mut l.muted),
+                                ("Text (muted)", &mut l.muted),
                             ]
                             .into_iter()
                             .enumerate()
@@ -966,98 +967,98 @@ impl App {
                                 }
                             }
                             if changed {
-                                l.preset = "Eigene".into();
+                                l.preset = "Custom".into();
                             }
                         });
                     });
                 });
 
-                card(ui, pal, "Hintergrund der Startseite", |ui| {
+                card(ui, pal, "Home background", |ui| {
                     segmented(ui, pal, "bgmode", &theme::BACKGROUNDS, &mut l.background);
                     match l.background.as_str() {
-                        "Landschaft" => {
+                        "Landscape" => {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("Tageszeit").color(pal.muted));
+                                ui.label(RichText::new("Time of day").color(pal.muted));
                                 segmented(ui, pal, "scene", &theme::SCENES, &mut l.scene);
                             });
                         }
-                        "Bild" => {
-                            field(ui, pal, "Pfad zum Bild (PNG, JPG, WEBP, GIF, BMP)", &mut l.image_path, "oder einfach ein Bild ins Fenster ziehen");
+                        "Image" => {
+                            field(ui, pal, "Path to the image (PNG, JPG, WEBP, GIF, BMP)", &mut l.image_path, "or just drop an image on the window");
                             if let Some((p, e)) = &bg_err {
                                 if *p == l.image_path.trim() {
-                                    ui.label(RichText::new(format!("Fehler: {e}")).color(BAD).size(12.0));
+                                    ui.label(RichText::new(format!("Error: {e}")).color(BAD).size(12.0));
                                 }
                             }
                         }
                         _ => {}
                     }
-                    if matches!(l.background.as_str(), "Landschaft" | "Bild") {
+                    if matches!(l.background.as_str(), "Landscape" | "Image") {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("Abdunkeln").color(pal.muted));
+                            ui.label(RichText::new("Dim").color(pal.muted));
                             ui.add(egui::Slider::new(&mut l.dim, 0.0..=0.9).show_value(false));
                             ui.label(format!("{:.0} %", l.dim * 100.0));
                         });
                     }
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut l.animations);
-                        ui.label("Animationen (Wolken, Sterne, Berge)");
+                        ui.label("Animations (clouds, stars, mountains)");
                     });
                 });
 
-                card(ui, pal, "Form & Größe", |ui| {
+                card(ui, pal, "Shape & size", |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Eckenrundung").color(pal.muted));
+                        ui.label(RichText::new("Corner radius").color(pal.muted));
                         ui.add(egui::Slider::new(&mut l.rounding, 0.0..=20.0).step_by(1.0).show_value(false));
                         ui.label(format!("{:.0} px", l.rounding));
                     });
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Oberflächen-Größe").color(pal.muted));
+                        ui.label(RichText::new("Interface scale").color(pal.muted));
                         ui.add(egui::Slider::new(&mut l.ui_scale, 0.8..=1.4).step_by(0.05).show_value(false));
                         ui.label(format!("{:.0} %", l.ui_scale * 100.0));
                     });
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Schriftart").color(pal.muted));
+                        ui.label(RichText::new("Typeface").color(pal.muted));
                         segmented(ui, pal, "font", &theme::FONTS, &mut l.font);
                     });
                 });
 
-                card(ui, pal, "Startseite", |ui| {
-                    field(ui, pal, "Titel", &mut l.title, "PEREGRINE");
-                    field(ui, pal, "Untertitel", &mut l.subtitle, "CLIENT");
-                    field(ui, pal, "Slogan", &mut l.tagline, "");
+                card(ui, pal, "Home", |ui| {
+                    field(ui, pal, "Title", &mut l.title, "PEREGRINE");
+                    field(ui, pal, "Subtitle", &mut l.subtitle, "CLIENT");
+                    field(ui, pal, "Tagline", &mut l.tagline, "");
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut l.show_badge);
-                        ui.label("„Neueste Version“ anzeigen");
+                        ui.label("Show “latest version”");
                         ui.add_space(16.0);
                         theme::toggle(ui, pal, &mut l.show_tagline);
-                        ui.label("Slogan anzeigen");
+                        ui.label("Show tagline");
                         ui.add_space(16.0);
                         theme::toggle(ui, pal, &mut l.show_logo);
-                        ui.label("Logo anzeigen");
+                        ui.label("Show logo");
                     });
                 });
 
                 let import_text = &mut self.import_text;
-                card(ui, pal, "Design teilen", |ui| {
-                    ui.label(RichText::new("Exportiere dein Design als Code und schick es Freunden – oder füge einen Code ein.").color(pal.muted).size(12.5));
+                card(ui, pal, "Share theme", |ui| {
+                    ui.label(RichText::new("Export your theme as a code to share it – or paste a code.").color(pal.muted).size(12.5));
                     ui.horizontal(|ui| {
-                        if ui.button("Design kopieren").clicked() {
+                        if ui.button("Copy theme").clicked() {
                             ui.ctx().copy_text(serde_json::to_string(&*l).unwrap_or_default());
                         }
-                        if ui.button("Alles zurücksetzen").clicked() {
+                        if ui.button("Reset everything").clicked() {
                             *l = Look::default();
                         }
                     });
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(import_text).hint_text("Design-Code hier einfügen").desired_width(380.0).margin(vec2(10.0, 6.0)));
-                        if ui.button("Übernehmen").clicked() {
+                        ui.add(egui::TextEdit::singleline(import_text).hint_text("Paste a theme code here").desired_width(380.0).margin(vec2(10.0, 6.0)));
+                        if ui.button("Apply").clicked() {
                             match serde_json::from_str::<Look>(import_text.trim()) {
                                 Ok(new) => {
                                     *l = new;
                                     import_text.clear();
                                 }
                                 Err(_) => {
-                                    *import_text = "Ungültiger Code".into();
+                                    *import_text = "Invalid code".into();
                                 }
                             }
                         }
@@ -1071,12 +1072,12 @@ impl App {
     fn console(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
             ui.horizontal(|ui| {
-                header(ui, pal, "Konsole", "Ausgabe des Launchers und des Spiels");
+                header(ui, pal, "Console", "Output of the launcher and the game");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Leeren").clicked() {
+                    if ui.button("Clear").clicked() {
                         self.h.lock().log.clear();
                     }
-                    if ui.button("Kopieren").clicked() {
+                    if ui.button("Copy").clicked() {
                         let text = self.h.lock().log.iter().cloned().collect::<Vec<_>>().join("\n");
                         ui.ctx().copy_text(text);
                     }
@@ -1088,7 +1089,7 @@ impl App {
                 egui::ScrollArea::vertical().stick_to_bottom(true).auto_shrink([false; 2]).show_rows(ui, row_h, s.log.len(), |ui, range| {
                     ui.spacing_mut().item_spacing.y = 3.0;
                     for line in s.log.range(range) {
-                        let c = if line.starts_with("[Fehler]") || line.contains("ERROR") {
+                        let c = if line.starts_with("[Error]") || line.contains("ERROR") {
                             BAD
                         } else if line.starts_with("[Launcher]") {
                             pal.accent
@@ -1100,7 +1101,7 @@ impl App {
                         ui.label(RichText::new(line).monospace().color(c));
                     }
                     if s.log.is_empty() {
-                        ui.label(RichText::new("Noch keine Ausgabe.").color(pal.muted));
+                        ui.label(RichText::new("No output yet.").color(pal.muted));
                     }
                 });
             });
@@ -1111,78 +1112,78 @@ impl App {
     fn settings(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
         let mut open_prism = false;
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
-            header(ui, pal, "Einstellungen", "Änderungen werden automatisch gespeichert");
+            header(ui, pal, "Settings", "Changes are saved automatically");
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
                 let c = &mut self.cfg;
-                card(ui, pal, "Leistung", |ui| {
-                    ui.label(RichText::new("Arbeitsspeicher für Minecraft. 4–8 GB reichen meistens, mit vielen Mods mehr.").color(pal.muted).size(12.5));
+                card(ui, pal, "Performance", |ui| {
+                    ui.label(RichText::new("Memory for Minecraft. 4–8 GB is usually enough, more with many mods.").color(pal.muted).size(12.5));
                     ui.horizontal(|ui| {
                         ui.add(egui::Slider::new(&mut c.ram_mb, 1024..=32768).step_by(512.0).show_value(false));
                         ui.label(RichText::new(format!("{:.1} GB", c.ram_mb as f32 / 1024.0)).font(font(16.0, "semibold")));
                     });
-                    field(ui, pal, "Zusätzliche JVM-Argumente", &mut c.extra_jvm_args, "z. B. -XX:+UseZGC");
+                    field(ui, pal, "Extra JVM arguments", &mut c.extra_jvm_args, "e.g. -XX:+UseZGC");
                 });
-                card(ui, pal, "Spiel", |ui| {
+                card(ui, pal, "Game", |ui| {
                     ui.horizontal(|ui| {
-                        field(ui, pal, "Spielordner", &mut c.game_dir, "");
+                        field(ui, pal, "Game folder", &mut c.game_dir, "");
                         ui.vertical(|ui| {
                             ui.add_space(18.0);
-                            if ui.button("Öffnen").clicked() {
+                            if ui.button("Open").clicked() {
                                 let _ = std::fs::create_dir_all(&c.game_dir);
                                 let _ = open::that(&c.game_dir);
                             }
                         });
                     });
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Fenstergröße").color(pal.muted));
+                        ui.label(RichText::new("Window size").color(pal.muted));
                         ui.add(egui::DragValue::new(&mut c.width).range(320..=7680).suffix(" px"));
                         ui.label("×");
                         ui.add(egui::DragValue::new(&mut c.height).range(240..=4320).suffix(" px"));
                     });
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut c.close_on_launch);
-                        ui.label("Launcher nach dem Spielstart schließen");
+                        ui.label("Close the launcher when the game starts");
                     });
                 });
                 card(ui, pal, "Java", |ui| {
-                    field(ui, pal, "Java-Pfad (leer = passende Version wird automatisch geladen)", &mut c.java_path, "automatisch");
+                    field(ui, pal, "Java path (empty = the right version is downloaded automatically)", &mut c.java_path, "automatisch");
                 });
                 let (prism_found, prism_acc) = {
                     let s = self.h.lock();
                     (s.prism.clone(), s.prism_account.clone())
                 };
-                card(ui, pal, "Anmeldung", |ui| {
-                    ui.label(RichText::new("Du meldest dich nur ein einziges Mal mit deinem Microsoft-Konto an – danach startet Minecraft immer direkt mit deinem Konto.").color(pal.muted).size(12.5));
+                card(ui, pal, "Account", |ui| {
+                    ui.label(RichText::new("You sign in with your Microsoft account once – after that Minecraft always starts with your account.").color(pal.muted).size(12.5));
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, &mut c.use_prism);
-                        ui.label("Einfache Anmeldung");
+                        ui.label("Easy sign-in");
                     });
                     let (txt, col) = match (&prism_found, &prism_acc) {
-                        (None, _) if prism::can_install() => ("Noch nicht angemeldet".to_string(), WARN),
-                        (None, _) => ("Zusatzkomponente fehlt".to_string(), BAD),
-                        (Some(_), None) => ("Noch nicht angemeldet".to_string(), WARN),
-                        (Some(_), Some(n)) => (format!("Angemeldet als {n}"), GOOD),
+                        (None, _) if prism::can_install() => ("Not signed in yet".to_string(), WARN),
+                        (None, _) => ("Extra component missing".to_string(), BAD),
+                        (Some(_), None) => ("Not signed in yet".to_string(), WARN),
+                        (Some(_), Some(n)) => (format!("Signed in as {n}"), GOOD),
                     };
                     ui.label(RichText::new(txt).color(col).font(font(14.0, "medium")));
                     ui.horizontal(|ui| {
                         if prism_found.is_none() && !prism::can_install() {
-                            if ui.button("Herunterladen").clicked() {
+                            if ui.button("Download").clicked() {
                                 let _ = open::that(prism::DOWNLOAD_URL);
                             }
-                        } else if ui.button(if prism_acc.is_some() { "Konto wechseln" } else { "Jetzt anmelden" }).clicked() {
+                        } else if ui.button(if prism_acc.is_some() { "Switch account" } else { "Sign in now" }).clicked() {
                             open_prism = true;
                         }
                     });
                 });
-                card(ui, pal, "Microsoft-Login", |ui| {
-                    field(ui, pal, "Azure Client-ID (Anleitung in README.md)", &mut c.client_id, "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
-                    field(ui, pal, "Redirect-URI", &mut c.redirect_uri, "");
+                card(ui, pal, "Microsoft sign-in", |ui| {
+                    field(ui, pal, "Azure client ID (guide in README.md)", &mut c.client_id, "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
+                    field(ui, pal, "Redirect URI", &mut c.redirect_uri, "");
                 });
                 let repair = &mut self.repair;
-                card(ui, pal, "Wartung", |ui| {
+                card(ui, pal, "Maintenance", |ui| {
                     ui.horizontal(|ui| {
                         theme::toggle(ui, pal, repair);
-                        ui.label("Beim nächsten Start alle Dateien prüfen und reparieren");
+                        ui.label("Verify and repair all files on the next launch");
                     });
                 });
             });
@@ -1354,7 +1355,7 @@ impl eframe::App for App {
                 // Auf der Seite Client-Mods: Foto als Umhang hochladen
                 self.import_cape(&path);
             } else {
-                self.cfg.look.background = "Bild".into();
+                self.cfg.look.background = "Image".into();
                 self.cfg.look.image_path = path.to_string_lossy().into_owned();
             }
         }
@@ -1408,8 +1409,8 @@ impl eframe::App for App {
             egui::Area::new(Id::new("errorbox")).order(egui::Order::Tooltip).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).show(ctx, |ui| {
                 egui::Frame::none().fill(pal.bg).stroke(Stroke::new(1.0_f32, pal.text)).rounding(pal.r).inner_margin(24.0).show(ui, |ui| {
                     ui.set_max_width(440.0);
-                    ui.label(RichText::new("FEHLER").font(font(11.0, "mono")).color(BAD));
-                    ui.label(RichText::new("Etwas ist schiefgelaufen").font(font(24.0, "display")).color(pal.text));
+                    ui.label(RichText::new("ERROR").font(font(11.0, "mono")).color(BAD));
+                    ui.label(RichText::new("Something went wrong").font(font(24.0, "display")).color(pal.text));
                     ui.label(RichText::new(err).color(pal.muted));
                     ui.add_space(4.0);
                     let (r, resp) = ui.allocate_exact_size(vec2(110.0, 36.0), Sense::click());
@@ -1418,8 +1419,8 @@ impl eframe::App for App {
                     if resp.clicked() {
                         let mut s = self.h.lock();
                         s.error = None;
-                        if s.status.starts_with("Fehler") {
-                            s.status = "Bereit.".into();
+                        if s.status.starts_with("Error") {
+                            s.status = "Ready.".into();
                         }
                     }
                 });
@@ -1440,7 +1441,7 @@ impl eframe::App for App {
             config::save_config(&self.cfg);
             self.saved = self.cfg.clone();
         }
-        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landschaft") || busy || self.prof.busy() {
+        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landscape") || busy || self.prof.busy() {
             ctx.request_repaint_after(Duration::from_millis(33));
         }
     }
@@ -1507,16 +1508,16 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
         if !wanted(slug) {
             continue;
         }
-        h.status(format!("Installiere {name} …"));
+        h.status(format!("Installing {name} …"));
         match mods::pick_file(client, slug, version, loader).await {
             Ok(Some((file, url, sha1))) => match mods::download_to(client, &url, sha1.as_deref(), &mods.join(&file)).await {
                 Ok(()) => {
                     have.insert(slug.to_string(), (version.to_string(), file));
                     fresh.push(name);
                 }
-                Err(e) => h.log(format!("[Turbo] {name} konnte nicht geladen werden: {e:#}")),
+                Err(e) => h.log(format!("[Turbo] Could not download {name}: {e:#}")),
             },
-            Ok(None) => h.log(format!("[Turbo] {name} gibt es (noch) nicht für Minecraft {version} – übersprungen.")),
+            Ok(None) => h.log(format!("[Turbo] {name} is not available for Minecraft {version} (yet) – skipped.")),
             Err(e) => h.log(format!("[Turbo] {name}: {e:#}")),
         }
     }
@@ -1528,7 +1529,7 @@ async fn setup_turbo(h: &Handle, client: &reqwest::Client, game: &std::path::Pat
         let _ = std::fs::write(&check_file, format!("{version} {now}"));
     }
     if !fresh.is_empty() {
-        h.log(format!("[Turbo] Leistungs-Mods installiert: {}", fresh.join(", ")));
+        h.log(format!("[Turbo] Performance mods installed: {}", fresh.join(", ")));
     }
 }
 
@@ -1546,14 +1547,14 @@ async fn setup_client_mods(
     if loader != "Vanilla" && cm.enabled && !cm.keys.is_empty() {
         match client_mods::apply_keys(game, &cm.keys) {
             Ok(true) => {}
-            Ok(false) => h.log("[Client-Mods] Eigene Tasten gelten ab dem nächsten Start (options.txt wird beim ersten Start angelegt)."),
-            Err(e) => h.log(format!("[Client-Mods] Tasten konnten nicht gesetzt werden: {e:#}")),
+            Ok(false) => h.log("[Mods] Custom keys apply from the next launch (options.txt is created on the first run)."),
+            Err(e) => h.log(format!("[Mods] Could not apply the keys: {e:#}")),
         }
     }
     match client_mods::prepare(game, version, loader, cm) {
         Ok(client_mods::Prepared::Ready { needs_fabric_api }) => {
             if needs_fabric_api {
-                h.status("Installiere Fabric API für die Client-Mods …");
+                h.status("Installing Fabric API for the client mods …");
                 let hh = h.clone();
                 match mods::install(client, mods::Kind::Mod, client_mods::FABRIC_API, version, loader, game, None, &[], move |l| hh.log(l)).await {
                     Ok(list) => {
@@ -1562,19 +1563,19 @@ async fn setup_client_mods(
                         }
                     }
                     Err(e) => {
-                        h.log(format!("[Client-Mods] Fabric API konnte nicht installiert werden ({e:#}) – Client-Mods diesmal aus."));
+                        h.log(format!("[Mods] Could not install Fabric API ({e:#}) – client mods are off for this launch."));
                         let _ = std::fs::remove_file(game.join("mods").join("peregrine-client.jar"));
                         return;
                     }
                 }
             }
-            h.log("[Client-Mods] aktiv – im Spiel mit Rechts-Shift das Mod-Menü öffnen");
+            h.log("[Mods] Active – press Right Shift in game for the mod menu");
         }
         Ok(client_mods::Prepared::Unsupported) => h.log(format!(
-            "[Client-Mods] Für Minecraft {version} gibt es noch keine Client-Mods (unterstützt: {}).",
+            "[Mods] There are no client mods for Minecraft {version} yet (supported: {}).",
             client_mods::supported().join(", ")
         )),
         Ok(client_mods::Prepared::Off) => {}
-        Err(e) => h.log(format!("[Client-Mods] Fehler: {e:#}")),
+        Err(e) => h.log(format!("[Mods] Error: {e:#}")),
     }
 }

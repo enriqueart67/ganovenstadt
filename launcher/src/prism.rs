@@ -160,8 +160,8 @@ pub fn login(p: &Prism, ui: Ui, on_done: impl FnOnce(Option<String>) + Send + 's
     preset(p);
     let before = accounts_stamp(p);
     let had = account_name(p);
-    let mut child = command(p).spawn().with_context(|| format!("Anmelde-Komponente konnte nicht gestartet werden: {}", p.exe.display()))?;
-    ui.log("[Anmeldung] Anmeldefenster geöffnet: „Microsoft hinzufügen“ wählen und anmelden – danach schließt es sich von selbst.");
+    let mut child = command(p).spawn().with_context(|| format!("Could not start the sign-in component: {}", p.exe.display()))?;
+    ui.log("[Account] Sign-in window opened: choose “Add Microsoft” and sign in – it closes by itself afterwards.");
     let p = p.clone();
     std::thread::spawn(move || {
         let t0 = Instant::now();
@@ -181,7 +181,7 @@ pub fn login(p: &Prism, ui: Ui, on_done: impl FnOnce(Option<String>) + Send + 's
                         std::thread::sleep(Duration::from_millis(1500));
                         let _ = child.kill();
                         let _ = child.wait();
-                        ui.log(format!("[Anmeldung] Angemeldet als {name}."));
+                        ui.log(format!("[Account] Signed in as {name}."));
                         on_done(Some(name));
                         return;
                     }
@@ -210,7 +210,7 @@ pub fn preset(p: &Prism) {
         .ok()
         .and_then(|d| d.flatten().map(|e| e.path().join("bin").join(if cfg!(windows) { "javaw.exe" } else { "java" })).find(|p| p.exists()));
     let mut want: Vec<(&str, String)> = vec![
-        ("Language", "de".into()),
+        ("Language", "en".into()),
         ("UseSystemLocale", "false".into()),
         ("ApplicationTheme", "system".into()),
         ("IconTheme", "pe_colored".into()),
@@ -239,13 +239,13 @@ pub fn preset(p: &Prism) {
 /// Lädt den Prism Launcher (portable) von GitHub und entpackt ihn nach `bundled_dir()`.
 pub async fn install(ui: &Ui) -> Result<Prism> {
     if !can_install() {
-        bail!("Bitte die Anmelde-Komponente von {DOWNLOAD_URL} installieren");
+        bail!("Please install the sign-in component from {DOWNLOAD_URL}");
     }
     let client = reqwest::Client::builder()
         .user_agent(concat!("peregrine/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(15))
         .build()?;
-    ui.status("Bereite Anmeldung vor …");
+    ui.status("Preparing sign-in …");
     let arm = std::env::consts::ARCH == "aarch64";
     let pick = |name: &str| {
         let n = name.to_lowercase();
@@ -261,8 +261,8 @@ pub async fn install(ui: &Ui) -> Result<Prism> {
         let kind = if arm { "MSVC-arm64" } else { "MinGW-w64" };
         format!("https://github.com/PrismLauncher/PrismLauncher/releases/download/{FALLBACK_TAG}/PrismLauncher-Windows-{kind}-Portable-{FALLBACK_TAG}.zip")
     });
-    ui.log("[Anmeldung] Lade Anmelde-Komponente (einmalig) …");
-    ui.status("Bereite Anmeldung vor …");
+    ui.log("[Account] Downloading the sign-in component (once) …");
+    ui.status("Preparing sign-in …");
     let mut resp = client.get(&url).send().await?.error_for_status()?;
     let total = resp.content_length().unwrap_or(0) as usize;
     let mut data = Vec::with_capacity(total);
@@ -271,7 +271,7 @@ pub async fn install(ui: &Ui) -> Result<Prism> {
         data.extend_from_slice(&chunk);
         ui.progress(data.len().min(total.max(data.len())), total.max(data.len()));
     }
-    ui.status("Bereite Anmeldung vor …");
+    ui.status("Preparing sign-in …");
     let dest = bundled_dir();
     let tmp = dest.with_extension("tmp");
     let _ = std::fs::remove_dir_all(&tmp);
@@ -297,11 +297,11 @@ pub async fn install(ui: &Ui) -> Result<Prism> {
     std::fs::rename(&root, &dest)?;
     let _ = std::fs::remove_dir_all(&tmp);
     ui.progress(0, 0);
-    find("").filter(|p| p.exe.starts_with(&dest)).context("Anmelde-Komponente unvollständig – bitte erneut versuchen")
+    find("").filter(|p| p.exe.starts_with(&dest)).context("Sign-in component incomplete – please try again")
 }
 
 fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(data)).context("Download beschädigt – bitte erneut versuchen")?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(data)).context("Download corrupted – please try again")?;
     for i in 0..zip.len() {
         let mut e = zip.by_index(i)?;
         let Some(rel) = e.enclosed_name() else { continue };
@@ -344,10 +344,10 @@ pub fn pack_json(mc: &str, loader: &str, loader_version: Option<&str>) -> Result
         "Vanilla" => None,
         "Fabric" => Some("net.fabricmc.fabric-loader"),
         "Quilt" => Some("org.quiltmc.quilt-loader"),
-        other => bail!("Loader {other} wird nicht unterstützt"),
+        other => bail!("Loader {other} is not supported"),
     };
     if let Some(uid) = uid {
-        let lv = loader_version.context("Loader-Version fehlt")?;
+        let lv = loader_version.context("Loader version missing")?;
         comps.push(json!({"uid": uid, "version": lv}));
     }
     Ok(json!({"formatVersion": 1, "components": comps}))
@@ -400,13 +400,13 @@ fn link_game_dir(inst: &Path, game: &Path) -> Result<()> {
         if meta.file_type().is_symlink() || is_junction(&link) {
             remove_link(&link)?;
         } else {
-            bail!("{} ist ein echter Ordner – bitte umbenennen oder löschen", link.display());
+            bail!("{} is a real folder – please rename or delete it", link.display());
         }
     }
     std::fs::create_dir_all(game)?;
     #[cfg(windows)]
     junction::create(game, &link)
-        .with_context(|| format!("Verknüpfung {} → {} konnte nicht erstellt werden", link.display(), game.display()))?;
+        .with_context(|| format!("Could not link {} → {}", link.display(), game.display()))?;
     #[cfg(unix)]
     std::os::unix::fs::symlink(game, &link)?;
     Ok(())
@@ -442,7 +442,7 @@ fn remove_link(p: &Path) -> Result<()> {
 /// Legt die Prism-Instanz an bzw. aktualisiert sie.
 pub fn write_instance(p: &Prism, id: &str, name: &str, game: &Path, pack: &Value, cfg: &Config, java: Option<&Path>) -> Result<PathBuf> {
     let inst = p.instances().join(id);
-    std::fs::create_dir_all(&inst).with_context(|| format!("Ordner {} nicht beschreibbar", inst.display()))?;
+    std::fs::create_dir_all(&inst).with_context(|| format!("Folder {} is not writable", inst.display()))?;
     std::fs::write(inst.join("instance.cfg"), instance_cfg(name, cfg, java))?;
     std::fs::write(inst.join("mmc-pack.json"), serde_json::to_vec_pretty(pack)?)?;
     link_game_dir(&inst, game)?;
@@ -461,11 +461,11 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000);
     }
-    let mut child = cmd.spawn().with_context(|| format!("Spielstart fehlgeschlagen: {}", p.exe.display()))?;
+    let mut child = cmd.spawn().with_context(|| format!("Could not start the game: {}", p.exe.display()))?;
     let pid = child.id();
     let hiding = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(HIDE_FAST));
     hide_windows_while(pid, hiding.clone());
-    ui.status("Anmeldung wird geprüft …");
+    ui.status("Checking your account …");
     ui.progress(35, 100);
     let log = game.join("logs").join("latest.log");
     std::thread::spawn(move || {
@@ -499,7 +499,7 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
                 if target > pct {
                     pct = target;
                     if pct >= 40 {
-                        ui.status("Lade Spieldateien …");
+                        ui.status("Downloading game files …");
                     }
                     ui.progress(pct, 100);
                 }
@@ -513,9 +513,9 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
                     if m.modified().is_ok_and(|t| t >= started) {
                         pos = Some(0);
                         pct = pct.max(65);
-                        ui.status("Minecraft startet …");
+                        ui.status("Starting Minecraft …");
                         ui.progress(pct, 100);
-                        ui.log("[Launcher] Minecraft startet …");
+                        ui.log("[Launcher] Starting Minecraft …");
                     }
                 }
             }
@@ -543,7 +543,7 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
                             last_data = Instant::now();
                             if !ready {
                                 if up {
-                                    ui.status(format!("{label} läuft"));
+                                    ui.status(format!("{label} running"));
                                     finish_loading(&mut ready, &ui);
                                     hiding.store(HIDE_SLOW, Ordering::Relaxed);
                                 } else if pct < 95 {
@@ -554,8 +554,8 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
                             if stop {
                                 finish_loading(&mut ready, &ui);
                                 hiding.store(STOP, Ordering::Relaxed);
-                                ui.log("[Launcher] Spiel beendet");
-                                ui.status("Bereit.");
+                                ui.log("[Launcher] Game closed");
+                                ui.status("Ready.");
                                 return;
                             }
                         }
@@ -563,12 +563,12 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
                 }
             }
             if !ready && pos.is_some() && last_data.elapsed() > Duration::from_secs(20) {
-                ui.status(format!("{label} läuft"));
+                ui.status(format!("{label} running"));
                 finish_loading(&mut ready, &ui);
                 hiding.store(HIDE_SLOW, Ordering::Relaxed);
             }
             if prism_done && pos.is_none() && t0.elapsed() > Duration::from_secs(120) {
-                ui.log("[Launcher] Kein Spielstart erkannt.");
+                ui.log("[Launcher] The game did not start.");
                 break;
             }
             if pos.is_some() && last_data.elapsed() > Duration::from_secs(6 * 3600) {
@@ -578,8 +578,8 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, ui: Ui) -> Result
         }
         hiding.store(STOP, Ordering::Relaxed);
         finish_loading(&mut ready, &ui);
-        ui.log("[Launcher] Spiel beendet");
-        ui.status("Bereit.");
+        ui.log("[Launcher] Game closed");
+        ui.status("Ready.");
     });
     Ok(())
 }

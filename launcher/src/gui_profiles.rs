@@ -42,7 +42,7 @@ pub struct ProfileForm {
 pub struct ProfilesUi {
     pub list: Vec<Profile>,
     pub selected: Option<String>,
-    /// "Installiert" oder "Entdecken"
+    /// "Installed" oder "Discover"
     pub tab: String,
     pub kind: Kind,
     pub query: String,
@@ -62,7 +62,7 @@ impl ProfilesUi {
         Self {
             list: profiles::load(),
             selected: None,
-            tab: "Installiert".into(),
+            tab: "Installed".into(),
             kind: Kind::Mod,
             query: String::new(),
             query_changed: None,
@@ -89,9 +89,9 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 fn kind_singular(k: Kind) -> &'static str {
     match k {
         Kind::Mod => "Mod",
-        Kind::ResourcePack => "Ressourcenpaket",
+        Kind::ResourcePack => "Resource pack",
         Kind::Shader => "Shader",
-        Kind::DataPack => "Datenpaket",
+        Kind::DataPack => "Data pack",
         Kind::ModPack => "Modpack",
     }
 }
@@ -116,7 +116,7 @@ impl App {
         }
         for p in new_profiles {
             self.prof.selected = Some(p.id.clone());
-            self.prof.tab = "Installiert".into();
+            self.prof.tab = "Installed".into();
             self.prof.modpacks = false;
             self.prof.list.push(p);
         }
@@ -205,7 +205,7 @@ impl App {
         let root = profiles::dir(&self.cfg.game_dir, profile);
         let (pid, mc, loader, already) = (profile.id.clone(), profile.version.clone(), profile.loader.clone(), profile.mods.clone());
         let (kind, id, title) = (hit.kind, hit.id.clone(), hit.title.clone());
-        h.log(format!("[Modrinth] Installiere {title} …"));
+        h.log(format!("[Modrinth] Installing {title} …"));
         self.rt.spawn(async move {
             let hh = h.clone();
             let res = mods::install(&client, kind, &id, &mc, &loader, &root, world.as_deref(), &already, move |l| hh.log(l)).await;
@@ -216,7 +216,7 @@ impl App {
                     let n = list.len();
                     s.finished.push((pid, list));
                     drop(s);
-                    h.log(format!("[Modrinth] {title} installiert ({n} Datei{})", if n == 1 { "" } else { "en" }));
+                    h.log(format!("[Modrinth] {title} installed ({n} file{})", if n == 1 { "" } else { "s" }));
                 }
                 Err(e) => {
                     drop(s);
@@ -235,7 +235,7 @@ impl App {
         let (shared, client, h) = (self.prof.shared.clone(), self.client.clone(), self.h.clone());
         let (id, title, gd, existing) = (hit.id.clone(), hit.title.clone(), self.cfg.game_dir.clone(), self.prof.list.clone());
         h.set_busy(true);
-        h.log(format!("[Modrinth] Installiere Modpack {title} …"));
+        h.log(format!("[Modrinth] Installing modpack {title} …"));
         self.rt.spawn(async move {
             let res = mods::install_modpack(&client, &h, &id, &gd, existing).await;
             let mut s = lock(&shared);
@@ -245,12 +245,12 @@ impl App {
                     let n = p.mods.len();
                     s.new_profiles.push(p);
                     drop(s);
-                    h.log(format!("[Modrinth] Modpack {title} installiert ({n} Inhalte) – neues Profil angelegt"));
+                    h.log(format!("[Modrinth] Modpack {title} installed ({n} items) – new profile created"));
                 }
                 Err(e) => {
                     drop(s);
                     h.progress(0, 0);
-                    h.status("Bereit.");
+                    h.status("Ready.");
                     h.error(format!("{title}: {e:#}"));
                 }
             }
@@ -291,7 +291,7 @@ impl App {
             let s = self.h.lock();
             (s.busy, s.status.clone(), s.done, s.total)
         };
-        if busy || status.ends_with("läuft") {
+        if busy || status.ends_with("running") {
             ui.horizontal(|ui| {
                 if busy {
                     ui.spinner();
@@ -310,13 +310,13 @@ impl App {
 
     fn profile_list(&mut self, ui: &mut egui::Ui, pal: &Pal) {
         ui.horizontal(|ui| {
-            header(ui, pal, "Profile", "Eigene Installationen – Welten, Einstellungen und Inhalte getrennt");
+            header(ui, pal, "Profiles", "Separate installs – each with its own worlds, settings and content");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if accent_button(ui, pal, "+  Neues Profil").clicked() {
+                if accent_button(ui, pal, "+  New profile").clicked() {
                     let version = self.h.lock().versions.iter().find(|v| v.kind == "release").map(|v| v.id.clone()).unwrap_or_default();
                     self.prof.form = Some(ProfileForm { editing: None, name: String::new(), version, loader: "Fabric".into() });
                 }
-                if ui.button("Modpack installieren").clicked() {
+                if ui.button("Install a modpack").clicked() {
                     self.prof.modpacks = true;
                     self.prof.query.clear();
                 }
@@ -324,8 +324,8 @@ impl App {
         });
         self.progress_line(ui, pal);
         if self.prof.list.is_empty() {
-            card(ui, pal, "Noch keine Profile", |ui| {
-                ui.label(RichText::new("Erstelle ein Profil oder installiere ein fertiges Modpack. Danach findest du unter „Entdecken“ Mods, Ressourcenpakete, Shader und Datenpakete von Modrinth.").color(pal.muted));
+            card(ui, pal, "No profiles yet", |ui| {
+                ui.label(RichText::new("Create a profile or install a ready-made modpack. After that, “Discover” has mods, resource packs, shaders and data packs from Modrinth.").color(pal.muted));
             });
             return;
         }
@@ -346,16 +346,16 @@ impl App {
                 let painter = ui.painter();
                 painter.text(pos2(ic.right() + 14.0, rr.top() + 25.0), Align2::LEFT_CENTER, &p.name, font(15.0, "semibold"), pal.text);
                 let n = p.mods.len();
-                let sub = format!("{} · {} · {} Inhalt{}", p.loader, p.version, n, if n == 1 { "" } else { "e" });
+                let sub = format!("{} · {} · {} item{}", p.loader, p.version, n, if n == 1 { "" } else { "s" });
                 painter.text(pos2(ic.right() + 14.0, rr.top() + 47.0), Align2::LEFT_CENTER, sub, font(12.0, "regular"), pal.muted);
                 let play = Rect::from_min_size(pos2(rr.right() - 120.0, rr.center().y - 17.0), vec2(106.0, 34.0));
                 let presp = ui.interact(play, Id::new(("pplay", &p.id)), Sense::click());
-                pal.primary(ui.painter(), play, presp.hovered(), "Spielen");
+                pal.primary(ui.painter(), play, presp.hovered(), "Play");
                 if presp.clicked() {
                     self.play_profile(p.clone());
                 } else if resp.clicked() {
                     self.prof.selected = Some(p.id.clone());
-                    self.prof.tab = "Installiert".into();
+                    self.prof.tab = "Installed".into();
                     self.prof.confirm_delete = false;
                 }
                 ui.add_space(2.0);
@@ -367,10 +367,10 @@ impl App {
         let releases: Vec<String> = self.h.lock().versions.iter().filter(|v| v.kind == "release").map(|v| v.id.clone()).collect();
         let Some(form) = self.prof.form.as_mut() else { return };
         let editing = form.editing.clone();
-        header(ui, pal, if editing.is_some() { "Profil bearbeiten" } else { "Neues Profil" }, "Name, Minecraft-Version und Modloader");
+        header(ui, pal, if editing.is_some() { "Edit profile" } else { "New profile" }, "Name, Minecraft version and mod loader");
         let mut action = 0;
-        card(ui, pal, "Profil", |ui| {
-            field(ui, pal, "Name", &mut form.name, "z. B. Mein Modpack");
+        card(ui, pal, "Profile", |ui| {
+            field(ui, pal, "Name", &mut form.name, "e.g. My modpack");
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Version").color(pal.muted));
                 egui::ComboBox::from_id_salt("pversion").selected_text(&form.version).height(320.0).show_ui(ui, |ui| {
@@ -379,22 +379,22 @@ impl App {
                     }
                 });
                 ui.add_space(12.0);
-                ui.label(RichText::new("Modloader").color(pal.muted));
+                ui.label(RichText::new("Mod loader").color(pal.muted));
                 segmented(ui, pal, "ploader", &install::LOADERS, &mut form.loader);
             });
             if form.loader == "Vanilla" {
-                ui.label(RichText::new("Mit Vanilla gehen Ressourcen- und Datenpakete, aber keine Mods und Shader – dafür Fabric oder Quilt wählen.").color(WARN).size(12.5));
+                ui.label(RichText::new("Vanilla supports resource and data packs, but no mods or shaders – choose Fabric or Quilt for those.").color(WARN).size(12.5));
             }
             if editing.is_some() {
-                ui.label(RichText::new("Wenn du Version oder Loader änderst, passen installierte Inhalte evtl. nicht mehr.").color(pal.muted).size(12.5));
+                ui.label(RichText::new("Changing the version or loader may break installed content.").color(pal.muted).size(12.5));
             }
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let ok = !form.name.trim().is_empty() && !form.version.is_empty();
-                if ui.add_enabled(ok, egui::Button::new(if editing.is_some() { "Speichern" } else { "Profil erstellen" })).clicked() {
+                if ui.add_enabled(ok, egui::Button::new(if editing.is_some() { "Save" } else { "Create profile" })).clicked() {
                     action = 1;
                 }
-                if ui.button("Abbrechen").clicked() {
+                if ui.button("Cancel").clicked() {
                     action = 2;
                 }
             });
@@ -425,7 +425,7 @@ impl App {
                             icon: None,
                         });
                         self.prof.selected = Some(id);
-                        self.prof.tab = "Entdecken".into();
+                        self.prof.tab = "Discover".into();
                     }
                 }
                 self.prof.searched_key.clear();
@@ -441,11 +441,11 @@ impl App {
         let root = profiles::dir(&gd, &p);
         let mut back = false;
         ui.horizontal(|ui| {
-            if ui.button("‹ Profile").clicked() {
+            if ui.button("‹ Profiles").clicked() {
                 back = true;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let del = if self.prof.confirm_delete { "Wirklich löschen?" } else { "Löschen" };
+                let del = if self.prof.confirm_delete { "Really delete?" } else { "Delete" };
                 if ui.add(egui::Button::new(RichText::new(del).color(BAD))).clicked() {
                     if self.prof.confirm_delete {
                         let _ = std::fs::remove_dir_all(&root);
@@ -458,14 +458,14 @@ impl App {
                     }
                     self.prof.confirm_delete = !self.prof.confirm_delete;
                 }
-                if ui.button("Ordner öffnen").clicked() {
+                if ui.button("Open folder").clicked() {
                     let _ = std::fs::create_dir_all(&root);
                     let _ = open::that(&root);
                 }
-                if ui.button("Bearbeiten").clicked() {
+                if ui.button("Edit").clicked() {
                     self.prof.form = Some(ProfileForm { editing: Some(p.id.clone()), name: p.name.clone(), version: p.version.clone(), loader: p.loader.clone() });
                 }
-                if accent_button(ui, pal, "▶  Spielen").clicked() {
+                if accent_button(ui, pal, "▶  Play").clicked() {
                     self.play_profile(p.clone());
                 }
             });
@@ -476,15 +476,15 @@ impl App {
             return;
         }
         let pinned = p.loader_version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
-        header(ui, pal, &p.name, &format!("{}{pinned} · Minecraft {} · eigener Spielordner", p.loader, p.version));
+        header(ui, pal, &p.name, &format!("{}{pinned} · Minecraft {} · own game folder", p.loader, p.version));
         self.progress_line(ui, pal);
-        let tabs = [format!("Installiert ({})", p.mods.len()), "Entdecken".to_string()];
-        let mut tab = if self.prof.tab == "Installiert" { tabs[0].clone() } else { tabs[1].clone() };
+        let tabs = [format!("Installed ({})", p.mods.len()), "Discover".to_string()];
+        let mut tab = if self.prof.tab == "Installed" { tabs[0].clone() } else { tabs[1].clone() };
         let refs: Vec<&str> = tabs.iter().map(String::as_str).collect();
         segmented(ui, pal, "ptab", &refs, &mut tab);
-        self.prof.tab = if tab.starts_with("Installiert") { "Installiert".into() } else { "Entdecken".into() };
+        self.prof.tab = if tab.starts_with("Installed") { "Installed".into() } else { "Discover".into() };
         ui.add_space(2.0);
-        if self.prof.tab == "Installiert" {
+        if self.prof.tab == "Installed" {
             self.installed(ui, pal, &p, &root);
         } else {
             self.discover(ui, pal, &p, &root);
@@ -493,8 +493,8 @@ impl App {
 
     fn installed(&mut self, ui: &mut egui::Ui, pal: &Pal, p: &Profile, root: &Path) {
         if p.mods.is_empty() {
-            card(ui, pal, "Noch nichts installiert", |ui| {
-                ui.label(RichText::new("Unter „Entdecken“ findest du Mods, Ressourcenpakete, Shader und Datenpakete von Modrinth.").color(pal.muted));
+            card(ui, pal, "Nothing installed yet", |ui| {
+                ui.label(RichText::new("“Discover” has mods, resource packs, shaders and data packs from Modrinth.").color(pal.muted));
             });
             return;
         }
@@ -514,11 +514,11 @@ impl App {
                     let painter = ui.painter().with_clip_rect(Rect::from_min_max(rr.min, pos2(rr.right() - 200.0, rr.bottom())));
                     let tr = painter.text(pos2(ic.right() + 12.0, rr.top() + 19.0), Align2::LEFT_CENTER, &m.title, font(14.0, "semibold"), pal.text);
                     let tag = if m.dependency {
-                        Some("Abhängigkeit".to_string())
+                        Some("Dependency".to_string())
                     } else if m.from_pack {
-                        Some("aus Modpack".to_string())
+                        Some("from modpack".to_string())
                     } else {
-                        m.world.as_ref().map(|w| format!("Welt: {w}"))
+                        m.world.as_ref().map(|w| format!("World: {w}"))
                     };
                     if let Some(t) = tag {
                         painter.text(pos2(tr.right() + 10.0, rr.top() + 19.0), Align2::LEFT_CENTER, t, font(10.5, "medium"), pal.muted);
@@ -526,13 +526,13 @@ impl App {
                     painter.text(pos2(ic.right() + 12.0, rr.top() + 37.0), Align2::LEFT_CENTER, &m.filename, font(11.5, "regular"), pal.muted);
                     let mut on = mods::is_enabled(root, m);
                     let tr = Rect::from_min_size(pos2(rr.right() - 190.0, rr.center().y - 11.0), vec2(40.0, 22.0));
-                    if ui.put(tr, |ui: &mut egui::Ui| theme::toggle(ui, pal, &mut on)).on_hover_text("Aktiv / Deaktiviert").changed() {
+                    if ui.put(tr, |ui: &mut egui::Ui| theme::toggle(ui, pal, &mut on)).on_hover_text("Enabled / disabled").changed() {
                         if let Err(e) = mods::set_enabled(root, m, on) {
                             self.h.error(format!("{e:#}"));
                         }
                     }
                     let br = Rect::from_min_size(pos2(rr.right() - 120.0, rr.center().y - 15.0), vec2(106.0, 30.0));
-                    if ui.put(br, egui::Button::new(RichText::new("Entfernen").color(BAD))).clicked() {
+                    if ui.put(br, egui::Button::new(RichText::new("Remove").color(BAD))).clicked() {
                         remove = Some(m.clone());
                     }
                     ui.add_space(2.0);
@@ -559,20 +559,20 @@ impl App {
         }
         let kind = self.prof.kind;
         if kind.needs_loader() && p.loader == "Vanilla" {
-            card(ui, pal, &format!("{} brauchen Fabric oder Quilt", kind.label()), |ui| {
-                ui.label(RichText::new("Klicke oben auf „Bearbeiten“ und wähle Fabric oder Quilt als Modloader. Ressourcen- und Datenpakete funktionieren auch mit Vanilla.").color(pal.muted));
+            card(ui, pal, &format!("{} need Fabric or Quilt", kind.label()), |ui| {
+                ui.label(RichText::new("Click “Edit” above and choose Fabric or Quilt as the mod loader. Resource and data packs also work with Vanilla.").color(pal.muted));
             });
             return;
         }
         if kind == Kind::Shader && !p.mods.iter().any(|m| m.project_id == mods::IRIS) {
-            ui.label(RichText::new("Shader brauchen den Mod Iris – er wird beim ersten Shader automatisch mitinstalliert.").color(pal.muted).size(12.5));
+            ui.label(RichText::new("Shaders need the Iris mod – it is installed automatically with your first shader.").color(pal.muted).size(12.5));
         }
         // Datenpakete: Welt waehlen
         let worlds = mods::worlds(root);
         if kind == Kind::DataPack {
             if worlds.is_empty() {
-                card(ui, pal, "Noch keine Welt", |ui| {
-                    ui.label(RichText::new("Datenpakete gehören zu einer Welt. Starte das Profil einmal, erstelle eine Welt und komm dann hierher zurück.").color(pal.muted));
+                card(ui, pal, "No world yet", |ui| {
+                    ui.label(RichText::new("Data packs belong to a world. Start the profile once, create a world, then come back here.").color(pal.muted));
                 });
                 return;
             }
@@ -582,7 +582,7 @@ impl App {
         }
         ui.horizontal(|ui| {
             if kind == Kind::DataPack {
-                ui.label(RichText::new("Welt").color(pal.muted));
+                ui.label(RichText::new("World").color(pal.muted));
                 let cur = self.prof.world.clone().unwrap_or_default();
                 egui::ComboBox::from_id_salt("pworld").selected_text(cur).show_ui(ui, |ui| {
                     for w in &worlds {
@@ -590,7 +590,7 @@ impl App {
                     }
                 });
             }
-            let hint = format!("{} suchen … (leer = beliebteste)", kind.label());
+            let hint = format!("Search {} … (empty = most popular)", kind.label());
             let r = ui.add(egui::TextEdit::singleline(&mut self.prof.query).hint_text(hint).desired_width(f32::INFINITY).margin(vec2(10.0, 7.0)));
             if r.changed() {
                 self.prof.query_changed = Some(Instant::now());
@@ -610,7 +610,7 @@ impl App {
     fn modpack_browser(&mut self, ui: &mut egui::Ui, pal: &Pal) {
         let mut back = false;
         ui.horizontal(|ui| {
-            if ui.button("‹ Profile").clicked() {
+            if ui.button("‹ Profiles").clicked() {
                 back = true;
             }
         });
@@ -619,16 +619,16 @@ impl App {
             self.prof.query.clear();
             return;
         }
-        header(ui, pal, "Modpack installieren", "Fertige Sammlungen von Modrinth – jedes Modpack wird ein eigenes Profil");
+        header(ui, pal, "Install a modpack", "Ready-made collections from Modrinth – every modpack becomes its own profile");
         self.progress_line(ui, pal);
-        let r = ui.add(egui::TextEdit::singleline(&mut self.prof.query).hint_text("Modpacks suchen … (leer = beliebteste)").desired_width(f32::INFINITY).margin(vec2(10.0, 7.0)));
+        let r = ui.add(egui::TextEdit::singleline(&mut self.prof.query).hint_text("Search modpacks … (empty = most popular)").desired_width(f32::INFINITY).margin(vec2(10.0, 7.0)));
         if r.changed() {
             self.prof.query_changed = Some(Instant::now());
         }
         if self.prof.query_changed.is_none() {
             self.start_search(Kind::ModPack, "", "Fabric");
         }
-        if let Some(hit) = self.results(ui, pal, "Installieren", &|_| false, true) {
+        if let Some(hit) = self.results(ui, pal, "Install", &|_| false, true) {
             self.start_modpack(&hit);
         }
     }
@@ -645,10 +645,10 @@ impl App {
         if searching {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label(RichText::new("Suche auf Modrinth …").color(pal.muted));
+                ui.label(RichText::new("Search Modrinth …").color(pal.muted));
             });
         } else if results.is_empty() {
-            ui.label(RichText::new("Nichts gefunden.").color(pal.muted));
+            ui.label(RichText::new("Nothing found.").color(pal.muted));
         }
         let busy = self.h.lock().busy;
         let mut clicked = None;
@@ -662,7 +662,7 @@ impl App {
                 let text_clip = Rect::from_min_max(rr.min, pos2(rr.right() - bw - 30.0, rr.bottom()));
                 let painter = ui.painter().with_clip_rect(text_clip);
                 let tr = painter.text(pos2(ic.right() + 14.0, rr.top() + 20.0), Align2::LEFT_CENTER, &hit.title, font(14.5, "semibold"), pal.text);
-                let link = ui.interact(tr, Id::new(("link", &hit.id)), Sense::click()).on_hover_text("Auf Modrinth ansehen");
+                let link = ui.interact(tr, Id::new(("link", &hit.id)), Sense::click()).on_hover_text("View on Modrinth");
                 if link.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                     ui.painter().line_segment([tr.left_bottom(), tr.right_bottom()], Stroke::new(1.0_f32, pal.text));
@@ -678,18 +678,18 @@ impl App {
                 let mut info = format!("{} Downloads", mods::format_downloads(hit.downloads));
                 if show_version {
                     if let Some(v) = hit.versions.last() {
-                        info.push_str(&format!("  ·  bis Minecraft {v}"));
+                        info.push_str(&format!("  ·  up to Minecraft {v}"));
                     }
                 }
                 painter.text(pos2(ic.right() + 14.0, rr.top() + 58.0), Align2::LEFT_CENTER, info, font(11.0, "medium"), alpha(pal.muted, 200));
                 let br = Rect::from_min_size(pos2(rr.right() - bw - 14.0, rr.center().y - 16.0), vec2(bw, 32.0));
                 if installed(hit) {
-                    ui.painter().text(br.center(), Align2::CENTER_CENTER, "✔ Installiert", font(12.5, "semibold"), theme::GOOD);
+                    ui.painter().text(br.center(), Align2::CENTER_CENTER, "✔ Installed", font(12.5, "semibold"), theme::GOOD);
                 } else if installing.contains(&hit.id) {
                     ui.put(br, |ui: &mut egui::Ui| {
                         ui.horizontal_centered(|ui| {
                             ui.spinner();
-                            ui.label(RichText::new("Lädt …").color(pal.muted));
+                            ui.label(RichText::new("Loading …").color(pal.muted));
                         })
                         .response
                     });

@@ -48,17 +48,17 @@ public final class CustomCapes {
 
     public static String[] allDesigns() {
         List<String> all = new ArrayList<>(List.of(Modules.Cape.DESIGNS));
-        for (String n : names()) all.add("Foto: " + n);
+        for (String n : names()) all.add("Photo: " + n);
         return all.toArray(String[]::new);
     }
 
     public static boolean isCustom(String design) {
-        return design.startsWith("Foto: ");
+        return design.startsWith("Photo: ");
     }
 
     /** Textur eines hochgeladenen Umhangs (bei Änderung der Datei neu geladen); null wenn nicht ladbar. */
     public static Identifier texture(String design) {
-        String name = design.substring("Foto: ".length());
+        String name = design.substring("Photo: ".length());
         Path d = dir();
         if (d == null) return null;
         Path file = d.resolve(name + ".png");
@@ -81,7 +81,7 @@ public final class CustomCapes {
             LOADED.put(name, new Loaded(id, mod, now));
             return id;
         } catch (Exception e) {
-            PeregrineClient.LOG.warn("Umhang „{}“ konnte nicht geladen werden: {}", name, e.toString());
+            PeregrineClient.LOG.warn("Could not load cape {}: {}", name, e.toString());
             LOADED.put(name, new Loaded(null, Long.MIN_VALUE, now));
             return null;
         }

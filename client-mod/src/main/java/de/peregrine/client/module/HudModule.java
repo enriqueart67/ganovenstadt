@@ -15,7 +15,7 @@ public abstract class HudModule extends Module {
     /** Position der linken oberen Ecke als Anteil der Bildschirmgroesse (0..1). */
     public double x, y;
     public final double defX, defY;
-    public final NumberSetting scale = add(new NumberSetting("scale", "Größe", 1.0, 0.5, 2.0, 0.1, "×"));
+    public final NumberSetting scale = add(new NumberSetting("scale", "Size", 1.0, 0.5, 2.0, 0.1, "×"));
     /** Zuletzt gezeichnete Flaeche in GUI-Pixeln (fuer den Editor). */
     public int lastX, lastY, lastW, lastH;
 

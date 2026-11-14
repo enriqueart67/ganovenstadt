@@ -25,7 +25,7 @@ public final class PeregrineClient implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Peregrine");
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("peregrine", "main"));
 
-    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey;
+    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey;
 
     @Override
     public void onInitializeClient() {
@@ -36,6 +36,7 @@ public final class PeregrineClient implements ClientModInitializer {
         sprintKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.sprint", InputConstants.KEY_V, CATEGORY));
         emoteKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.emote", InputConstants.KEY_B, CATEGORY));
         freelookKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.freelook", InputConstants.KEY_LALT, CATEGORY));
+        waypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.waypoints", InputConstants.KEY_M, CATEGORY));
         net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
             if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
         });
@@ -44,6 +45,7 @@ public final class PeregrineClient implements ClientModInitializer {
             if (HudEditor.active) return;
             Minecraft mc = Minecraft.getInstance();
             HudModule.layout(g.guiWidth(), g.guiHeight(), Modules.huds());
+            Waypoints.render(g, mc);
             for (HudModule h : Modules.huds()) if (h.enabled) h.render(g, mc, false);
         });
         HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, vanilla -> (HudElement) (g, dt) -> {
@@ -69,7 +71,8 @@ public final class PeregrineClient implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(PeregrineClient::onTick);
-        LOG.info("Peregrine Client geladen – Menü mit Rechts-Shift");
+        net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> de.peregrine.client.gui.TitleMenu.onScreenInit(mc, screen));
+        LOG.info("Peregrine Client loaded – press Right Shift for the menu");
     }
 
     /** Ist das die (frei belegbare) Taste für das Mod-Menü? */
@@ -84,6 +87,7 @@ public final class PeregrineClient implements ClientModInitializer {
     private static void onTick(Minecraft mc) {
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
+        while (waypointKey.consumeClick()) if (Modules.WAYPOINTS.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.WaypointScreen());
         Zoom.setHeld(zoomKey.isDown());
         FreelookState.update(mc, freelookKey.isDown());
         while (fullbrightKey.consumeClick()) toggle(mc, Modules.FULLBRIGHT);
@@ -94,6 +98,6 @@ public final class PeregrineClient implements ClientModInitializer {
     private static void toggle(Minecraft mc, Module m) {
         m.toggle();
         Store.save();
-        if (mc.player != null) mc.player.sendOverlayMessage(Component.literal("§6[Peregrine]§r " + m.name + ": " + (m.enabled ? "§aan" : "§caus")));
+        if (mc.player != null) mc.player.sendOverlayMessage(Component.literal("§6[Peregrine]§r " + m.name + ": " + (m.enabled ? "§aon" : "§coff")));
     }
 }

@@ -54,7 +54,7 @@ public final class Store {
                 for (Setting<?> st : m.settings) st.load(s.get(st.id));
             }
         } catch (Exception e) {
-            PeregrineClient.LOG.warn("Einstellungen konnten nicht geladen werden: {}", e.toString());
+            PeregrineClient.LOG.warn("Could not load settings: {}", e.toString());
         }
     }
 
@@ -80,7 +80,7 @@ public final class Store {
             Files.createDirectories(path().getParent());
             Files.writeString(path(), new GsonBuilder().setPrettyPrinting().create().toJson(root));
         } catch (Exception e) {
-            PeregrineClient.LOG.warn("Einstellungen konnten nicht gespeichert werden: {}", e.toString());
+            PeregrineClient.LOG.warn("Could not save settings: {}", e.toString());
         }
     }
 }

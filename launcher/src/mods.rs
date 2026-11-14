@@ -35,9 +35,9 @@ impl Kind {
     pub fn label(self) -> &'static str {
         match self {
             Kind::Mod => "Mods",
-            Kind::ResourcePack => "Ressourcenpakete",
-            Kind::Shader => "Shader",
-            Kind::DataPack => "Datenpakete",
+            Kind::ResourcePack => "Resource packs",
+            Kind::Shader => "Shaders",
+            Kind::DataPack => "Data packs",
             Kind::ModPack => "Modpacks",
         }
     }
@@ -126,7 +126,7 @@ async fn get(client: &Client, url: &str) -> Result<Value> {
     let r = client.get(url).send().await?;
     let status = r.status();
     if !status.is_success() {
-        bail!("Modrinth antwortet mit {status}");
+        bail!("Modrinth answered with {status}");
     }
     Ok(r.json().await?)
 }
@@ -200,7 +200,7 @@ async fn latest_version(client: &Client, id: &str, kind: Kind, mc: Option<&str>,
 async fn pick(client: &Client, id: &str, kind: Kind, mc: &str, loader: &str) -> Result<Option<Pick>> {
     let Some(v) = latest_version(client, id, kind, Some(mc), loader).await? else { return Ok(None) };
     let files = v["files"].as_array().cloned().unwrap_or_default();
-    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Version ohne Datei")?;
+    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Version without a file")?;
     let project = get(client, &format!("{API}/project/{id}")).await?;
     let mut deps = Vec::new();
     if kind == Kind::Mod {
@@ -234,7 +234,7 @@ async fn fetch(client: &Client, url: &str, sha1: Option<&str>) -> Result<Vec<u8>
     let bytes = client.get(url).send().await?.error_for_status()?.bytes().await?.to_vec();
     if let Some(h) = sha1 {
         if !hex::encode(Sha1::digest(&bytes)).eq_ignore_ascii_case(h) {
-            bail!("Prüfsumme stimmt nicht ({url})");
+            bail!("Checksum mismatch ({url})");
         }
     }
     Ok(bytes)
@@ -254,10 +254,10 @@ async fn save(dest: &Path, bytes: &[u8]) -> Result<()> {
 pub async fn pick_file(client: &Client, id: &str, mc: &str, loader: &str) -> Result<Option<(String, String, Option<String>)>> {
     let Some(v) = latest_version(client, id, Kind::Mod, Some(mc), loader).await? else { return Ok(None) };
     let files = v["files"].as_array().cloned().unwrap_or_default();
-    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Version ohne Datei")?;
+    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Version without a file")?;
     let name = f["filename"].as_str().unwrap_or("").to_string();
     if !safe_name(&name) {
-        bail!("Ungültiger Dateiname");
+        bail!("Invalid file name");
     }
     Ok(Some((name, f["url"].as_str().unwrap_or("").into(), f["hashes"]["sha1"].as_str().map(String::from))))
 }
@@ -299,18 +299,18 @@ pub async fn install(
         let p = match pick(client, &id, k, mc, loader).await {
             Ok(Some(p)) => p,
             Ok(None) if is_dep => {
-                log(format!("[Modrinth] Abhängigkeit {id} hat keine Version für {loader} {mc} – übersprungen"));
+                log(format!("[Modrinth] Dependency {id} has no version for {loader} {mc} – skipped"));
                 continue;
             }
-            Ok(None) => bail!("Für Minecraft {mc} gibt es keine passende Version davon."),
+            Ok(None) => bail!("There is no version of this for Minecraft {mc}."),
             Err(e) if is_dep => {
-                log(format!("[Modrinth] Abhängigkeit {id} konnte nicht geladen werden: {e:#}"));
+                log(format!("[Modrinth] Could not load dependency {id}: {e:#}"));
                 continue;
             }
             Err(e) => return Err(e),
         };
         if !safe_name(&p.filename) {
-            bail!("Ungültiger Dateiname für {}", p.title);
+            bail!("Invalid file name for {}", p.title);
         }
         let entry = InstalledMod {
             kind: k,
@@ -323,7 +323,7 @@ pub async fn install(
             world: if k == Kind::DataPack { world.map(String::from) } else { None },
             from_pack: false,
         };
-        log(format!("[Modrinth] Lade {} ({})", p.title, p.filename));
+        log(format!("[Modrinth] Downloading {} ({})", p.title, p.filename));
         let bytes = fetch(client, &p.url, p.sha1.as_deref()).await?;
         save(&entry.dir(root).join(&p.filename), &bytes).await?;
         for d in p.deps {
@@ -337,34 +337,34 @@ pub async fn install(
 // ------------------------------------------------------------------ Modpacks (.mrpack)
 /// Laedt ein Modpack von Modrinth und legt daraus ein neues Profil an.
 pub async fn install_modpack(client: &Client, ui: &Ui, project_id: &str, game_dir: &str, existing: Vec<Profile>) -> Result<Profile> {
-    ui.status("Lade Modpack-Infos …");
+    ui.status("Loading modpack info …");
     let project = get(client, &format!("{API}/project/{project_id}")).await?;
     let title = project["title"].as_str().unwrap_or("Modpack").to_string();
     let v = match latest_version(client, project_id, Kind::ModPack, None, "Fabric").await? {
         Some(v) => Some(v),
         None => latest_version(client, project_id, Kind::ModPack, None, "Quilt").await?,
     };
-    let v = v.context("Dieses Modpack gibt es nur für Forge/NeoForge – der Launcher unterstützt Fabric und Quilt.")?;
+    let v = v.context("This modpack only exists for Forge/NeoForge – the launcher supports Fabric and Quilt.")?;
     let files = v["files"].as_array().cloned().unwrap_or_default();
-    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Modpack ohne Datei")?;
-    ui.status(format!("Lade {title} …"));
+    let f = files.iter().find(|f| f["primary"] == true).or(files.first()).context("Modpack without a file")?;
+    ui.status(format!("Downloading {title} …"));
     let pack = fetch(client, f["url"].as_str().unwrap_or(""), f["hashes"]["sha1"].as_str()).await?;
 
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(pack))?;
     let index: Value = {
-        let mut e = zip.by_name("modrinth.index.json").context("Keine modrinth.index.json im Modpack")?;
+        let mut e = zip.by_name("modrinth.index.json").context("No modrinth.index.json in the modpack")?;
         let mut s = String::new();
         std::io::Read::read_to_string(&mut e, &mut s)?;
         serde_json::from_str(&s)?
     };
     let deps = &index["dependencies"];
-    let mc = deps["minecraft"].as_str().context("Modpack ohne Minecraft-Version")?.to_string();
+    let mc = deps["minecraft"].as_str().context("Modpack without a Minecraft version")?.to_string();
     let (loader, loader_version) = if let Some(l) = deps["fabric-loader"].as_str() {
         ("Fabric", l.to_string())
     } else if let Some(l) = deps["quilt-loader"].as_str() {
         ("Quilt", l.to_string())
     } else {
-        bail!("Dieses Modpack braucht Forge/NeoForge – der Launcher unterstützt Fabric und Quilt.");
+        bail!("This modpack needs Forge/NeoForge – the launcher supports Fabric and Quilt.");
     };
 
     let mut profile = Profile {
@@ -396,7 +396,7 @@ pub async fn install_modpack(client: &Client, ui: &Ui, project_id: &str, game_di
         let Some(url) = f["downloads"][0].as_str() else { continue };
         files.push(F { path, url: url.into(), sha1: f["hashes"]["sha1"].as_str().map(String::from) });
     }
-    ui.status(format!("Lade {} Dateien von {title} …", files.len()));
+    ui.status(format!("Downloading {} files of {title} …", files.len()));
     ui.progress(0, files.len());
     let jobs: Vec<(String, String, Option<String>)> = files.iter().map(|f| (f.path.clone(), f.url.clone(), f.sha1.clone())).collect();
     let results: Vec<Result<()>> = stream::iter(jobs)
@@ -434,7 +434,7 @@ pub async fn install_modpack(client: &Client, ui: &Ui, project_id: &str, game_di
     }
 
     // Titel/Icons der enthaltenen Inhalte ueber ihre Pruefsummen nachschlagen
-    ui.status("Lese Modpack-Inhalt …");
+    ui.status("Reading the modpack …");
     let hashes: Vec<&str> = files.iter().filter_map(|f| f.sha1.as_deref()).collect();
     let by_hash: HashMap<String, Value> = match client.post(format!("{API}/version_files")).json(&json!({"hashes": hashes, "algorithm": "sha1"})).send().await {
         Ok(r) if r.status().is_success() => r.json().await.unwrap_or_default(),
@@ -478,7 +478,7 @@ pub async fn install_modpack(client: &Client, ui: &Ui, project_id: &str, game_di
     }
     profile.mods.sort_by_key(|m| m.title.to_lowercase());
     ui.progress(0, 0);
-    ui.status("Bereit.");
+    ui.status("Ready.");
     Ok(profile)
 }
 
@@ -520,8 +520,8 @@ pub fn worlds(root: &Path) -> Vec<String> {
 pub fn format_downloads(n: u64) -> String {
     match n {
         0..=999 => n.to_string(),
-        1_000..=999_999 => format!("{} Tsd.", format!("{:.1}", n as f64 / 1e3).replace('.', ",")),
-        _ => format!("{} Mio.", format!("{:.1}", n as f64 / 1e6).replace('.', ",")),
+        1_000..=999_999 => format!("{:.1}K", n as f64 / 1e3),
+        _ => format!("{:.1}M", n as f64 / 1e6),
     }
 }
 
@@ -532,8 +532,8 @@ mod tests {
     #[test]
     fn downloads_text() {
         assert_eq!(format_downloads(950), "950");
-        assert_eq!(format_downloads(12_340), "12,3 Tsd.");
-        assert_eq!(format_downloads(98_700_000), "98,7 Mio.");
+        assert_eq!(format_downloads(12_340), "12.3K");
+        assert_eq!(format_downloads(98_700_000), "98.7M");
     }
 
     #[test]

@@ -7,12 +7,7 @@
     "MouseHandlerMixin",
     "OptionInstanceAccessor",
     "GameRendererMixin",
-    "LevelMixin",
-    "AbstractClientPlayerMixin",
-    "PlayerModelMixin",
-    "EntityTurnMixin",
-    "CameraRotationMixin",
-    "ChatComponentMixin"
+    "LevelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

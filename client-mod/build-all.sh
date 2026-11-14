@@ -9,7 +9,7 @@ while read -r mc api; do
   [ -z "$mc" ] && continue
   series=$(echo "$mc" | cut -d. -f1-2)
   echo "== Minecraft $mc (Reihe $series)"
-  ./gradlew build --console=plain -q -Pminecraft_version="$mc" -Pfabric_api_version="$api"
+  ./gradlew build --console=plain -q -Pminecraft_version="$mc" -Pfabric_api_version="$api" || { echo "FAILED $mc"; exit 1; }
   cp "build/libs/peregrine-client-1.0.0+$mc.jar" "$OUT/peregrine-client-$series.jar"
 done <<'LIST'
 26.1.2 0.155.3+26.1.2
