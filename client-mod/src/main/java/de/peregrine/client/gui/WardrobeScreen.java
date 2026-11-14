@@ -158,16 +158,21 @@ public final class WardrobeScreen extends Screen {
         }
     }
 
-    /** The system's file picker (bundled with Minecraft via LWJGL). */
+    /** The system's file picker (LWJGL tinyfd – bundled up to 26.2; newer versions: drop the picture instead). */
     private void pickPhoto() {
-        try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
-            org.lwjgl.PointerBuffer filters = stack.mallocPointer(5);
-            for (String f : new String[]{"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif"}) filters.put(stack.UTF8(f));
-            filters.flip();
-            String path = org.lwjgl.util.tinyfd.TinyFileDialogs.tinyfd_openFileDialog("Choose a picture for your cape", "", filters, "Pictures", false);
+        try {
+            Class<?> tinyfd = Class.forName("org.lwjgl.util.tinyfd.TinyFileDialogs");
+            String path;
+            try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+                org.lwjgl.PointerBuffer filters = stack.mallocPointer(5);
+                for (String f : new String[]{"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif"}) filters.put(stack.UTF8(f));
+                filters.flip();
+                path = (String) tinyfd.getMethod("tinyfd_openFileDialog", CharSequence.class, CharSequence.class, org.lwjgl.PointerBuffer.class,
+                        CharSequence.class, boolean.class).invoke(null, "Choose a picture for your cape", "", filters, "Pictures", false);
+            }
             if (path != null && !path.isBlank()) importPhoto(java.nio.file.Path.of(path.split("\\|")[0]));
         } catch (Throwable e) {
-            say("No file picker on this system – drop a picture onto the game window instead.");
+            say("Drag a picture from your files onto the game window to make it a cape.");
         }
     }
 

@@ -281,7 +281,9 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
         } else {
             pose.translate(side * 0.36f, -0.02f + bob * 0.3f, 0.02f); // on the shoulder
         }
-        pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees((float) Math.sin(t * 0.05f) * 12f));
+        float sway = (float) Math.toRadians(Math.sin(t * 0.05f) * 12f);
+        pose.last().pose().rotateY(sway); // JOML directly: PoseStack.mulPose differs between versions
+        pose.last().normal().rotateY(sway);
         float sc = def.scale();
         pose.scale(sc, sc, sc);
         pose.translate(0, -1.5f, 0); // vanilla models stand with their feet at y = 24 px
