@@ -157,6 +157,14 @@ public final class ClickGui extends Screen {
         g.fill(x0 + 14, fy + 5, x0 + 14 + ew, fy + 20, eh ? t.accent : t.text);
         Type.left(g, edit, Type.MONO, x0 + 23, fy + 9, 0.8f, eh ? t.onAccent : (t.bg | 0xFF000000));
         hits.add(new Hit(x0 + 14, fy + 5, ew, 15, () -> Ui.open(new HudEditor(this))));
+        if (minecraft.player != null) { // the assistant also opens from here, in case its key is taken
+            String ai = "AI ASSISTANT";
+            int aw = Type.width(ai, Type.MONO, 0.8f) + 18, ax = x0 + 14 + ew + 8;
+            boolean ah = Ui.in(mx, my, ax, fy + 5, aw, 15);
+            g.fill(ax, fy + 5, ax + aw, fy + 20, ah ? t.accent : t.card);
+            Type.left(g, ai, Type.MONO, ax + 9, fy + 9, 0.8f, ah ? t.onAccent : t.text);
+            hits.add(new Hit(ax, fy + 5, aw, 15, () -> Ui.open(new AssistantScreen())));
+        }
         long on = Modules.ALL.stream().filter(m -> m.enabled).count();
         Type.right(g, on + " OF " + Modules.ALL.size() + " ON   ·   ESC TO CLOSE", Type.MONO, x0 + W - 14, fy + 9, 0.8f, t.muted);
 

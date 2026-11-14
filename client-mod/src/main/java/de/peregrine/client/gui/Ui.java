@@ -54,6 +54,21 @@ public final class Ui {
         g.fill(kx, y + 1, kx + 6, y + 7, TEXT);
     }
 
+    /** The open screen, or null – Minecraft.screen in 26.1, Gui.screen() in 26.2+. */
+    public static Screen current() {
+        Minecraft mc = Minecraft.getInstance();
+        try {
+            Object gui = mc.gui;
+            return (Screen) gui.getClass().getMethod("screen").invoke(gui);
+        } catch (ReflectiveOperationException ignored) {
+        }
+        try {
+            return (Screen) Minecraft.class.getField("screen").get(mc);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
+
     /** Bildschirm oeffnen – funktioniert mit 26.1 (Minecraft.setScreen) und 26.2+ (Gui.setScreen). */
     public static void open(Screen s) {
         Minecraft mc = Minecraft.getInstance();

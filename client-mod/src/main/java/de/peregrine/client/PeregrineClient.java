@@ -93,8 +93,29 @@ public final class PeregrineClient implements ClientModInitializer {
         return emoteKey != null && emoteKey.matches(e);
     }
 
+    private static boolean aiWasDown;
+    private static java.lang.reflect.Method keyDownM;
+
+    /** InputConstants.isKeyDown(Window, int) up to 26.2, isKeyDown(int) in 26.3. */
+    private static boolean keyDown(Minecraft mc, int key) throws ReflectiveOperationException {
+        if (keyDownM == null)
+            for (var m : InputConstants.class.getMethods()) if (m.getName().equals("isKeyDown")) keyDownM = m;
+        return keyDownM.getParameterCount() == 2 ? (boolean) keyDownM.invoke(null, mc.getWindow(), key) : (boolean) keyDownM.invoke(null, key);
+    }
+
     private static void onTick(Minecraft mc) {
-        while (assistantKey.consumeClick()) if (mc.player != null) Ui.open(new de.peregrine.client.gui.AssistantScreen());
+        boolean openAi = false;
+        while (assistantKey.consumeClick()) openAi = true;
+        // also read the key directly, so it works even if another mod or a vanilla action uses the same key
+        boolean aiDown = false;
+        try {
+            InputConstants.Key k = KeyMappingHelper.getBoundKeyOf(assistantKey);
+            if (Ui.current() == null && k.getType() != InputConstants.Type.MOUSE && k.getValue() > 0) aiDown = keyDown(mc, k.getValue());
+        } catch (Throwable ignored) {
+        }
+        if (aiDown && !aiWasDown) openAi = true;
+        aiWasDown = aiDown;
+        if (openAi && mc.player != null && !(Ui.current() instanceof de.peregrine.client.gui.AssistantScreen)) Ui.open(new de.peregrine.client.gui.AssistantScreen());
         de.peregrine.client.bot.Bot.tick(mc);
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
