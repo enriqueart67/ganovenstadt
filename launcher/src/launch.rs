@@ -154,7 +154,19 @@ pub fn build(cfg: &Config, launch_id: &str, account: Option<&Account>, run_dir: 
     Ok((install::java_path(cfg, &json), args))
 }
 
-pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool) -> Result<()> {
+/// "[Timing] …" line for the moments of a launch that matter: window open and fully loaded.
+pub fn timing_note(line: &str, clicked: std::time::Instant) -> Option<String> {
+    let what = if line.contains("Backend library") {
+        "Minecraft window open"
+    } else if line.contains("Sound engine started") || line.contains("starting SoundSystem") {
+        "Minecraft fully loaded (title screen)"
+    } else {
+        return None;
+    };
+    Some(format!("[Timing] {what} after {:.1} s", clicked.elapsed().as_secs_f32()))
+}
+
+pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool, clicked: std::time::Instant) -> Result<()> {
     std::fs::create_dir_all(game_dir)?;
     let mut cmd = Command::new(java);
     cmd.args(args).current_dir(game_dir).stdin(Stdio::null());
@@ -180,6 +192,9 @@ pub fn spawn(java: &Path, args: &[String], game_dir: &Path, ui: Ui, detach: bool
         let ui = ui.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(r).lines().map_while(Result::ok) {
+                if let Some(t) = timing_note(&line, clicked) {
+                    ui.log(t);
+                }
                 ui.log(line);
             }
         });

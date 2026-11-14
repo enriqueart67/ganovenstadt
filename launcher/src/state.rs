@@ -42,9 +42,24 @@ impl Ui {
         self.ctx.request_repaint();
     }
     pub fn log(&self, t: impl Into<String>) {
+        let t = t.into();
+        // launcher lines (not the game's own log) also go to ~/.peregrine/launcher.log for support
+        if t.starts_with('[') && !t.starts_with("[main") && !t.starts_with("[Render") {
+            use std::io::Write;
+            static FILE: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+            let f = FILE.get_or_init(|| {
+                let p = crate::config::base_dir().join("launcher.log");
+                let _ = std::fs::create_dir_all(crate::config::base_dir());
+                std::fs::File::create(p).ok().map(std::sync::Mutex::new)
+            });
+            if let Some(f) = f {
+                let mut f = f.lock().unwrap_or_else(|e| e.into_inner());
+                let _ = writeln!(f, "{t}");
+            }
+        }
         {
             let mut s = self.lock();
-            s.log.push_back(t.into());
+            s.log.push_back(t);
             while s.log.len() > 5000 {
                 s.log.pop_front();
             }

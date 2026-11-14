@@ -304,6 +304,7 @@ impl App {
                 return;
             }
             h.set_busy(true);
+            let clicked = std::time::Instant::now();
             self.rt.spawn(async move {
                 let res = async {
                     h.status("Preparing launch …");
@@ -332,7 +333,8 @@ impl App {
                     prism::write_instance(&pr, &id, &name, &game, &pack, &cfg, java.as_deref())?;
                     h.log(format!("[Launcher] Starting {} (account: {})", name.trim_start_matches("Peregrine · "), acc.unwrap_or_default()));
                     h.log("[Launcher] The first launch of a version downloads the game files – this takes a moment, once.");
-                    prism::launch(&pr, &id, &game, version.clone(), cfg.runtime_server.as_deref(), h.clone())?;
+                    h.log(format!("[Timing] Launcher preparation: {:.1} s", clicked.elapsed().as_secs_f32()));
+                    prism::launch(&pr, &id, &game, version.clone(), cfg.runtime_server.as_deref(), clicked, h.clone())?;
                     anyhow::Ok(())
                 }
                 .await;
@@ -350,6 +352,7 @@ impl App {
             return;
         }
         h.set_busy(true);
+        let clicked = std::time::Instant::now();
         self.rt.spawn(async move {
             let res = async {
                 let id = install::prepare(&h, &client, &cfg, &version, &loader, loader_version.as_deref(), repair).await?;
@@ -360,7 +363,8 @@ impl App {
                 h.log(format!("[Launcher] Starting {id} with {}", java.display()));
                 h.status(format!("{id} running"));
                 let dir = run_dir.clone().unwrap_or_else(|| std::path::PathBuf::from(&cfg.game_dir));
-                launch::spawn(&java, &args, &dir, h.clone(), cfg.close_on_launch)?;
+                h.log(format!("[Timing] Launcher preparation: {:.1} s", clicked.elapsed().as_secs_f32()));
+                launch::spawn(&java, &args, &dir, h.clone(), cfg.close_on_launch, clicked)?;
                 anyhow::Ok(())
             }
             .await;

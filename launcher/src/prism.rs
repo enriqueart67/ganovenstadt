@@ -452,7 +452,7 @@ pub fn write_instance(p: &Prism, id: &str, name: &str, game: &Path, pack: &Value
 /// Startet die Instanz und liest das Spiel-Log mit, bis das Spiel beendet ist.
 /// Fortschritt (Spielen-Leiste) läuft bis das Minecraft-Fenster da ist; erst dann ist der Launcher
 /// wieder frei. Unter Windows werden alle Fenster der Hintergrund-Komponente versteckt.
-pub fn launch(p: &Prism, id: &str, game: &Path, label: String, server: Option<&str>, ui: Ui) -> Result<()> {
+pub fn launch(p: &Prism, id: &str, game: &Path, label: String, server: Option<&str>, clicked: Instant, ui: Ui) -> Result<()> {
     let started = SystemTime::now();
     let mut cmd = command(p);
     cmd.arg("--launch").arg(id);
@@ -519,6 +519,7 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, server: Option<&s
                         ui.status("Starting Minecraft …");
                         ui.progress(pct, 100);
                         ui.log("[Launcher] Starting Minecraft …");
+                        ui.log(format!("[Timing] Sign-in component handed over to Java after {:.1} s", clicked.elapsed().as_secs_f32()));
                     }
                 }
             }
@@ -541,6 +542,9 @@ pub fn launch(p: &Prism, id: &str, game: &Path, label: String, server: Option<&s
                             let up = ["Backend library", "Sound engine started", "OpenAL initialized", "Reloading ResourceManager"]
                                 .iter()
                                 .any(|m| l.contains(m));
+                            if let Some(t) = crate::launch::timing_note(&l, clicked) {
+                                ui.log(t);
+                            }
                             ui.log(l);
                             line.clear();
                             last_data = Instant::now();
