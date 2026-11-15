@@ -62,7 +62,8 @@ final class Guard {
     /** Returns true when it handled this tick (the job should wait). */
     static boolean tick(Minecraft mc) {
         LocalPlayer p = mc.player;
-        if (++gearTicks % 40 == 0) gear(mc);
+        if (++gearTicks % 10 == 0) gear(mc); // fast, so a popped totem is replaced right away
+        boolean duel = Bot.current() instanceof Combat.Duel;
 
         // 1) lava: get out instead of giving up
         if (p.isInLava()) {
@@ -138,7 +139,7 @@ final class Guard {
             return true;
         }
         // 6) outnumbered and hurt: retreat
-        if (!enemies.isEmpty() && (enemies.size() >= 4 || (hp < 8 && enemies.size() >= 2))) {
+        if (!duel && !enemies.isEmpty() && (enemies.size() >= 4 || (hp < 8 && enemies.size() >= 2))) {
             Vec3 centre = Vec3.ZERO;
             for (LivingEntity e : enemies) centre = centre.add(e.position());
             centre = centre.scale(1.0 / enemies.size());
@@ -150,13 +151,14 @@ final class Guard {
         }
         // 7) emergency food (golden apples allowed) – before a fight goes wrong
         if (hp < 8 && eatNow(mc, true)) return true;
-        // 8) fighting
-        if (enemy != null) {
+        // 8) fighting (in a duel only mobs that are really close – the player is the main target)
+        if (enemy != null && (!duel || ed < 3)) {
             fight(mc, p, enemy, ed);
             return true;
         }
         mc.options.keyLeft.setDown(false);
         mc.options.keyRight.setDown(false);
+        if (duel) return false; // eating, resting and hunting are handled by the duel itself
         // 9) eating
         int food = p.getFoodData().getFoodLevel();
         if ((food <= 14 || (hp < 16 && food < 20)) && eatNow(mc, false)) return true;
@@ -266,7 +268,7 @@ final class Guard {
     }
 
     // ------------------------------------------------------------------ food
-    private static double weaponScore(ItemStack s) {
+    static double weaponScore(ItemStack s) {
         String id = BuiltInRegistries.ITEM.getKey(s.getItem()).getPath();
         double tier = id.startsWith("netherite") ? 5 : id.startsWith("diamond") ? 4 : id.startsWith("iron") ? 3 : id.startsWith("stone") ? 2 : 1;
         if (id.endsWith("_sword")) return 10 + tier;
@@ -289,7 +291,12 @@ final class Guard {
         return false;
     }
 
-    private static boolean eatNow(Minecraft mc, boolean emergency) {
+    static boolean hasTotem(LocalPlayer p) {
+        return BuiltInRegistries.ITEM.getKey(p.getOffhandItem().getItem()).getPath().equals("totem_of_undying")
+                || BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).getPath().equals("totem_of_undying");
+    }
+
+    static boolean eatNow(Minecraft mc, boolean emergency) {
         LocalPlayer p = mc.player;
         if (p.getFoodData().getFoodLevel() >= 20 && !emergency) return false;
         if (!Bot.holdBest(mc, s -> foodScore(s, emergency))) return false;
@@ -362,35 +369,33 @@ final class Guard {
         return 1; // leather
     }
 
-    /** Puts on better armor from the inventory and keeps a totem in the off hand (server side, singleplayer). */
-    private static void gear(Minecraft mc) {
-        Bot.onServer(mc, sp -> {
-            var inv = sp.getInventory();
-            for (int i = 0; i < 36; i++) {
-                ItemStack it = inv.getItem(i);
-                if (it.isEmpty()) continue;
-                String id = BuiltInRegistries.ITEM.getKey(it.getItem()).getPath();
-                if (id.equals("totem_of_undying")) {
-                    ItemStack off = sp.getItemBySlot(EquipmentSlot.OFFHAND);
-                    if (!BuiltInRegistries.ITEM.getKey(off.getItem()).getPath().equals("totem_of_undying")) {
-                        sp.setItemSlot(EquipmentSlot.OFFHAND, it.copy());
-                        inv.setItem(i, off.copy());
-                    }
-                    continue;
+    /** Puts on better armor and keeps a totem in the off hand – with normal inventory clicks, one move at a time. */
+    static void gear(Minecraft mc) {
+        var p = mc.player;
+        var inv = p.getInventory();
+        boolean totemInHand = BuiltInRegistries.ITEM.getKey(p.getOffhandItem().getItem()).getPath().equals("totem_of_undying");
+        for (int i = 0; i < 36; i++) {
+            ItemStack it = inv.getItem(i);
+            if (it.isEmpty()) continue;
+            String id = BuiltInRegistries.ITEM.getKey(it.getItem()).getPath();
+            if (id.equals("totem_of_undying")) {
+                if (!totemInHand) {
+                    Inv.toOffhand(mc, i);
+                    return;
                 }
-                int tier = armorTier(id);
-                if (tier < 0) continue;
-                var eq = it.get(DataComponents.EQUIPPABLE);
-                if (eq == null) continue;
-                EquipmentSlot slot = eq.slot();
-                ItemStack worn = sp.getItemBySlot(slot);
-                String wid = BuiltInRegistries.ITEM.getKey(worn.getItem()).getPath();
-                if (worn.isEmpty() || armorTier(wid) < tier) {
-                    sp.setItemSlot(slot, it.copy());
-                    inv.setItem(i, worn.copy());
-                }
+                continue;
             }
-        });
+            int tier = armorTier(id);
+            if (tier < 0) continue;
+            var eq = it.get(DataComponents.EQUIPPABLE);
+            if (eq == null) continue;
+            EquipmentSlot slot = eq.slot();
+            ItemStack worn = p.getItemBySlot(slot);
+            if (worn.isEmpty() || armorTier(BuiltInRegistries.ITEM.getKey(worn.getItem()).getPath()) < tier) {
+                Inv.equip(mc, i, slot);
+                return;
+            }
+        }
     }
 
     private static void torch(Minecraft mc, LocalPlayer p) {

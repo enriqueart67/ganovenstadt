@@ -34,6 +34,22 @@ public final class Bot {
     private static String lastStatus = "Idle";
     public static final List<String[]> CHAT = new ArrayList<>(); // {"you"|"bot", text}
 
+    public static final String NOT_ALLOWED = "I only work in singleplayer, on LAN worlds you host and on servers where you are an operator (your own server). On other servers this would be cheating against other players – and get you banned.";
+
+    /** Singleplayer / own LAN world, or a server where you are an operator (= your own server). */
+    public static boolean allowed(Minecraft mc) {
+        if (mc.hasSingleplayerServer()) return true;
+        try {
+            return mc.player != null && mc.player.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    public static Task current() {
+        return task;
+    }
+
     public static boolean busy() {
         return task != null;
     }
@@ -89,8 +105,8 @@ public final class Bot {
             stop(null);
             return;
         }
-        if (!mc.hasSingleplayerServer()) {
-            stop("I only work in singleplayer – servers ban automated play.");
+        if (!allowed(mc)) {
+            stop(NOT_ALLOWED);
             return;
         }
         LocalPlayer p = mc.player;
@@ -120,6 +136,7 @@ public final class Bot {
         mc.options.keyShift.setDown(false);
         mc.options.keyUse.setDown(false);
         mc.options.keyLeft.setDown(false);
+        mc.options.keyDown.setDown(false);
         mc.options.keyRight.setDown(false);
         if (mc.gameMode != null) mc.gameMode.stopDestroyBlock();
     }
@@ -252,14 +269,7 @@ public final class Bot {
         if (best == sel) return;
         if (best < 9) inv.setSelectedSlot(best);
         else {
-            final int from = best;
-            onServer(mc, sp -> { // move it into the hand (singleplayer: change the server's copy, it syncs back)
-                var si = sp.getInventory();
-                int hand = si.getSelectedSlot();
-                ItemStack a = si.getItem(from).copy(), b = si.getItem(hand).copy();
-                si.setItem(hand, a);
-                si.setItem(from, b);
-            });
+            Inv.toHotbar(mc, best, sel); // a normal inventory click – works on servers too
         }
     }
 
@@ -281,14 +291,7 @@ public final class Bot {
         if (best == sel) return true;
         if (best < 9) inv.setSelectedSlot(best);
         else {
-            final int from = best;
-            onServer(mc, sp -> {
-                var si = sp.getInventory();
-                int hand = si.getSelectedSlot();
-                ItemStack a = si.getItem(from).copy(), b = si.getItem(hand).copy();
-                si.setItem(hand, a);
-                si.setItem(from, b);
-            });
+            Inv.toHotbar(mc, best, sel);
         }
         return true;
     }
@@ -339,11 +342,9 @@ public final class Bot {
             }
         }
         if (slots.isEmpty()) return false;
-        onServer(mc, sp -> {
-            for (int i : slots) sp.getInventory().setItem(i, ItemStack.EMPTY);
-        });
+        for (int i : slots) Inv.throwAway(mc, i);
         lastRoom = System.currentTimeMillis();
-        say("My bags were full, so I threw away dirt, gravel and spare stone.");
+        say("My bags were full, so I dropped dirt, gravel and spare stone.");
         return true;
     }
 

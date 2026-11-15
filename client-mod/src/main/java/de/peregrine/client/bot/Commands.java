@@ -132,7 +132,7 @@ public final class Commands {
         }
 
         if (mc.player == null || mc.level == null) return "Join a world first.";
-        if (!mc.hasSingleplayerServer()) return "I only work in singleplayer – servers ban automated play, and I don't want your account banned.";
+        if (!Bot.allowed(mc)) return Bot.NOT_ALLOWED;
 
         List<Bot.Task> jobs = new ArrayList<>();
         List<String> said = new ArrayList<>();
@@ -249,6 +249,16 @@ public final class Commands {
             return null;
         }
 
+        // fighting (players, or mobs by name)
+        Matcher fight = Pattern.compile("^(?:fight|duel|pvp|kill|attack|beat|kämpf(?:e)?(?: gegen| mit)?|kaempf(?:e)?(?: gegen| mit)?|töte|toete|besiege|bekämpf(?:e)?|bekaempf(?:e)?|greif(?:e)?|hau)(?:\\s+(.*?))?(?:\\s+an)?$").matcher(c);
+        if (fight.find()) {
+            String who = fight.group(1) == null ? "" : fight.group(1).trim().replaceAll("^(gegen|mit|den|die|das|the|player|spieler)\\s+", "");
+            if (who.matches("(|nearest|nearest player|the nearest|nächsten|naechsten|nächsten spieler|jemand|anyone|someone|everyone|alle|all)")) who = null;
+            JOBS.add(dry ? null : new Combat.Duel(who));
+            said.add("fighting " + (who == null ? "the nearest player" : who) + " – I'll use crystals, the mace or my sword, whatever I have");
+            return null;
+        }
+
         // getting / making things
         String what = c.replaceAll("\\b(\\d+)\\b", " ")
                 .replaceAll("\\b(bitte|please|mir|me|for me|für mich|fuer mich|ich (will|möchte|moechte|brauche|hätte gern|haette gern)|i (want|need|would like)|can you|kannst du|könntest du|koenntest du|noch|mal|some|ein paar|paar|a few|einen stack|ein stack|a stack|stack|viele|lots of|a lot of|many|stück|stueck|x)\\b", " ")
@@ -273,7 +283,7 @@ public final class Commands {
     private static String help() {
         return "Just tell me what you want, in English or German. Examples: \"get 10 diamonds\" (I make the pickaxes I need first), "
                 + "\"hol 64 holz\", \"mach mir eine eisenrüstung\", \"craft 16 torches\", \"go to Home\", \"geh zu 100 -250\", "
-                + "\"hol 20 holz und dann 5 eisenbarren\". Save your own: \"remember starter: get 16 wood, then a stone pickaxe\" – then just say \"starter\". "
+                + "\"hol 20 holz und dann 5 eisenbarren\", \"fight Steve\" / \"kämpf gegen Steve\" (PvP: crystals, mace, sword). Save your own: \"remember starter: get 16 wood, then a stone pickaxe\" – then just say \"starter\". "
                 + "\"my commands\" lists them, \"forget starter\" deletes one, \"stop\" stops me.";
     }
 

@@ -57,6 +57,18 @@
   12. Fackeln setzen.
   - **Planer:** Vor jedem Erz-Auftrag baut er ein Schwert. Vor tiefen Erzen (Ziel-Y < 16) macht er 16 Fackeln. Kohle, die als Zutat gebraucht wird, brennt er als Holzkohle aus Stämmen.
   - Nicht im Spiel getestet (Nutzer wollte keine weiteren Tests), nur für 26.1/26.2/26.3 gebaut.
+- **PvP und eigener Server:**
+  - **Freigabe (`Bot.allowed`):** Der Assistent läuft im Einzelspieler und in selbst gehosteten LAN-Welten. Auf Servern läuft er nur, wenn der Spieler dort Operator ist (`permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)`, also Level 2+). Auf fremden Servern bleibt er aus (Cheat gegen andere Spieler, Bann-Gefahr).
+  - **Inventar über echte Klicks (`bot/Inv.java`, `handleContainerInput`):** in die Hand tauschen, Totem in die zweite Hand, Rüstung anziehen, Müll wegwerfen. Das funktioniert auch auf Servern.
+  - **Herstellen und Schmelzen** bleiben nur im Einzelspieler (serverseitig). Auf Servern hält der Planer beim ersten Herstell-Schritt an und sagt, was der Spieler selbst bauen soll.
+  - **`bot/Combat.java` (`Duel`)**, Befehle „fight/duel/pvp/kill <Name>“, „kämpf gegen <Name>“, „töte …“. Ohne Namen gilt der nächste Spieler, mit einem Mob-Namen der nächste Mob dieser Art.
+    - Crystal: Kristalle zerschlagen, wenn das dem Gegner mehr schadet als uns. Sonst den besten Obsidian- oder Grundgestein-Block im Umkreis von 3 um den Gegner suchen (Schaden nach der Explosionsformel mit Stärke 6, eigener Schaden × 0,6 abgezogen, nie tödlich ohne Totem) und dort einen Kristall setzen. Ohne passende Stelle setzt er Obsidian neben den Gegner.
+    - Mace: Windladung an die eigenen Füße (Blick nach unten), dann im Fallen mit der Mace schlagen.
+    - Schwert: Sprint-Treffer mit W-Tap, kritische Treffer, wenn der Gegner in der Luft ist oder fast tot, unregelmäßiges Strafen, Abstand ~2,6–3,0. Hebt der Gegner das Schild, nimmt er die Axt.
+    - Verteidigung: `Guard.gear` jede Runde (Totem nach dem Verbrauch sofort ersetzen), goldener Apfel unter ~4,5 Herzen.
+    - Bei mehr als 10 Blöcken Abstand läuft er per A* hin.
+  - **Im Duell:** `Guard` ruht nicht, jagt nicht und zieht sich nicht vor Gruppen zurück. Mobs bekämpft er nur, wenn sie näher als 3 Blöcke sind.
+  - **Getestet:** nur „kill cow“ in 26.2 (finden, hinlaufen, schlagen, Sieg erkennen). Gegen echte Spieler, Crystal und Mace ist nichts getestet (geht im Container nicht). Es ist ein Regelwerk, kein trainiertes Modell.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

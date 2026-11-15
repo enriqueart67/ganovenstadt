@@ -329,6 +329,10 @@ public final class Planner {
                 return false;
             }
             Step step = steps.get(0);
+            if (step.kind() != Kind.GATHER && !mc.hasSingleplayerServer()) {
+                Bot.stop("On a server I can gather, but crafting needs your hands: " + step.describe() + ", then ask me again. (Plan: " + describe(steps) + ")");
+                return false;
+            }
             String invSig = snapshot(mc).toString();
             if (step.describe().equals(lastStep) && invSig.equals(lastInv)) {
                 if (++sameSteps >= 3) {

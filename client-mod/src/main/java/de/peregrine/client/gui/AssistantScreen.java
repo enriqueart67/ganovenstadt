@@ -60,7 +60,7 @@ public final class AssistantScreen extends Screen {
         Ui.chart(g, x0, y0, W, H, t.light);
         int cx = x0 + 14, cw = W - 28;
         Type.left(g, "Assistant", Type.DISPLAY, cx, y0 + 10, 2.1f, t.text);
-        Type.right(g, "SINGLEPLAYER", Type.MONO, cx + cw, y0 + 14, 0.7f, t.muted);
+        Type.right(g, "SINGLEPLAYER · OWN SERVER", Type.MONO, cx + cw, y0 + 14, 0.7f, t.muted);
 
         // status line
         int sy = y0 + 36;
