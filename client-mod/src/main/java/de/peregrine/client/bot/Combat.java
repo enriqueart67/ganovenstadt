@@ -68,7 +68,7 @@ public final class Combat {
         private float catchYaw;
         private int flyStage, flyTicks, rocketCd, flyCd;
         private boolean strafeLeft, hadTarget;
-        private int lastHurt = -1000, obiPlaced, obiWindow;
+        private int lastHurt = -1000, obiPlaced, obiWindow, backOff;
         private final Random rnd = new Random();
 
         public LivingEntity target() {
@@ -139,8 +139,26 @@ public final class Combat {
             // ---- defence first
             Guard.gear(mc); // totem back in the off hand immediately after a pop, best armor on
             float hp = p.getHealth() + p.getAbsorptionAmount();
-            if ((hp < 9 || (hp < 13 && d > 5)) && Guard.eatNow(mc, true)) {
-                mode = "healing";
+            // healing: only a golden apple heals in time. First get room (eating next to them = dying), then eat;
+            // cornered, it keeps fighting. Normal food only when hungry and nobody is close.
+            // Being hit = keep fighting (no snack under fire). With a totem left it stays in the fight and only eats in
+            // a quiet moment; with no totem left and low health it gets away first, then heals.
+            boolean hitNow = ticks - lastHurt < 20;
+            boolean totems = Guard.hasTotem(p) || Bot.count(mc, "totem_of_undying") > 0;
+            boolean needHeal = hp < 9 || (hp < 13 && d > 6);
+            if (!totems && hp < 7 && d < 7 && backOff < 60) { // no totem left: get out of reach
+                backOff++;
+                mode = "no totem – getting away";
+                Guard.backOff(mc, p, target.position());
+                return false;
+            }
+            if (needHeal && !hitNow && Guard.canGapple(mc, p) && (d >= 3.5 || totems) && Guard.eatGapple(mc)) {
+                mode = "golden apple";
+                return false;
+            }
+            if (hp >= 9 || d >= 8) backOff = 0;
+            if (p.getFoodData().getFoodLevel() <= 6 && d > 8 && Guard.eatNow(mc, false)) {
+                mode = "eating";
                 return false;
             }
 
@@ -154,6 +172,9 @@ public final class Combat {
 
             // ---- from a distance: elytra mace (flies there itself)
             if (elytraMace(mc, p, d)) return false;
+
+            // ---- they are up high (on a pillar, a ledge): build up under ourselves
+            if (pillar(mc, p)) return false;
 
             // ---- getting there
             if (d > 10) {
@@ -215,6 +236,47 @@ public final class Combat {
             mc.options.keyLeft.setDown(false);
             mc.options.keyRight.setDown(false);
             Bot.mine(mc, b);
+            return true;
+        }
+
+        private int pillarY = Integer.MIN_VALUE;
+
+        /** Pillars straight up (jump, block under the feet) while the target is more than 3 blocks above and close by. */
+        private boolean pillar(Minecraft mc, LocalPlayer p) {
+            double dy = target.getY() - p.getY(), hd = Math.hypot(target.getX() - p.getX(), target.getZ() - p.getZ());
+            if (dy < 3 || hd > 4 || wearingElytra(p) && p.isFallFlying()) {
+                pillarY = Integer.MIN_VALUE;
+                return false;
+            }
+            java.util.function.ToDoubleFunction<ItemStack> block = s -> switch (id(s)) {
+                case "cobblestone", "cobbled_deepslate", "dirt", "netherrack", "stone", "deepslate", "andesite", "diorite", "granite", "tuff", "blackstone" -> 2 + s.getCount() * 0.01;
+                default -> id(s).endsWith("_planks") ? 1 : 0;
+            };
+            if (!Bot.holdBest(mc, block)) return false;
+            if (block.applyAsDouble(p.getMainHandItem()) <= 0) return true; // still swapping
+            mode = "building up to them";
+            BlockPos feet = p.blockPosition();
+            if (!Bot.passable(mc, feet.above(2))) { // ceiling: dig it first
+                Bot.mine(mc, feet.above(2));
+                return true;
+            }
+            mc.options.keyUp.setDown(false);
+            mc.options.keyLeft.setDown(false);
+            mc.options.keyRight.setDown(false);
+            p.setXRot(90f);
+            if (p.onGround()) {
+                pillarY = feet.getY();
+                mc.options.keyJump.setDown(true);
+                return true;
+            }
+            mc.options.keyJump.setDown(false);
+            if (pillarY != Integer.MIN_VALUE && p.getY() > pillarY + 1.05) { // high enough: block into the space we left
+                BlockPos floor = new BlockPos(feet.getX(), pillarY - 1, feet.getZ());
+                Vec3 hit = Vec3.atCenterOf(floor).add(0, 0.5, 0);
+                mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(hit, Direction.UP, floor, false));
+                Bot.swing(p);
+                pillarY = Integer.MIN_VALUE;
+            }
             return true;
         }
 
@@ -442,7 +504,7 @@ public final class Combat {
                 strafeLeft = !strafeLeft;
                 strafeT = 7 + rnd.nextInt(10);
             }
-            mc.options.keyLeft.setDown(strafeLeft);
+            mc.options.keyLeft.setDown(strafeLeft); // with forward held below this is a diagonal run (W+A / W+D)
             mc.options.keyRight.setDown(!strafeLeft);
             if (wtap > 0) { // sprint reset: let go of forward for a moment after a hit
                 wtap--;
@@ -451,14 +513,14 @@ public final class Combat {
                 return;
             }
             mc.options.keyDown.setDown(false);
-            if (d > 3.1) { // chase
+            if (d > 3.1) { // chase – diagonally, so they can't line up a clean hit
                 mc.options.keyUp.setDown(true);
                 mc.options.keySprint.setDown(true);
                 mc.options.keyJump.setDown(p.horizontalCollision && p.onGround());
                 return;
             }
-            // in range: stay at the edge of reach, hit when the swing is fully charged
-            mc.options.keyUp.setDown(d > 2.6);
+            // in range: stay at the edge of reach (diagonal steps in), hit when the swing is fully charged
+            mc.options.keyUp.setDown(d > 2.4);
             mc.options.keySprint.setDown(true);
             boolean targetAirborne = !target.onGround();
             boolean wantCrit = targetAirborne || target.getHealth() < 6; // crits finish, sprint hits push away
@@ -548,7 +610,7 @@ public final class Combat {
             if (flyCd > 0) flyCd--;
             boolean can = has(mc, "mace") && has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
             if (flyStage == 0) {
-                if (!can || flyCd > 0 || d < 12 || d > 48 || !calm(p, 12) || !mc.level.canSeeSky(p.blockPosition().above(2))) return false;
+                if (!can || flyCd > 0 || d < 9 || d > 64 || !calm(p, 9) || !mc.level.canSeeSky(p.blockPosition().above(2))) return false;
                 flyStage = 1;
                 flyTicks = 0;
             }
@@ -617,22 +679,44 @@ public final class Combat {
         private boolean endFlight(Minecraft mc) {
             flyStage = 0;
             flyCd = 60;
-            Guard.keepElytra = false; // Guard puts the best chestplate back on
+            Guard.keepElytra = false;
+            Guard.gear(mc); // chestplate back on right away, so it doesn't keep gliding
             mc.options.keyJump.setDown(false);
             return false;
         }
 
         // ------------------------------------------------------------------ crystal
+        /** Crystal damage to us (before armor, so on the safe side) must leave at least 4 hearts – and never over 6 hearts. */
+        private static boolean safeForUs(double us, float hp) {
+            return us < hp - 8 && us <= 12;
+        }
+
+        private int sinceSwordHit = 100;
+
         private boolean crystal(Minecraft mc, LocalPlayer p) {
             float hp = p.getHealth() + p.getAbsorptionAmount();
             Vec3 eye = p.getEyePosition();
+            sinceSwordHit++;
+            // 0) hit them up first: a sprint hit with the sword knocks them into the air, then the crystal goes off
+            //    under them while they can't move away
+            double dd = p.distanceTo(target);
+            if (target.onGround() && dd <= 3.0 && sinceSwordHit > 12 && p.getAttackStrengthScale(0f) >= 0.9f && p.hasLineOfSight(target)) {
+                Bot.holdBest(mc, Guard::weaponScore);
+                Bot.look(p, target.getEyePosition().subtract(0, target.getBbHeight() * 0.3, 0));
+                mc.options.keySprint.setDown(true);
+                mc.options.keyUp.setDown(true);
+                attackWithSwap(mc, p, target);
+                sinceSwordHit = 0;
+                mode = "crystal · hit up";
+                return true;
+            }
             // 1) break any crystal that hurts them more than us
             EndCrystal hit = null;
             double hitScore = 0;
             for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), c -> c.isAlive())) {
                 if (eye.distanceTo(c.position().add(0, 1, 0)) > 4.6) continue;
                 double them = crystalDamage(target, c.position()), us = crystalDamage(p, c.position());
-                if (us >= hp - 3 && !Guard.hasTotem(p)) continue; // would kill us
+                if (!safeForUs(us, hp)) continue; // never risk blowing ourselves up – totem or not
                 double score = them - us * 0.6;
                 if (them > 2 && score > hitScore) {
                     hitScore = score;
@@ -661,7 +745,7 @@ public final class Combat {
                 if (eye.distanceTo(Vec3.atCenterOf(b).add(0, 0.5, 0)) > 4.5) continue;
                 Vec3 c = Vec3.atBottomCenterOf(a1);
                 double them = crystalDamage(target, c), us = crystalDamage(p, c);
-                if (us >= hp - 3 && !Guard.hasTotem(p)) continue;
+                if (!safeForUs(us, hp)) continue;
                 double score = them - us * 0.6;
                 if (them >= 4 && score > bestScore) {
                     bestScore = score;

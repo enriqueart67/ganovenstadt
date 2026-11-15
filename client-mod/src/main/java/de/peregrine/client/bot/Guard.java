@@ -46,6 +46,7 @@ final class Guard {
     private static int eatTicks, fleeTicks, critTicks, strafeTicks, gearTicks, huntTicks;
     private static boolean resting, strafeLeft;
     private static int restTicks, restCooldown; // resting is capped, so a slow heal never freezes the job
+    private static int gapCd, backOffTicks; // golden apple pause; how long it has been backing off to eat
 
     /** True while it waits for health to come back (the stuck detector leaves it alone then). */
     static boolean resting() {
@@ -76,6 +77,7 @@ final class Guard {
         eatTicks = fleeTicks = critTicks = strafeTicks = huntTicks = 0;
         resting = false;
         restTicks = restCooldown = 0;
+        backOffTicks = 0;
         prey = null;
         loot = null;
         hunts = 0;
@@ -114,7 +116,20 @@ final class Guard {
             Bot.note("Coming up for air.");
             return true;
         }
-        // 4) finish eating
+        if (gapCd > 0) gapCd--;
+        // 4) finish eating – unless someone is right on us: then stop and hit back
+        if (eatTicks > 8) {
+            boolean close = !mc.level.getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(2.5),
+                    e -> e instanceof Enemy && e.isAlive() && e.distanceTo(p) < 2.5).isEmpty();
+            if (Bot.current() instanceof Combat.Duel duelNow && duelNow.target() != null && duelNow.target().distanceTo(p) < 2.5) close = true;
+            if (p.hurtTime > 0) close = true; // got hit while eating: fight back instead
+            if (close) {
+                eatTicks = 0;
+                mc.options.keyUse.setDown(false);
+                if (p.isUsingItem()) mc.gameMode.releaseUsingItem(p);
+                Bot.note("Too close – fighting instead of eating.");
+            }
+        }
         if (eatTicks > 0) {
             eatTicks--;
             mc.options.keyUse.setDown(eatTicks > 0);
@@ -180,14 +195,26 @@ final class Guard {
             Vec3 centre = Vec3.ZERO;
             for (LivingEntity e : enemies) centre = centre.add(e.position());
             centre = centre.scale(1.0 / enemies.size());
-            if (hp < 8) eatNow(mc, true); // a bite while running if possible
+            double near = Double.MAX_VALUE;
+            for (LivingEntity e : enemies) near = Math.min(near, e.distanceTo(p));
+            if (hp < 8 && near > 5 && canGapple(mc, p) && eatGapple(mc)) return true; // only with room to eat
             runFrom(mc, p, centre);
             safeWalk(mc, true);
             Bot.note("Too many monsters – falling back.");
             return true;
         }
-        // 7) emergency food (golden apples allowed) – before a fight goes wrong
-        if (hp < 8 && eatNow(mc, true)) return true;
+        // 7) low in a fight: a golden apple – but first get some room, eating next to a monster gets you killed
+        if (hp < 8 && enemy != null && canGapple(mc, p)) {
+            if (ed < 5 && backOffTicks < 40) {
+                backOffTicks++;
+                backOff(mc, p, enemy.position());
+                return true;
+            }
+            if (ed >= 3 && eatGapple(mc)) {
+                backOffTicks = 0;
+                return true;
+            }
+        } else if (hp >= 8) backOffTicks = 0;
         // 8) fighting (in a duel only mobs that are really close – the player is the main target)
         if (enemy != null && (!duel || ed < 3)) {
             fight(mc, p, enemy, ed);
@@ -266,6 +293,44 @@ final class Guard {
             safeWalk(mc, archer && d > 5);
         }
         Bot.note("Fighting a " + type(enemy).replace('_', ' ') + ".");
+    }
+
+    /** A golden apple is there, none eaten in the last 5 s, and no regeneration running. */
+    static boolean canGapple(Minecraft mc, LocalPlayer p) {
+        if (gapCd > 0 || p.hasEffect(net.minecraft.world.effect.MobEffects.REGENERATION)) return false;
+        return Bot.count(mc, "golden_apple", "enchanted_golden_apple") > 0;
+    }
+
+    /** Eats a golden apple (enchanted first). Then 5 s pause, so it doesn't eat one after the other. */
+    static boolean eatGapple(Minecraft mc) {
+        LocalPlayer p = mc.player;
+        if (!Bot.holdBest(mc, s -> {
+            String id = BuiltInRegistries.ITEM.getKey(s.getItem()).getPath();
+            return id.equals("enchanted_golden_apple") ? 200 : id.equals("golden_apple") ? 100 : 0;
+        })) return false;
+        if (!BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).getPath().contains("golden_apple")) return true; // still swapping
+        mc.options.keyUp.setDown(false);
+        mc.options.keyJump.setDown(false);
+        mc.options.keyLeft.setDown(false);
+        mc.options.keyRight.setDown(false);
+        mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+        mc.options.keyUse.setDown(true);
+        eatTicks = 40;
+        gapCd = 20 * 5;
+        Bot.note("Golden apple.");
+        return true;
+    }
+
+    /** Sprint away from a point (to get room before eating). */
+    static void backOff(Minecraft mc, LocalPlayer p, Vec3 from) {
+        mc.options.keyUse.setDown(false);
+        mc.options.keyLeft.setDown(false);
+        mc.options.keyRight.setDown(false);
+        mc.options.keyDown.setDown(false);
+        runFrom(mc, p, from);
+        safeWalk(mc, true);
+        mc.options.keyJump.setDown(p.horizontalCollision && p.onGround());
+        Bot.note("Backing off to eat.");
     }
 
     private static void runFrom(Minecraft mc, LocalPlayer p, Vec3 from) {
@@ -433,7 +498,7 @@ final class Guard {
     }
 
     /** Puts on better armor and keeps a totem in the off hand – with normal inventory clicks, one move at a time. */
-    static void gear(Minecraft mc) {
+    public static void gear(Minecraft mc) {
         var p = mc.player;
         var inv = p.getInventory();
         boolean totemInHand = BuiltInRegistries.ITEM.getKey(p.getOffhandItem().getItem()).getPath().equals("totem_of_undying");

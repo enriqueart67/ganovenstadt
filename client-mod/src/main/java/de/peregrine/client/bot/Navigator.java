@@ -183,6 +183,16 @@ public final class Navigator {
                 closestH = h;
                 closest = n;
             }
+            for (int k = 0; k < 4; k++) { // diagonal steps on the same level (no corner cutting, no digging)
+                Direction a = HORIZONTAL[k], b = HORIZONTAL[(k + 1) % 4];
+                Move m = diagonal(mc, n.pos, a, b);
+                if (m == null) continue;
+                double g = n.g + m.cost();
+                long key = m.cell().asLong();
+                if (g >= best.getOrDefault(key, Double.MAX_VALUE)) continue;
+                best.put(key, g);
+                open.add(new Node(m.cell(), g, g + estimate(m.cell()) * 1.6, n, m));
+            }
             for (Direction d : HORIZONTAL) {
                 for (int dy = -1; dy <= 1; dy++) {
                     Move m = move(mc, n.pos, d, dy);
@@ -227,6 +237,23 @@ public final class Navigator {
             if (m != null) return m;
         }
         return null;
+    }
+
+    /** A diagonal step on flat ground: both side cells and the target free for feet and head, solid floor, no lava. */
+    private Move diagonal(Minecraft mc, BlockPos feet, Direction a, Direction b) {
+        BlockPos cell = feet.relative(a).relative(b);
+        for (BlockPos c : new BlockPos[]{feet.relative(a), feet.relative(b), cell}) {
+            if (!Bot.passable(mc, c) || !Bot.passable(mc, c.above())) return null;
+            if (Bot.isWater(mc.level.getBlockState(c))) return null;
+        }
+        if (!Bot.solid(mc, cell.below()) || AVOID.contains(cell)) return null;
+        for (Direction n : Direction.values()) if (Bot.isLava(mc.level.getBlockState(cell.relative(n)))) return null;
+        double cost = 1.41;
+        for (net.minecraft.world.phys.Vec3 m : danger) {
+            double dd = m.distanceTo(net.minecraft.world.phys.Vec3.atCenterOf(cell));
+            if (dd < 6) cost += (6 - dd) * 1.3;
+        }
+        return new Move(feet.immutable(), cell.immutable(), new ArrayList<>(), cost, a);
     }
 
     /** A step from {@code feet} in direction d: level (dy 0, may drop), stairs up (1) or stairs down (-1). */
