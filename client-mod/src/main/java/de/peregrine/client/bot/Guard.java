@@ -33,7 +33,7 @@ import java.util.Set;
  *   <li>fighting: best weapon, critical hits (jump, hit while falling), zig-zag towards archers</li>
  *   <li>emergency food (golden apples allowed) below 4 hearts, normal food when hungry or hurt</li>
  *   <li>no food left: hunt cows, pigs, sheep, chickens or rabbits and eat what they drop</li>
- *   <li>resting until health comes back</li>
+ *   <li>no resting: it never stops to wait for health (hunts for food on the way when it has none)</li>
  *   <li>always: wear the best armor, keep a totem in the off hand, light dark tunnels with torches</li>
  * </ol>
  */
@@ -224,29 +224,8 @@ final class Guard {
             prey = null;
             huntTicks = 0;
         }
-        // 11) resting when badly hurt (health comes back by itself with a full food bar) – never with monsters
-        //     around: then it keeps going and fights when they come
-        if (restCooldown > 0) restCooldown--;
-        boolean monstersNear = threats.stream().anyMatch(e -> e.distanceTo(p) < 16);
-        if (monstersNear) {
-            resting = false;
-            restTicks = 0;
-        } else if ((hp < 10 || (resting && hp < 18)) && restCooldown == 0 && hp >= 4 && ++restTicks > 20 * 45) {
-            resting = false; // 45 s is enough – carry on carefully and rest again later
-            restTicks = 0;
-            restCooldown = 20 * 60;
-            Bot.note("Rested long enough – carrying on.");
-        } else if ((hp < 10 || (resting && hp < 18)) && (restCooldown == 0 || hp < 4)) {
-            if (food < 18 && !hasFood(mc)) {
-                if (hunt(mc, p)) return true;
-                Bot.stop("Your health is low and I couldn't find anything to eat – I stopped. Eat something, then ask me again.");
-                return true;
-            }
-            if (!resting) Bot.say("I'm hurt – resting until I'm healthy again.");
-            resting = true;
-            Bot.release(mc);
-            return true;
-        }
+        // 11) no resting – it never stops to wait for health. Low and nothing to eat: get food on the way (hunting).
+        if (hp < 10 && food < 18 && !hasFood(mc) && hunt(mc, p)) return true;
         resting = false;
         restTicks = 0;
         // 12) light up dark tunnels (doesn't take the tick)

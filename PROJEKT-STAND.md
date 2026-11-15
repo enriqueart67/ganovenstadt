@@ -250,6 +250,7 @@
   - Zweite Windladung am höchsten Punkt (|vy| < 0,12, Gegner seitlich < 6 Blöcke, höchstens 14 Blöcke über ihm) für mehr Fallhöhe.
   - Ohne Schild: Windladung in die Flugbahn eines Gegners, der mit Mace von oben kommt.
   - Nicht im Spiel getestet.
+- **Kein Ausruhen mehr, Heilen nur 100 Blöcke weg:** Der Ausruh-Zweig im `Guard` ist entfernt („I'm hurt – resting …“ gibt es nicht mehr). Bei wenig Leben ohne Essen jagt er unterwegs. `Combat.healTrip` nur mit Elytra und Raketen (≤ 2 Herzen, kein Totem): Er fliegt, bis kein Spieler näher als 110 Blöcke ist (höchstens 30 s), landet und heilt erst, wenn niemand innerhalb von 100 Blöcken ist. Kommt jemand näher, startet er wieder. Ohne Elytra gibt es keine Heilpause, er kämpft weiter (goldene Äpfel im Laufen bleiben). Nicht im Spiel getestet.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

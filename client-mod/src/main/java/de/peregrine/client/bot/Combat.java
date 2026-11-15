@@ -317,21 +317,30 @@ public final class Combat {
         private int tripStage, tripTicks;
         private Vec3 tripFrom;
 
+        /** Distance to the nearest other player (Double.MAX_VALUE when nobody is around). */
+        private static double nearestPlayer(Minecraft mc, LocalPlayer p) {
+            double best = Double.MAX_VALUE;
+            for (Player o : mc.level.players()) if (o != p && !o.isSpectator()) best = Math.min(best, o.distanceTo(p));
+            return best;
+        }
+
         /**
-         * Only when it really has to: 2 hearts or less and no totem left. With elytra and rockets it flies far away
-         * (away from them, rockets, ~5 s), lands, heals (golden apple, food, then regeneration) up to 8 hearts or 40 s,
-         * and then the duel goes on – it walks or flies back on its own. Without elytra it sprints and pearls away.
+         * Only when it really has to: 2 hearts or less and no totem left, and only with elytra and rockets. It flies
+         * away from everyone until no player is within 100 blocks, lands, and only there heals (golden apple, food,
+         * regeneration) up to 8 hearts. If a player comes within 100 blocks while it heals, it takes off again. Then the
+         * duel goes on – it walks or flies back on its own. Without elytra there is no heal stop: it keeps fighting.
          */
         private boolean healTrip(Minecraft mc, LocalPlayer p, float hp, boolean totems, double d) {
+            boolean wings = has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
             if (tripStage == 0) {
-                if (hp > 4 || totems) return false;
+                if (hp > 4 || totems || !wings) return false;
                 tripStage = 1;
                 tripTicks = 0;
                 tripFrom = target.position();
                 Bot.say("Two hearts and no totem – flying off to heal, back in a moment.");
             }
             tripTicks++;
-            boolean wings = has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
+            double far = nearestPlayer(mc, p);
             Vec3 away = p.position().subtract(tripFrom).multiply(1, 0, 1);
             if (away.lengthSqr() < 1e-3) away = new Vec3(1, 0, 0);
             float yaw = (float) Math.toDegrees(Math.atan2(-away.x, away.z));
@@ -357,11 +366,11 @@ public final class Combat {
                             p.setXRot(-25f);
                             if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", yaw, -25f)) rocketCd = 25;
                         }
-                        if (tripTicks > 20 * 5 || p.position().distanceTo(tripFrom) > 60) tripStage = 2;
+                        if (far >= 110 || tripTicks > 20 * 30) tripStage = 2; // a bit over 100, so landing still leaves 100
                     } else {
-                        if (has(mc, "ender_pearl") && pearlCd == 0 && quickUse(mc, p, "ender_pearl", yaw, -30f)) pearlCd = 40;
-                        Guard.backOff(mc, p, tripFrom);
-                        if (tripTicks > 20 * 5 || p.position().distanceTo(tripFrom) > 30) tripStage = 2;
+                        tripStage = 0; // out of rockets: no heal stop, back to fighting
+                        Guard.keepElytra = false;
+                        return false;
                     }
                 }
                 case 2 -> { // land (glide down, look ahead)
@@ -376,10 +385,17 @@ public final class Combat {
                         tripTicks = 0;
                     }
                 }
-                case 3 -> { // heal
+                case 3 -> { // heal – only with nobody within 100 blocks
+                    if (far < 100) { // someone came after us: off again
+                        tripStage = 1;
+                        tripTicks = 0;
+                        tripFrom = p.position().subtract(1, 0, 0);
+                        for (Player o : mc.level.players()) if (o != p && o.distanceTo(p) < 100) tripFrom = o.position();
+                        return true;
+                    }
                     mode = "healing far away";
                     Bot.release(mc);
-                    if (p.getHealth() >= 16 || tripTicks > 20 * 40) {
+                    if (p.getHealth() >= 16 || tripTicks > 20 * 60) {
                         tripStage = 0;
                         Bot.say("Healed – going back in.");
                         return false;
