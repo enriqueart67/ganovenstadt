@@ -236,6 +236,7 @@
   - **Säule:** Ist der Gegner > 3 Blöcke höher und < 4 Blöcke seitlich entfernt, baut er sich mit Bruchstein, Erde & Co. hoch (springen, Block unter die Füße, Decke vorher abbauen). Brücken zu Gegnern in der Ferne gibt es noch nicht.
   - **Elytra-Mace** schon ab 9 Blöcken und 4,5 Herzen (vorher 12 und 6); nach der Landung zieht `Guard.gear` sofort die Brustplatte an.
   - **Getestet:** nur Kompilieren (26.1–26.3) und ein Lauftest, bei dem der Bot nachts mit Holzschwert bei 4 FPS von Zombies getötet wurde (keine Aussage). Alles andere braucht einen echten Gegner mit Ausrüstung.
+- **Schild gegen Mace, Stun Slam bei jedem Fall-Treffer (`Combat.shieldUp`, `attackWithSwap`):** Ist ein gegnerischer Spieler mit Mace in der Hand in der Luft, mehr als 1,5 Blöcke über uns und weniger als 5 Blöcke seitlich entfernt, hebt der Bot ein Schild. Das kommt aus der zweiten Hand oder wird aus der Hotbar in die Haupthand getauscht, damit das Totem in der zweiten Hand bleibt. Er hält es bis 8 Ticks nach der Landung und wechselt dann zurück. Fällt er selbst (Fall > 1,5) auf einen Gegner mit erhobenem Schild und hat Axt und Mace, kommt immer der Stun Slam (Axt, dann Mace im selben Tick), auch bei normalen Krit-Sprüngen. Ohne Axt gibt es keinen Mace-Sprung gegen ein erhobenes Schild. Nicht im Spiel getestet.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

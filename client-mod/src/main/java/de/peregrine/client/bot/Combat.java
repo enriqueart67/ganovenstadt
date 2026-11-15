@@ -167,6 +167,9 @@ public final class Combat {
             // ---- they walled themselves in: break the block between us
             if (d < 7 && breakIn(mc, p)) return false;
 
+            // ---- they come down on us with a mace: shield up
+            if (shieldUp(mc, p)) return false;
+
             // ---- special moves (pearls, wind charges, lunge)
             if (techniques(mc, p, d)) return false;
 
@@ -237,6 +240,47 @@ public final class Combat {
             mc.options.keyRight.setDown(false);
             Bot.mine(mc, b);
             return true;
+        }
+
+        private int shieldTicks, shieldSlot = -1;
+
+        /**
+         * A player in the air above us with a mace in hand is about to smash: raise a shield (off hand, or swap one in
+         * from the hotbar) and hold it until they land, then switch back. A shield needs a moment to come up, so it
+         * starts as soon as they are airborne and above us, not only when they are already falling.
+         */
+        private boolean shieldUp(Minecraft mc, LocalPlayer p) {
+            boolean threat = false;
+            if (target instanceof Player && id(target.getMainHandItem()).equals("mace") && !target.onGround()) {
+                double hd = Math.hypot(target.getX() - p.getX(), target.getZ() - p.getZ());
+                threat = target.getY() - p.getY() > 1.5 && hd < 5;
+            }
+            boolean inOff = id(p.getOffhandItem()).equals("shield");
+            int slot = inOff ? -1 : hotbar(mc, s -> id(s).equals("shield") ? 1 : 0);
+            if (threat && (inOff || slot >= 0)) shieldTicks = 8;
+            var inv = p.getInventory();
+            if (shieldTicks > 0) {
+                shieldTicks--;
+                if (!inOff) {
+                    if (shieldSlot < 0) shieldSlot = inv.getSelectedSlot();
+                    inv.setSelectedSlot(slot);
+                }
+                Bot.look(p, target.getEyePosition());
+                mc.options.keyUp.setDown(false);
+                mc.options.keyJump.setDown(false);
+                if (!p.isUsingItem()) mc.gameMode.useItem(p, inOff ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
+                mc.options.keyUse.setDown(true);
+                mode = "shield up";
+                return true;
+            }
+            if (shieldSlot >= 0 || (inOff && mode.equals("shield up"))) { // they landed: shield down, weapon back
+                mc.options.keyUse.setDown(false);
+                if (p.isUsingItem()) mc.gameMode.releaseUsingItem(p);
+                if (shieldSlot >= 0) inv.setSelectedSlot(shieldSlot);
+                shieldSlot = -1;
+                mode = "fighting";
+            }
+            return false;
         }
 
         private int pillarY = Integer.MIN_VALUE;
@@ -471,6 +515,11 @@ public final class Combat {
             var inv = p.getInventory();
             int hand = inv.getSelectedSlot();
             double dist = p.getEyePosition().distanceTo(t.getBoundingBox().getCenter()) - t.getBbWidth() / 2;
+            if (t == target && t.isBlocking() && p.fallDistance > 1.5 && hotbar(mc, s -> id(s).equals("mace") ? 1 : 0) >= 0
+                    && hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0) >= 0) {
+                smash(mc, p); // falling onto a raised shield: axe takes the shield down, the mace lands in the same tick
+                return;
+            }
             int swap = -1;
             if (t.isBlocking()) swap = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0); // shield: axe first
             if (swap < 0) { // otherwise whatever hits hardest now – the charge comes from the fast weapon in hand
@@ -541,7 +590,8 @@ public final class Combat {
         private boolean mace(Minecraft mc, LocalPlayer p, double d) {
             boolean charges = has(mc, "wind_charge");
             // stage 1: on the ground, close enough – wind charge at our own feet to launch up
-            if (maceStage == 0 && charges && p.onGround() && d < 5.5 && d > 2.0 && calm(p, 8)) {
+            boolean shieldWall = target.isBlocking() && hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0) < 0; // blocked without an axe
+            if (maceStage == 0 && charges && p.onGround() && d < 5.5 && d > 2.0 && calm(p, 8) && !shieldWall) {
                 if (!Bot.holdBest(mc, s -> id(s).equals("wind_charge") ? 1 : 0)) return false;
                 if (!holding(p, "wind_charge")) return true; // still swapping
                 if (p.getCooldowns().isOnCooldown(p.getMainHandItem())) return false;
