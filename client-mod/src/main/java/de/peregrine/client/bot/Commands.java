@@ -99,6 +99,11 @@ public final class Commands {
             if (cur != null) cur.unstuck(mc);
         }
 
+        /** A duel runs right now (it handles its own eating). */
+        boolean inFight() {
+            return cur instanceof Combat.Duel || cur instanceof Chain c && c.inFight() || cur instanceof Actions.Repeat r && r.inFight();
+        }
+
         /** The current job failed: move on to the next one. False when there is none. */
         public boolean skip() {
             if (cur instanceof Actions.Repeat r && r.skip()) return true;

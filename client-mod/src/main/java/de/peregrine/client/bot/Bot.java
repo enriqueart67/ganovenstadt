@@ -236,6 +236,7 @@ public final class Bot {
                 return; // fighting, eating or resting first
             }
             guardTicks = 0;
+            if (task != null && task.idle() && !(task instanceof Commands.Chain c && c.inFight()) && Guard.idleEat(mc)) return; // a pause is for eating
             if (task != null && task.tick(mc)) {
                 Task done = task;
                 task = null;
@@ -412,7 +413,9 @@ public final class Bot {
         for (int i = 0; i < 36; i++) {
             ItemStack it = inv.getItem(i);
             if (it.isEmpty()) continue;
-            double v = score.applyAsDouble(it) + (i == sel ? 0.001 : 0);
+            double v = score.applyAsDouble(it);
+            if (v <= 0) continue; // not wanted at all – the item in hand must not win just because it is in hand
+            if (i == sel) v += 0.001; // among equals, keep what is in hand
             if (v > bs) {
                 bs = v;
                 best = i;

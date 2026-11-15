@@ -269,6 +269,10 @@ public final class Actions {
             if (current != null) current.unstuck(mc);
         }
 
+        boolean inFight() {
+            return current != null && current.inFight();
+        }
+
         private int failedRounds;
 
         /** A step inside failed: go on with the next step, or the next round. Three failed rounds in a row end it. */

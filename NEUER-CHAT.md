@@ -16,6 +16,8 @@
 - Schnell sichtbare Ergebnisse (Screenshots schicken), ehrlich sagen, was nicht getestet ist.
 - Grenzen, die bisher gelten: Bot/PvP/ESP nur **Einzelspieler, eigene LAN-Welt, Server mit Operator-Recht oder Server, der es per Plugin-Nachricht `peregrine:features` erlaubt** (`feature/Access`); keine frei eintragbare Server-Liste; Combat Aura unter derselben Regel (`Access.AURA`), auf Wunsch auch gegen Spieler; keine fremden Microsoft-Client-IDs, kein Offline-Bypass.
 
+- **Zugangscode des Clients: 1751** (nur als Hash im Code). Server-Plugin `server-plugin/` (PeregrineGrant): Freigabe ohne OP und Bann für Clients ohne Code.
+
 ## Bauen
 - **Mod (alle drei Versionen + Kopie in den Launcher):**
   `cd client-mod && JAVA_HOME=<JDK 25> ./build-all.sh` → legt `launcher/assets/client-mod/peregrine-client-26.x.jar` ab (werden in den Launcher eingebettet).

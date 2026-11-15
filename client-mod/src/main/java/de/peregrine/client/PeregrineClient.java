@@ -43,6 +43,7 @@ public final class PeregrineClient implements ClientModInitializer {
         auraKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.aura", InputConstants.KEY_R, CATEGORY));
         entityEspKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.entityesp", InputConstants.KEY_J, CATEGORY));
         de.peregrine.client.feature.Access.init();
+        de.peregrine.client.feature.CodeLock.init();
         net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
             if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
         });
@@ -51,6 +52,7 @@ public final class PeregrineClient implements ClientModInitializer {
             Modules.EMERGENCY.onFrame();
             if (HudEditor.active) return;
             Minecraft mc = Minecraft.getInstance();
+            if (!de.peregrine.client.feature.CodeLock.unlocked()) return; // locked: no HUD, no overlays
             HudModule.layout(g.guiWidth(), g.guiHeight(), Modules.huds());
             Modules.BLOCK_ESP.render(g, mc);
             Modules.ENTITY_ESP.render(g, mc, dt.getGameTimeDeltaPartialTick(true));
@@ -113,6 +115,17 @@ public final class PeregrineClient implements ClientModInitializer {
     }
 
     private static void onTick(Minecraft mc) {
+        de.peregrine.client.feature.CodeLock.tick(mc);
+        if (!de.peregrine.client.feature.CodeLock.unlocked()) { // private client: nothing works until the code is entered
+            boolean ask = false;
+            while (menuKey.consumeClick()) ask = true;
+            while (assistantKey.consumeClick()) ask = true;
+            for (KeyMapping k : new KeyMapping[]{zoomKey, fullbrightKey, sprintKey, emoteKey, waypointKey, espKey, auraKey, entityEspKey})
+                while (k.consumeClick()) ask = true;
+            if (ask && mc.player != null && !(Ui.current() instanceof de.peregrine.client.gui.CodeScreen))
+                Ui.open(new de.peregrine.client.gui.CodeScreen(new ClickGui()));
+            return;
+        }
         boolean openAi = false;
         while (assistantKey.consumeClick()) openAi = true;
         // also read the key directly, so it works even if another mod or a vanilla action uses the same key

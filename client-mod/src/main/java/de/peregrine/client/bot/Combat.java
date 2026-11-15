@@ -137,7 +137,8 @@ public final class Combat {
                     if (++lost > 20 * 15) {
                         Bot.fail("I can't find " + (wanted == null ? "anyone to fight" : "\"" + wanted + "\"") + " nearby.");
                     }
-                    Bot.release(mc);
+                    if (!Guard.idleEat(mc)) Bot.release(mc); // nothing to hit: use the moment to eat
+                    mode = "looking for them" + (p.isUsingItem() ? " · eating" : "");
                     return false;
                 }
                 lost = 0;
@@ -241,7 +242,7 @@ public final class Combat {
             // ---- pick what hurts most right now: crystals, a mace jump, or the sword
             double cp = has(mc, "end_crystal") && d < 7.5 ? crystalPotential(mc, p) : 0;
             double mp = maceStage == 0 && has(mc, "mace") && has(mc, "wind_charge") ? 14 : 0; // a smash from a wind-charge jump, rough
-            if (maceStage == 0 && cp >= 6 && cp >= mp * 0.8) { // crystal fight: sword hits them up, crystals follow
+            if (maceStage == 0 && cp >= 4) { // crystals in the bag and a spot that hurts: crystal fight (sword hits them up, crystals follow)
                 if (crystal(mc, p)) {
                     if (!mode.startsWith("crystal")) mode = "crystal";
                     return false;
@@ -1121,7 +1122,8 @@ public final class Combat {
             for (BlockPos b : BlockPos.betweenClosed(t.offset(-3, -2, -3), t.offset(3, 1, 3))) {
                 String bid = Bot.id(mc.level.getBlockState(b));
                 boolean base = bid.equals("obsidian") || bid.equals("bedrock");
-                boolean canSet = obi && !base && Math.max(Math.abs(b.getX() - t.getX()), Math.abs(b.getZ() - t.getZ())) == 2 && b.getY() == t.getY()
+                int ring = Math.max(Math.abs(b.getX() - t.getX()), Math.abs(b.getZ() - t.getZ()));
+                boolean canSet = obi && !base && ring >= 2 && ring <= 3 && b.getY() >= t.getY() - 1 && b.getY() <= t.getY()
                         && mc.level.getBlockState(b).isAir() && Bot.solid(mc, b.below());
                 if (!base && !canSet) continue;
                 BlockPos a1 = canSet ? b.above() : b.above();
@@ -1181,9 +1183,9 @@ public final class Combat {
                 Bot.swing(p);
                 return true;
             }
-            if (crystalCd > 0) {
+            if (crystalCd > 0) { // the next crystal comes next tick – meanwhile the sword fight goes on (no idle tick)
                 crystalCd--;
-                return true;
+                return false;
             }
             // 2) place a crystal on the best obsidian/bedrock block next to them
             BlockPos t = target.blockPosition(), best = null;

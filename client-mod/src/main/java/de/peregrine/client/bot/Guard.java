@@ -60,8 +60,11 @@ final class Guard {
     private static final Set<String> PREY = Set.of("cow", "pig", "sheep", "chicken", "rabbit", "mooshroom");
 
     /** What the self-protection is busy with (for the status line), judged from its state. */
+    static String why = "";
+
     static String activity(Minecraft mc) {
         LocalPlayer p = mc.player;
+        if (!why.isEmpty()) return Character.toUpperCase(why.charAt(0)) + why.substring(1) + " (" + Math.round(p.getHealth() / 2) + " hearts)";
         int hearts = p == null ? 0 : Math.round(p.getHealth() / 2);
         if (p != null && p.isInLava()) return "Getting out of lava";
         if (p != null && p.isUnderWater() && p.getAirSupply() < 140) return "Swimming up for air";
@@ -93,12 +96,14 @@ final class Guard {
         boolean duel = Bot.current() instanceof Combat.Duel;
 
         // 1) lava: get out instead of giving up
+        why = "getting out of lava";
         if (p.isInLava()) {
             escapeLava(mc, p);
             Bot.note("Lava! Getting out.");
             return true;
         }
         // 2) inside a block (sand/gravel fell on us): dig the head free
+        why = "digging its head free";
         if (p.isInWall()) {
             BlockPos head = BlockPos.containing(p.getEyePosition());
             if (!Bot.passable(mc, head)) {
@@ -107,6 +112,7 @@ final class Guard {
             }
         }
         // 3) drowning: swim up
+        why = "swimming up for air";
         if (p.isUnderWater() && p.getAirSupply() < 140) {
             Bot.release(mc);
             p.setXRot(-60f);
@@ -117,6 +123,7 @@ final class Guard {
         }
         if (gapCd > 0) gapCd--;
         // 4) finish eating – also while being hit (no pauses, no giving up a bite)
+        why = "eating";
         if (eatTicks > 0) {
             eatTicks--;
             mc.options.keyUse.setDown(eatTicks > 0);
@@ -161,6 +168,7 @@ final class Guard {
         float hp = p.getHealth();
 
         // 5) creeper: run – unless it is so close that hitting it (knockback) is safer
+        why = "dealing with a creeper";
         if (creeper != null && cd < 2.6 && p.getAttackStrengthScale(0f) > 0.8f) {
             Bot.holdBest(mc, Guard::weaponScore);
             Bot.look(p, creeper.getEyePosition());
@@ -178,6 +186,7 @@ final class Guard {
             return true;
         }
         // 6) outnumbered and hurt: retreat
+        why = "falling back from monsters";
         if (!duel && !enemies.isEmpty() && (enemies.size() >= 4 || (hp < 8 && enemies.size() >= 2) || hp < 6)) {
             Vec3 centre = Vec3.ZERO;
             for (LivingEntity e : enemies) centre = centre.add(e.position());
@@ -191,9 +200,11 @@ final class Guard {
             return true;
         }
         // 7) low in a fight: a golden apple – but first get some room, eating next to a monster gets you killed
+        why = "golden apple";
         // (no extra pause: it eats while it keeps moving, but not in the second it is being hit)
         if (hp < 8 && enemy != null && canGapple(mc, p) && eatGapple(mc)) return true;
         // 8) fighting (in a duel only mobs that are really close – the player is the main target)
+        why = "fighting a monster";
         if (enemy != null && (!duel || ed < 3)) {
             fight(mc, p, enemy, ed);
             return true;
@@ -202,9 +213,11 @@ final class Guard {
         mc.options.keyRight.setDown(false);
         if (duel) return false; // eating, resting and hunting are handled by the duel itself
         // 9) eating
+        why = "eating";
         int food = p.getFoodData().getFoodLevel();
         if ((food <= 14 || (hp < 16 && food < 20)) && eatNow(mc, false)) return true;
         // 10) no food at all and getting hungry: hunt
+        why = "hunting for food";
         if (food <= 10 && !hasFood(mc)) {
             if (hunt(mc, p)) return true;
         } else {
@@ -212,10 +225,12 @@ final class Guard {
             huntTicks = 0;
         }
         // 11) no resting – it never stops to wait for health. Low and nothing to eat: get food on the way (hunting).
+        why = "hunting for food";
         if (hp < 10 && food < 18 && !hasFood(mc) && hunt(mc, p)) return true;
         resting = false;
         restTicks = 0;
         // 12) light up dark tunnels (doesn't take the tick)
+        why = "";
         torch(mc, p);
         return false;
     }
@@ -304,6 +319,19 @@ final class Guard {
         potionCd = 40;
         Bot.note("Drinking a potion.");
         return true;
+    }
+
+    /**
+     * A moment with nothing to do (target out of sight, waiting at a guarded spot …): eat in it. Golden apple when
+     * health is missing, otherwise normal food when hungry, otherwise a healing potion. True while eating.
+     */
+    static boolean idleEat(Minecraft mc) {
+        LocalPlayer p = mc.player;
+        if (p.isUsingItem() || eatTicks > 0) return true;
+        float hp = p.getHealth();
+        if (hp < 16 && canGapple(mc, p) && eatGapple(mc)) return true;
+        if (p.getFoodData().getFoodLevel() < 20 && eatNow(mc, false)) return true;
+        return hp < 14 && healPotion(mc);
     }
 
     /** A strength potion at the start of a fight, if there is one and no strength yet. */
