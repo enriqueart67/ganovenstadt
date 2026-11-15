@@ -259,6 +259,7 @@
   - **Nie Ausruhen:** Er isst auch, wenn er getroffen wird (kein Abbruch, keine Sperre). Der Heil-Flug wartet nicht mehr auf Regeneration: landen, essen, sofort zurück.
   - Nicht im Spiel getestet.
 - **Beste Technik je Moment:** `crystalPotential` schätzt den Schaden des besten sicheren Kristalls: vorhandene Kristalle, Obsidian- oder Grundgestein-Basen, oder eine Basis 2 Blöcke neben dem Gegner, wenn Obsidian da ist. Mace-Sprung zählt grob 14. Bei Crystal ≥ 6 und ≥ 0,8 × Mace spielt er Crystal-PvP (Schwert schlägt hoch, kein Mace-Sprung), sonst Mace, dann Crystal, dann Schwert. Nicht im Spiel getestet.
+- **Schild sofort brechen:** Hebt der Gegner das Schild und ist er in 3,6 Blöcken Reichweite, wechselt der Bot im selben Tick auf die Axt, schlägt, wechselt zurück (ohne auf volle Ladung zu warten; 5 Ticks Pause bis zum nächsten Versuch). Nicht im Spiel getestet.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

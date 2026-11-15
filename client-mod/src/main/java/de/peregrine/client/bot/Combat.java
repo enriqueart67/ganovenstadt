@@ -83,7 +83,7 @@ public final class Combat {
         private float catchYaw;
         private int flyStage, flyTicks, rocketCd, flyCd;
         private boolean strafeLeft, hadTarget;
-        private int lastHurt = -1000, obiPlaced, obiWindow, backOff;
+        private int lastHurt = -1000, obiPlaced, obiWindow, backOff, axeCd;
         private final Random rnd = new Random();
 
         public LivingEntity target() {
@@ -186,6 +186,24 @@ public final class Combat {
 
             // ---- they come down on us with a mace: shield up
             if (shieldUp(mc, p)) return false;
+
+            // ---- they raise a shield: axe in the same tick, shield gone (no need to wait for a full charge)
+            if (axeCd > 0) axeCd--;
+            if (target.isBlocking() && axeCd == 0 && p.getEyePosition().distanceTo(target.getBoundingBox().getCenter()) <= 3.6) {
+                int axe = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0);
+                if (axe >= 0) {
+                    var inv = p.getInventory();
+                    int hand = inv.getSelectedSlot();
+                    Bot.look(p, target.getEyePosition().subtract(0, 0.3, 0));
+                    inv.setSelectedSlot(axe);
+                    mc.gameMode.attack(p, target);
+                    Bot.swing(p);
+                    inv.setSelectedSlot(hand);
+                    axeCd = 5;
+                    mode = "axe · shield down";
+                    return false;
+                }
+            }
 
             // ---- special moves (pearls, wind charges, lunge)
             if (techniques(mc, p, d)) return false;
