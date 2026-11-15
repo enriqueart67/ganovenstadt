@@ -17,7 +17,7 @@ import java.util.List;
 public final class AssistantScreen extends Screen {
     private final Theme t = Theme.load();
     private String input = "";
-    private static final String[] SUGGESTIONS = {"mine 10 diamonds", "farm 32 iron", "chop 64 wood", "go to Home", "stop"};
+    private static final String[] SUGGESTIONS = {"get 5 diamonds", "iron armor", "16 torches", "go to Home", "my commands", "help"};
     private final List<int[]> chips = new ArrayList<>(); // x, y, w, index
     private int stopX, stopY, stopW;
 
@@ -83,7 +83,7 @@ public final class AssistantScreen extends Screen {
         List<Object[]> rows = new ArrayList<>(); // {text, you?}
         List<String[]> chat = new ArrayList<>(Bot.CHAT);
         if (chat.isEmpty()) {
-            for (String l : wrap("Tell me what to do and I'll play for you – for example \"mine 20 diamonds\" or \"hol 64 holz\". I walk, dig and collect with your character, keep away from lava and stop when your health gets low. Press Esc to close this window; I keep working.", 0.85f, cw - 12))
+            for (String l : wrap("Tell me what you want and I'll play for you. \"get 5 diamonds\" – I chop wood, build a crafting table, make wooden, stone and iron pickaxes, smelt the iron and dig down to the diamonds. German works too: \"hol 64 holz und dann 20 fackeln\". Save your own commands with \"remember name: …\". Esc closes this window; I keep working.", 0.85f, cw - 12))
                 rows.add(new Object[]{l, false});
         }
         for (String[] m : chat) {

@@ -36,6 +36,10 @@ public final class Tasks {
             new Ore("emeralds", Set.of("emerald_ore", "deepslate_emerald_ore"), new String[]{"emerald"}, 100, "iron"),
     };
 
+    /** Any stone that drops cobblestone; dug near where you are (y = "a few blocks below you"). */
+    public static final Ore STONE = new Ore("cobblestone", Set.of("stone", "cobblestone", "deepslate", "cobbled_deepslate", "blackstone"),
+            new String[]{"cobblestone", "cobbled_deepslate", "blackstone"}, Integer.MIN_VALUE, "wooden");
+
     /** Strip-mines at the ore's best height and digs out every matching ore it can see nearby. */
     public static final class Mine implements Bot.Task {
         private final Ore ore;
@@ -44,10 +48,14 @@ public final class Tasks {
         private Navigator nav;
         private BlockPos target; // ore block being mined
         private BlockPos collect;  // where its drop lies
+        private int collectTries;
         private final Set<BlockPos> skip = new HashSet<>();
         private Direction dir;
         private String phase = "starting";
-        private int steps;
+        private int steps, y;
+        private BlockState sample;
+        /** Part of a bigger plan: no "done" message, and a missing tool ends the step instead of the whole job. */
+        public boolean quiet;
 
         public Mine(Ore ore, int wanted) {
             this.ore = ore;
@@ -71,19 +79,21 @@ public final class Tasks {
             if (start < 0) {
                 start = have(mc);
                 dir = p.getDirection();
-                BlockState sample = BuiltInRegistries.BLOCK.getValue(Identifier.withDefaultNamespace(ore.blocks().iterator().next())).defaultBlockState();
-                if (!Bot.hasToolFor(mc, sample)) {
-                    Bot.stop("For " + ore.name() + " I need at least " + (ore.pickaxe().startsWith("i") ? "an " : "a ") + ore.pickaxe() + " pickaxe in your hotbar.");
-                    return false;
-                }
+                sample = BuiltInRegistries.BLOCK.getValue(Identifier.withDefaultNamespace(ore.blocks().iterator().next())).defaultBlockState();
+                y = ore.y() != Integer.MIN_VALUE ? ore.y() : Math.max(mc.level.getMinY() + 8, p.getBlockY() - 5);
             }
             if (have(mc) - start >= wanted) {
                 phase = "done";
-                Bot.say("Done! " + wanted + " " + ore.name() + " are in your inventory.");
+                if (!quiet) Bot.say("Done! " + wanted + " " + ore.name() + " are in your inventory.");
                 return true;
             }
-            if (Bot.inventoryFull(mc)) {
-                Bot.stop("Your inventory is full – I stopped. Empty it and ask me again.");
+            if (!Bot.hasToolFor(mc, sample)) { // never had one, or it just broke
+                if (quiet) return true; // the plan will craft a new one
+                Bot.stop("For " + ore.name() + " I need at least " + (ore.pickaxe().startsWith("i") ? "an " : "a ") + ore.pickaxe() + " pickaxe.");
+                return false;
+            }
+            if (Bot.inventoryFull(mc) && !Bot.makeRoom(mc)) {
+                Bot.stop("Your inventory is full of useful things – I stopped. Empty it and ask me again.");
                 return false;
             }
             if (p.getFoodData().getFoodLevel() <= 6) {
@@ -94,10 +104,22 @@ public final class Tasks {
             // 1) collecting a drop
             if (collect != null) {
                 phase = "picking up";
-                if (nav == null) nav = new Navigator(collect, 0, dir);
+                if (nav == null) { // walk to where the item really lies (it may have fallen or bounced)
+                    BlockPos drop = Bot.dropNear(mc, collect);
+                    if (drop == null || ++collectTries > 3) {
+                        collect = null;
+                        collectTries = 0;
+                        return false;
+                    }
+                    nav = new Navigator(drop, 0, dir);
+                    nav.timeout = 20 * 8;
+                }
                 if (nav.tick(mc)) {
                     nav = null;
-                    collect = null;
+                    if (Bot.dropNear(mc, collect) == null) {
+                        collect = null;
+                        collectTries = 0;
+                    }
                 }
                 return false;
             }
@@ -138,18 +160,18 @@ public final class Tasks {
             }
             // 4) get down (or up) to the right height, then tunnel forwards
             BlockPos feet = p.blockPosition();
-            if (Math.abs(feet.getY() - ore.y()) > 2) {
-                phase = "digging " + (feet.getY() > ore.y() ? "down" : "up") + " to Y " + ore.y();
+            if (Math.abs(feet.getY() - y) > 2) {
+                phase = "digging " + (feet.getY() > y ? "down" : "up") + " to Y " + y;
                 if (nav == null) {
-                    int dist = Math.abs(feet.getY() - ore.y());
-                    nav = new Navigator(feet.relative(dir, dist).atY(ore.y()), 0, dir);
+                    int dist = Math.abs(feet.getY() - y);
+                    nav = new Navigator(feet.relative(dir, dist).atY(y), 0, dir);
                 }
             } else {
                 phase = "strip-mining";
                 if (nav == null) {
                     steps++;
                     if (steps % 40 == 0) dir = dir.getClockWise(); // turn now and then to cover new ground
-                    nav = new Navigator(feet.relative(dir, 3).atY(ore.y()), 0, dir);
+                    nav = new Navigator(feet.relative(dir, 3).atY(y), 0, dir);
                 }
             }
             if (nav.tick(mc)) {
@@ -184,8 +206,10 @@ public final class Tasks {
         private int start = -1;
         private Navigator nav;
         private BlockPos tree, collect;
+        private int collectTries;
         private final Set<BlockPos> skip = new HashSet<>();
         private String phase = "looking for trees";
+        public boolean quiet;
 
         public Chop(int wanted) {
             this.wanted = wanted;
@@ -220,19 +244,31 @@ public final class Tasks {
             }
             if (have(mc) - start >= wanted) {
                 phase = "done";
-                Bot.say("Done! " + wanted + " logs collected.");
+                if (!quiet) Bot.say("Done! " + wanted + " logs collected.");
                 return true;
             }
-            if (Bot.inventoryFull(mc)) {
+            if (Bot.inventoryFull(mc) && !Bot.makeRoom(mc)) {
                 Bot.stop("Your inventory is full – I stopped.");
                 return false;
             }
             if (collect != null) {
                 phase = "picking up";
-                if (nav == null) nav = new Navigator(collect, 0, p.getDirection());
+                if (nav == null) { // walk to where the item really lies (it may have fallen or bounced)
+                    BlockPos drop = Bot.dropNear(mc, collect);
+                    if (drop == null || ++collectTries > 3) {
+                        collect = null;
+                        collectTries = 0;
+                        return false;
+                    }
+                    nav = new Navigator(drop, 0, p.getDirection());
+                    nav.timeout = 20 * 8;
+                }
                 if (nav.tick(mc)) {
                     nav = null;
-                    collect = null;
+                    if (Bot.dropNear(mc, collect) == null) {
+                        collect = null;
+                        collectTries = 0;
+                    }
                 }
                 return false;
             }
@@ -321,76 +357,8 @@ public final class Tasks {
         }
     }
 
-    // ------------------------------------------------------------------ understanding what you say
-    private static int number(String s, int def) {
-        var m = java.util.regex.Pattern.compile("(\\d+)").matcher(s);
-        return m.find() ? Math.max(1, Math.min(2304, Integer.parseInt(m.group(1)))) : def;
-    }
-
-    /** Turns a sentence (English or German) into a task. Returns the reply to show. */
+    /** Turns a sentence (English or German) into jobs. Returns the reply to show. */
     public static String command(String text) {
-        Minecraft mc = Minecraft.getInstance();
-        String t = text.toLowerCase(Locale.ROOT).trim();
-        if (t.isEmpty()) return null;
-        if (t.matches(".*\\b(stop|stopp|halt|cancel|abbrechen|hör auf|hoer auf)\\b.*")) {
-            if (!Bot.busy()) return "I'm not doing anything right now.";
-            Bot.stop(null);
-            return "Stopped.";
-        }
-        if (mc.player == null || mc.level == null) return "Join a world first.";
-        if (!mc.hasSingleplayerServer()) return "I only work in singleplayer – servers ban automated play, and I don't want your account banned.";
-        if (t.matches(".*\\b(help|hilfe|was kannst du|what can you do)\\b.*")) {
-            return "Try: \"mine 20 diamonds\", \"farm 64 iron\", \"chop 32 wood\", \"go to Home base\", \"go to 100 -250\", \"stop\". German works too: \"farm 100 dias\", \"hol 64 holz\".";
-        }
-        // mining
-        String[][] oreWords = {
-                {"diamonds", "dia", "diamond", "diamant"}, {"iron", "eisen", "iron ore"}, {"coal", "kohle"}, {"gold"},
-                {"redstone"}, {"lapis"}, {"copper", "kupfer"}, {"emeralds", "emerald", "smaragd"}};
-        for (int i = 0; i < oreWords.length; i++) {
-            for (String w : oreWords[i]) {
-                if (t.contains(w)) {
-                    Ore ore = ORES[i];
-                    int n = number(t, 10);
-                    BlockState sample = BuiltInRegistries.BLOCK.getValue(Identifier.withDefaultNamespace(ore.blocks().iterator().next())).defaultBlockState();
-                    if (!Bot.hasToolFor(mc, sample))
-                        return "For " + ore.name() + " I need at least " + (ore.pickaxe().startsWith("i") ? "an " : "a ") + ore.pickaxe() + " pickaxe in your hotbar. Put one there and ask me again.";
-                    Bot.start(new Mine(ore, n));
-                    return "Mining " + n + " " + ore.name() + ". I'll dig down to Y " + ore.y() + " and strip-mine, keep away from lava, stop when you're low on health and only dig in staircases. Say \"stop\" to stop.";
-                }
-            }
-        }
-        if (t.matches(".*\\b(wood|holz|logs?|stämme|staemme|baum|bäume|tree|trees|chop|fäll|fäll?en)\\b.*")) {
-            int n = number(t, 32);
-            Bot.start(new Chop(n));
-            return "Chopping " + n + " logs.";
-        }
-        // go to
-        var m = java.util.regex.Pattern.compile("(?:go to|goto|geh(?:e)? zu|lauf(?:e)? zu|bring mich zu|walk to)\\s+(.+)").matcher(t);
-        if (m.find()) {
-            String where = m.group(1).trim();
-            var xz = java.util.regex.Pattern.compile("(-?\\d+)\\s*[ ,]\\s*(-?\\d+)(?:\\s*[ ,]\\s*(-?\\d+))?").matcher(where);
-            if (xz.matches()) {
-                int x = Integer.parseInt(xz.group(1)), y, z;
-                if (xz.group(3) != null) {
-                    y = Integer.parseInt(xz.group(2));
-                    z = Integer.parseInt(xz.group(3));
-                } else {
-                    z = Integer.parseInt(xz.group(2));
-                    y = mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-                    if (y <= mc.level.getMinY()) y = mc.player.getBlockY();
-                }
-                Bot.start(new GoTo(new BlockPos(x, y, z), x + " " + y + " " + z));
-                return "Walking to " + x + " " + y + " " + z + ".";
-            }
-            String dim = Waypoints.dimension(mc);
-            for (Waypoints.Waypoint w : Waypoints.all(mc)) {
-                if (w.dimension.equals(dim) && w.name.toLowerCase(Locale.ROOT).contains(where)) {
-                    Bot.start(new GoTo(new BlockPos(w.x, w.y, w.z), w.name));
-                    return "Walking to " + w.name + " (" + Math.round(w.distance(mc.player.position())) + " m).";
-                }
-            }
-            return "I don't know a waypoint called \"" + where + "\". Add one with M, or give me coordinates like \"go to 100 -250\".";
-        }
-        return "Sorry, I didn't get that. Type \"help\" to see what I can do.";
+        return Commands.handle(text);
     }
 }

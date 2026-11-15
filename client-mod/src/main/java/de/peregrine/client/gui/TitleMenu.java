@@ -54,8 +54,15 @@ public final class TitleMenu extends Screen {
         List<Item> l = new ArrayList<>();
         if (mc.isDemo()) {
             l.add(new Item("Play demo world", "", true, () -> {
-                if (mc.getLevelSource().levelExists("Demo_World")) mc.createWorldOpenFlows().openWorld("Demo_World", () -> Ui.open(this));
-                else vanilla(); // first demo start creates the world – vanilla handles that
+                if (java.nio.file.Files.exists(mc.gameDirectory.toPath().resolve("saves/Demo_World/level.dat"))) mc.createWorldOpenFlows().openWorld("Demo_World", () -> Ui.open(this));
+                else { // first demo start: create the world the way vanilla does
+                    try {
+                        mc.createWorldOpenFlows().createFreshLevel(net.minecraft.server.MinecraftServer.DEMO_SETTINGS.levelName(), net.minecraft.server.MinecraftServer.DEMO_SETTINGS,
+                                net.minecraft.world.level.levelgen.WorldOptions.DEMO_OPTIONS, net.minecraft.world.level.levelgen.presets.WorldPresets::createNormalWorldDimensions, this);
+                    } catch (Throwable e) {
+                        vanilla();
+                    }
+                }
             }));
             l.add(new Item("Multiplayer", "NOT IN THE DEMO", false, () -> {
             }));

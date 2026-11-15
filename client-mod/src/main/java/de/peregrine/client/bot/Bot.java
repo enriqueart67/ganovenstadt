@@ -49,8 +49,30 @@ public final class Bot {
         if (mc.player != null) mc.player.sendOverlayMessage(Component.literal("§6[Peregrine AI]§r " + text));
     }
 
+    /** Short note in the action bar only (not in the conversation). */
+    public static void note(String text) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) mc.player.sendOverlayMessage(Component.literal("§6[Peregrine AI]§r " + text));
+    }
+
+    /** Nearest dropped item within 4 blocks of a spot (where to walk to pick it up), or null. */
+    public static BlockPos dropNear(Minecraft mc, BlockPos around) {
+        var items = mc.level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(around).inflate(4));
+        BlockPos best = null;
+        double bd = Double.MAX_VALUE;
+        for (var e : items) {
+            double d = e.position().distanceToSqr(Vec3.atCenterOf(around));
+            if (d < bd) {
+                bd = d;
+                best = e.blockPosition();
+            }
+        }
+        return best;
+    }
+
     public static void start(Task t) {
         stop(null);
+        Guard.reset();
         task = t;
     }
 
@@ -72,8 +94,8 @@ public final class Bot {
             return;
         }
         LocalPlayer p = mc.player;
-        if (p.getHealth() < 8f) {
-            stop("Stopped: your health is low. Heal up and ask me again.");
+        if (p.isDeadOrDying()) {
+            stop("You died – sorry. I stopped. Respawn and ask me again.");
             return;
         }
         if (p.isInLava()) {
@@ -81,6 +103,7 @@ public final class Bot {
             return;
         }
         try {
+            if (Guard.tick(mc)) return; // fighting, eating or resting first
             if (task != null && task.tick(mc)) {
                 Task done = task;
                 task = null;
@@ -99,6 +122,7 @@ public final class Bot {
         mc.options.keyJump.setDown(false);
         mc.options.keySprint.setDown(false);
         mc.options.keyShift.setDown(false);
+        mc.options.keyUse.setDown(false);
         if (mc.gameMode != null) mc.gameMode.stopDestroyBlock();
     }
 
@@ -181,6 +205,7 @@ public final class Bot {
             selectTool(mc, s);
         }
         miningTicks++;
+        if (miningTicks % 20 == 0) selectTool(mc, s); // e.g. after a torch or a fight changed the hand
         Vec3 c = Vec3.atCenterOf(pos);
         look(p, c);
         Vec3 eye = p.getEyePosition();
@@ -196,7 +221,7 @@ public final class Bot {
     private static boolean swingLooked;
 
     /** Arm swing; the method's signature differs between versions, so look it up once. */
-    private static void swing(LocalPlayer p) {
+    static void swing(LocalPlayer p) {
         try {
             if (!swingLooked) {
                 swingLooked = true;
@@ -208,28 +233,120 @@ public final class Bot {
         }
     }
 
-    /** Picks the fastest hotbar item for this block (keeps the hand if nothing helps). */
+    /** Picks the fastest item for this block; tools from the main inventory are swapped into the hand. */
     public static void selectTool(Minecraft mc, BlockState s) {
         var inv = mc.player.getInventory();
-        int best = inv.getSelectedSlot();
-        float bestSpeed = inv.getItem(best).getDestroySpeed(s);
-        for (int i = 0; i < 9; i++) {
+        int sel = inv.getSelectedSlot(), best = sel;
+        float bestSpeed = inv.getItem(sel).getDestroySpeed(s);
+        boolean bestDrops = inv.getItem(sel).isCorrectToolForDrops(s);
+        for (int i = 0; i < 36; i++) {
             ItemStack it = inv.getItem(i);
+            if (it.isEmpty()) continue;
             float sp = it.getDestroySpeed(s);
             boolean drops = it.isCorrectToolForDrops(s);
-            if (sp > bestSpeed + 0.01f || (drops && !inv.getItem(best).isCorrectToolForDrops(s) && sp >= bestSpeed)) {
+            // getting the drop matters more than speed; among equals prefer the hotbar
+            if ((drops && !bestDrops) || (drops == bestDrops && sp > bestSpeed + 0.01f)) {
                 best = i;
                 bestSpeed = sp;
+                bestDrops = drops;
             }
         }
-        if (best != inv.getSelectedSlot()) inv.setSelectedSlot(best);
+        if (best == sel) return;
+        if (best < 9) inv.setSelectedSlot(best);
+        else {
+            final int from = best;
+            onServer(mc, sp -> { // move it into the hand (singleplayer: change the server's copy, it syncs back)
+                var si = sp.getInventory();
+                int hand = si.getSelectedSlot();
+                ItemStack a = si.getItem(from).copy(), b = si.getItem(hand).copy();
+                si.setItem(hand, a);
+                si.setItem(from, b);
+            });
+        }
     }
 
-    /** Is there a hotbar item that gets drops from this block? */
+    /** Puts the best-scoring item (score > 0) in your hand; false if there is none. */
+    public static boolean holdBest(Minecraft mc, java.util.function.ToDoubleFunction<ItemStack> score) {
+        var inv = mc.player.getInventory();
+        int sel = inv.getSelectedSlot(), best = -1;
+        double bs = 0;
+        for (int i = 0; i < 36; i++) {
+            ItemStack it = inv.getItem(i);
+            if (it.isEmpty()) continue;
+            double v = score.applyAsDouble(it) + (i == sel ? 0.001 : 0);
+            if (v > bs) {
+                bs = v;
+                best = i;
+            }
+        }
+        if (best < 0) return false;
+        if (best == sel) return true;
+        if (best < 9) inv.setSelectedSlot(best);
+        else {
+            final int from = best;
+            onServer(mc, sp -> {
+                var si = sp.getInventory();
+                int hand = si.getSelectedSlot();
+                ItemStack a = si.getItem(from).copy(), b = si.getItem(hand).copy();
+                si.setItem(hand, a);
+                si.setItem(from, b);
+            });
+        }
+        return true;
+    }
+
+    /** Is there an item in the inventory that gets drops from this block? */
     public static boolean hasToolFor(Minecraft mc, BlockState s) {
         var inv = mc.player.getInventory();
-        for (int i = 0; i < 9; i++) if (inv.getItem(i).isCorrectToolForDrops(s)) return true;
+        for (int i = 0; i < 36; i++) if (inv.getItem(i).isCorrectToolForDrops(s)) return true;
         return !s.requiresCorrectToolForDrops();
+    }
+
+    // ------------------------------------------------------------------ singleplayer server access
+    public static net.minecraft.server.level.ServerPlayer serverPlayer(Minecraft mc) {
+        var server = mc.getSingleplayerServer();
+        return server == null || mc.player == null ? null : server.getPlayerList().getPlayer(mc.player.getUUID());
+    }
+
+    /** Runs code on the integrated server's thread with your server-side player. */
+    public static void onServer(Minecraft mc, java.util.function.Consumer<net.minecraft.server.level.ServerPlayer> job) {
+        var server = mc.getSingleplayerServer();
+        if (server == null || mc.player == null) return;
+        java.util.UUID id = mc.player.getUUID();
+        server.execute(() -> {
+            var sp = server.getPlayerList().getPlayer(id);
+            if (sp != null) job.accept(sp);
+        });
+    }
+
+    private static final java.util.Set<String> JUNK = java.util.Set.of("dirt", "gravel", "andesite", "diorite", "granite", "tuff",
+            "netherrack", "calcite", "dripstone_block", "pointed_dripstone", "flint", "rotten_flesh", "poisonous_potato", "sand", "red_sand", "coarse_dirt", "rooted_dirt");
+
+    /** Full inventory: throws away junk (dirt, gravel …) and stone beyond two stacks. Returns false if nothing could go. */
+    private static long lastRoom;
+
+    public static boolean makeRoom(Minecraft mc) {
+        if (System.currentTimeMillis() - lastRoom < 2000) return true; // the last clean-up is still syncing
+        var inv = mc.player.getInventory();
+        List<Integer> slots = new ArrayList<>();
+        int stone = 0;
+        for (int i = 0; i < 36; i++) {
+            ItemStack it = inv.getItem(i);
+            if (it.isEmpty() || i == inv.getSelectedSlot()) continue;
+            String id = BuiltInRegistries.ITEM.getKey(it.getItem()).getPath();
+            if (JUNK.contains(id)) slots.add(i);
+            else if (id.equals("cobblestone") || id.equals("cobbled_deepslate")) {
+                stone += it.getCount();
+                if (stone > 128) slots.add(i);
+            }
+        }
+        if (slots.isEmpty()) return false;
+        onServer(mc, sp -> {
+            for (int i : slots) sp.getInventory().setItem(i, ItemStack.EMPTY);
+        });
+        lastRoom = System.currentTimeMillis();
+        say("My bags were full, so I threw away dirt, gravel and spare stone.");
+        return true;
     }
 
     public static int count(Minecraft mc, String... itemIds) {
