@@ -245,6 +245,11 @@
   - **Notfall-Logout** ist standardmäßig aus. Gespeicherte Einstellungen werden einmalig umgestellt (`Store` Format 4).
   - **Combat Aura:** neue Ziele „Players“ und „Players + hostile“ (nie Zuschauer oder Kreativ-Spieler). Sie läuft jetzt unter derselben Regel wie der PvP-Bot (`Access.AURA`): Einzelspieler, eigene LAN-Welt, Operator oder Server-Freigabe `aura`; vorher nur Einzelspieler. Keine Tarnung vor Anti-Cheats.
   - Nichts davon im Spiel getestet.
+- **Mace-Stil nach dem Video des Nutzers** (Ranked-Mace-PvP in einer Arena: zwei Maces, Netherite-Schwert, goldene Äpfel, Brustplatte/Elytra-Tausch, Windladungen, Perlen, Totem in der zweiten Hand; ständige Windladungs-Sprünge mit Mace-Schlag von oben, Stun Slam gegen Schilde, Windladungen gegen Gegner in der Luft):
+  - Mace-Sprung bis 7 Blöcke Abstand, schon 0,75 s nach einem Treffer, ab 3 Herzen.
+  - Zweite Windladung am höchsten Punkt (|vy| < 0,12, Gegner seitlich < 6 Blöcke, höchstens 14 Blöcke über ihm) für mehr Fallhöhe.
+  - Ohne Schild: Windladung in die Flugbahn eines Gegners, der mit Mace von oben kommt.
+  - Nicht im Spiel getestet.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

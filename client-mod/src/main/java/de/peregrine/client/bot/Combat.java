@@ -261,6 +261,7 @@ public final class Combat {
         }
 
         private int shieldTicks, shieldSlot = -1;
+        private boolean boosted;
 
         /**
          * A player in the air above us with a mace in hand is about to smash: raise a shield (off hand, or swap one in
@@ -275,6 +276,17 @@ public final class Combat {
             }
             boolean inOff = id(p.getOffhandItem()).equals("shield");
             int slot = inOff ? -1 : hotbar(mc, s -> id(s).equals("shield") ? 1 : 0);
+            if (threat && !inOff && slot < 0 && has(mc, "wind_charge") && pearlCd == 0) {
+                // no shield: blow them off course with a wind charge into their path
+                Vec3 at = target.position().add(target.getDeltaMovement().scale(3));
+                Vec3 eye = p.getEyePosition();
+                float pitch = (float) -Math.toDegrees(Math.atan2(at.y - eye.y, Math.hypot(at.x - eye.x, at.z - eye.z)));
+                if (quickUse(mc, p, "wind_charge", yawTo(eye, at), pitch)) {
+                    pearlCd = 10; // short pause before the next throw
+                    mode = "wind charge vs. their dive";
+                    return true;
+                }
+            }
             if (threat && (inOff || slot >= 0)) shieldTicks = 8;
             var inv = p.getInventory();
             if (shieldTicks > 0) {
@@ -689,7 +701,7 @@ public final class Combat {
             boolean charges = has(mc, "wind_charge");
             // stage 1: on the ground, close enough – wind charge at our own feet to launch up
             boolean shieldWall = target.isBlocking() && hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0) < 0; // blocked without an axe
-            if (maceStage == 0 && charges && p.onGround() && d < 5.5 && d > 2.0 && calm(p, 8) && !shieldWall) {
+            if (maceStage == 0 && charges && p.onGround() && d < 7 && d > 2.0 && ticks - lastHurt > 15 && p.getHealth() + p.getAbsorptionAmount() >= 6 && !shieldWall) {
                 if (!Bot.holdBest(mc, s -> id(s).equals("wind_charge") ? 1 : 0)) return false;
                 if (!holding(p, "wind_charge")) return true; // still swapping
                 if (p.getCooldowns().isOnCooldown(p.getMainHandItem())) return false;
@@ -698,7 +710,17 @@ public final class Combat {
                 mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
                 Bot.swing(p);
                 maceStage = 1;
+                boosted = false;
                 return true;
+            }
+            // stage 1b: at the top of the jump a second wind charge under the feet – higher means a much harder smash
+            if (maceStage == 1 && !boosted && charges && !p.onGround() && Math.abs(p.getDeltaMovement().y) < 0.12 && p.getY() - target.getY() < 14
+                    && Math.hypot(target.getX() - p.getX(), target.getZ() - p.getZ()) < 6) {
+                if (quickUse(mc, p, "wind_charge", p.getYRot(), 90f)) {
+                    boosted = true;
+                    mode = "mace · second launch";
+                    return true;
+                }
             }
             // stage 2: in the air – drift over the target, mace out, smash on the way down
             if (maceStage == 1 || p.fallDistance > 1.5) {
