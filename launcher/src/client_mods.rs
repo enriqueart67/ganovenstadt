@@ -79,7 +79,7 @@ pub const MODULES: [(&str, &str, &str); 47] = [
     ("Misc", "HUD style", "Colors and background of all HUD elements"),
     ("Render", "Block ESP", "Highlights chosen blocks through walls (X)"),
     ("Render", "Entity ESP", "Monsters, animals, players and items through walls (J)"),
-    ("Combat", "Combat Aura", "Fights hostile mobs for you – singleplayer only (R)"),
+    ("Combat", "Combat Aura", "Attacks mobs or players around you – own worlds and servers only (R)"),
     ("Misc", "Emergency logout", "Screenshot + log out at half a heart while the bot plays"),
 ];
 
@@ -124,7 +124,7 @@ pub const KEYS: [(&str, &str, &str); 11] = [
     ("key.peregrine.waypoints", "Waypoints", "key.keyboard.m"),
     ("key.peregrine.assistant", "AI assistant", "key.keyboard.k"),
     ("key.peregrine.esp", "Block ESP on/off", "key.keyboard.x"),
-    ("key.peregrine.aura", "Combat Aura on/off (singleplayer)", "key.keyboard.r"),
+    ("key.peregrine.aura", "Combat Aura on/off", "key.keyboard.r"),
     ("key.peregrine.entityesp", "Entity ESP on/off", "key.keyboard.j"),
 ];
 

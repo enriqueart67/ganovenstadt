@@ -204,17 +204,8 @@ final class Guard {
             return true;
         }
         // 7) low in a fight: a golden apple – but first get some room, eating next to a monster gets you killed
-        if (hp < 8 && enemy != null && canGapple(mc, p)) {
-            if (ed < 5 && backOffTicks < 40) {
-                backOffTicks++;
-                backOff(mc, p, enemy.position());
-                return true;
-            }
-            if (ed >= 3 && eatGapple(mc)) {
-                backOffTicks = 0;
-                return true;
-            }
-        } else if (hp >= 8) backOffTicks = 0;
+        // (no extra pause: it eats while it keeps moving, but not in the second it is being hit)
+        if (hp < 8 && enemy != null && p.hurtTime == 0 && canGapple(mc, p) && eatGapple(mc)) return true;
         // 8) fighting (in a duel only mobs that are really close – the player is the main target)
         if (enemy != null && (!duel || ed < 3)) {
             fight(mc, p, enemy, ed);
@@ -233,9 +224,14 @@ final class Guard {
             prey = null;
             huntTicks = 0;
         }
-        // 11) resting when badly hurt (health comes back by itself with a full food bar)
+        // 11) resting when badly hurt (health comes back by itself with a full food bar) – never with monsters
+        //     around: then it keeps going and fights when they come
         if (restCooldown > 0) restCooldown--;
-        if ((hp < 10 || (resting && hp < 18)) && restCooldown == 0 && hp >= 4 && ++restTicks > 20 * 45) {
+        boolean monstersNear = threats.stream().anyMatch(e -> e.distanceTo(p) < 16);
+        if (monstersNear) {
+            resting = false;
+            restTicks = 0;
+        } else if ((hp < 10 || (resting && hp < 18)) && restCooldown == 0 && hp >= 4 && ++restTicks > 20 * 45) {
             resting = false; // 45 s is enough – carry on carefully and rest again later
             restTicks = 0;
             restCooldown = 20 * 60;
@@ -309,10 +305,7 @@ final class Guard {
             return id.equals("enchanted_golden_apple") ? 200 : id.equals("golden_apple") ? 100 : 0;
         })) return false;
         if (!BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).getPath().contains("golden_apple")) return true; // still swapping
-        mc.options.keyUp.setDown(false);
-        mc.options.keyJump.setDown(false);
-        mc.options.keyLeft.setDown(false);
-        mc.options.keyRight.setDown(false);
+        mc.options.keyJump.setDown(false); // keeps walking/strafing while it eats – no standing still
         mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
         mc.options.keyUse.setDown(true);
         eatTicks = 40;

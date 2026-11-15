@@ -29,7 +29,7 @@ import java.util.Set;
  * <p>Nothing here hides the client from a server or its anti-cheat; it only reads what the server already sends.</p>
  */
 public final class Access {
-    public static final String BLOCK_ESP = "blockesp", ENTITY_ESP = "entityesp", ASSISTANT = "assistant";
+    public static final String BLOCK_ESP = "blockesp", ENTITY_ESP = "entityesp", ASSISTANT = "assistant", AURA = "aura";
 
     private static volatile Set<String> granted = Set.of();
     private static volatile boolean announced;

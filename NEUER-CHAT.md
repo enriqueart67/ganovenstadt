@@ -14,7 +14,7 @@
 - Antworten **auf Deutsch**, Texte im Launcher und in der Mod **auf Englisch**, nichts soll „nach KI aussehen“.
 - Er testet unter **Windows**; im Container gibt es nur Linux + Xvfb (Software-Grafik, 1–10 FPS).
 - Schnell sichtbare Ergebnisse (Screenshots schicken), ehrlich sagen, was nicht getestet ist.
-- Grenzen, die bisher gelten: Bot/PvP/ESP nur **Einzelspieler, eigene LAN-Welt, Server mit Operator-Recht oder Server, der es per Plugin-Nachricht `peregrine:features` erlaubt** (`feature/Access`); keine frei eintragbare Server-Liste; Combat Aura **nur Einzelspieler**; keine fremden Microsoft-Client-IDs, kein Offline-Bypass.
+- Grenzen, die bisher gelten: Bot/PvP/ESP nur **Einzelspieler, eigene LAN-Welt, Server mit Operator-Recht oder Server, der es per Plugin-Nachricht `peregrine:features` erlaubt** (`feature/Access`); keine frei eintragbare Server-Liste; Combat Aura unter derselben Regel (`Access.AURA`), auf Wunsch auch gegen Spieler; keine fremden Microsoft-Client-IDs, kein Offline-Bypass.
 
 ## Bauen
 - **Mod (alle drei Versionen + Kopie in den Launcher):**

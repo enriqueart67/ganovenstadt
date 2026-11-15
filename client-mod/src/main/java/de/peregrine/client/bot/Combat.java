@@ -162,13 +162,15 @@ public final class Combat {
             boolean hitNow = ticks - lastHurt < 20;
             boolean totems = Guard.hasTotem(p) || Bot.count(mc, "totem_of_undying") > 0;
             boolean needHeal = hp < 9 || (hp < 13 && d > 6);
-            if (!totems && hp < 7 && d < 7 && backOff < 60) { // no totem left: get out of reach
+            if (healTrip(mc, p, hp, totems, d)) return false;
+            if (!totems && hp < 6 && d < 6 && backOff < 40) { // no totem left and nearly dead: a short dash away (eats on the run)
                 backOff++;
                 mode = "no totem – getting away";
                 Guard.backOff(mc, p, target.position());
+                if (!hitNow && Guard.canGapple(mc, p)) Guard.eatGapple(mc);
                 return false;
             }
-            if (needHeal && !hitNow && Guard.canGapple(mc, p) && (d >= 3.5 || totems) && Guard.eatGapple(mc)) {
+            if (needHeal && !hitNow && Guard.canGapple(mc, p) && Guard.eatGapple(mc)) { // no pause: strafing goes on
                 mode = "golden apple";
                 return false;
             }
@@ -297,6 +299,85 @@ public final class Combat {
                 mode = "fighting";
             }
             return false;
+        }
+
+        // ------------------------------------------------------------------ fly away, heal, come back
+        private int tripStage, tripTicks;
+        private Vec3 tripFrom;
+
+        /**
+         * Only when it really has to: 2 hearts or less and no totem left. With elytra and rockets it flies far away
+         * (away from them, rockets, ~5 s), lands, heals (golden apple, food, then regeneration) up to 8 hearts or 40 s,
+         * and then the duel goes on – it walks or flies back on its own. Without elytra it sprints and pearls away.
+         */
+        private boolean healTrip(Minecraft mc, LocalPlayer p, float hp, boolean totems, double d) {
+            if (tripStage == 0) {
+                if (hp > 4 || totems) return false;
+                tripStage = 1;
+                tripTicks = 0;
+                tripFrom = target.position();
+                Bot.say("Two hearts and no totem – flying off to heal, back in a moment.");
+            }
+            tripTicks++;
+            boolean wings = has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
+            Vec3 away = p.position().subtract(tripFrom).multiply(1, 0, 1);
+            if (away.lengthSqr() < 1e-3) away = new Vec3(1, 0, 0);
+            float yaw = (float) Math.toDegrees(Math.atan2(-away.x, away.z));
+            switch (tripStage) {
+                case 1 -> { // get away
+                    mode = "flying off to heal";
+                    if (wings) {
+                        Guard.keepElytra = true;
+                        if (!wearingElytra(p)) {
+                            var inv = p.getInventory();
+                            for (int i = 0; i < 36; i++)
+                                if (id(inv.getItem(i)).equals("elytra")) {
+                                    Inv.equip(mc, i, net.minecraft.world.entity.EquipmentSlot.CHEST);
+                                    break;
+                                }
+                            return true;
+                        }
+                        if (p.onGround()) mc.options.keyJump.setDown(tripTicks % 4 < 2);
+                        else if (!p.isFallFlying()) mc.options.keyJump.setDown(tripTicks % 2 == 0);
+                        else {
+                            mc.options.keyJump.setDown(false);
+                            p.setYRot(yaw);
+                            p.setXRot(-25f);
+                            if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", yaw, -25f)) rocketCd = 25;
+                        }
+                        if (tripTicks > 20 * 5 || p.position().distanceTo(tripFrom) > 60) tripStage = 2;
+                    } else {
+                        if (has(mc, "ender_pearl") && pearlCd == 0 && quickUse(mc, p, "ender_pearl", yaw, -30f)) pearlCd = 40;
+                        Guard.backOff(mc, p, tripFrom);
+                        if (tripTicks > 20 * 5 || p.position().distanceTo(tripFrom) > 30) tripStage = 2;
+                    }
+                }
+                case 2 -> { // land (glide down, look ahead)
+                    mode = "landing to heal";
+                    p.setYRot(yaw);
+                    p.setXRot(20f);
+                    if (p.onGround() || p.isInWater()) {
+                        Guard.keepElytra = false;
+                        Guard.gear(mc);
+                        Bot.release(mc);
+                        tripStage = 3;
+                        tripTicks = 0;
+                    }
+                }
+                case 3 -> { // heal
+                    mode = "healing far away";
+                    Bot.release(mc);
+                    if (p.getHealth() >= 16 || tripTicks > 20 * 40) {
+                        tripStage = 0;
+                        Bot.say("Healed – going back in.");
+                        return false;
+                    }
+                    if (Guard.canGapple(mc, p)) Guard.eatGapple(mc);
+                    else if (p.getFoodData().getFoodLevel() < 20) Guard.eatNow(mc, false);
+                }
+                default -> tripStage = 0;
+            }
+            return true;
         }
 
         private int pillarY = Integer.MIN_VALUE;
@@ -677,7 +758,7 @@ public final class Combat {
             if (flyCd > 0) flyCd--;
             boolean can = has(mc, "mace") && has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
             if (flyStage == 0) {
-                if (!can || flyCd > 0 || d < 9 || d > 64 || !calm(p, 9) || !mc.level.canSeeSky(p.blockPosition().above(2))) return false;
+                if (!can || flyCd > 0 || d < 9 || d > 64 || !calm(p, 9) || !mc.level.canSeeSky(p.blockPosition().above(2)) || !openAbove(mc, target)) return false;
                 flyStage = 1;
                 flyTicks = 0;
             }
@@ -685,6 +766,10 @@ public final class Combat {
             Guard.keepElytra = true;
             mode = "elytra mace";
             if (flyTicks > 20 * 14 || !target.isAlive()) return endFlight(mc);
+            if (flyStage >= 3 && !openAbove(mc, target)) { // they went under a roof: a dive would only hit blocks
+                flyStage = 5;
+                mode = "elytra mace · they're under cover";
+            }
             Vec3 t = target.position();
             switch (flyStage) {
                 case 1 -> { // put the elytra on, jump
@@ -740,6 +825,13 @@ public final class Combat {
                     if (p.onGround() || !p.isFallFlying()) return endFlight(mc);
                 }
             }
+            return true;
+        }
+
+        /** Nothing solid in the 24 blocks above them – otherwise a dive from above only hits the roof. */
+        private static boolean openAbove(Minecraft mc, LivingEntity t) {
+            BlockPos head = t.blockPosition().above(2);
+            for (int i = 0; i < 24; i++) if (!Bot.passable(mc, head.above(i))) return false;
             return true;
         }
 

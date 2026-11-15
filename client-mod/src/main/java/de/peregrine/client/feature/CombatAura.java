@@ -25,13 +25,13 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Comparator;
 
 /**
- * Combat Aura for singleplayer and private test worlds: finds hostile mobs, turns towards the chosen one and
- * attacks on full charge (or at a set rate). Never targets players, switches itself off in multiplayer and does
- * nothing to hide from anti-cheats – it only uses the normal attack, exactly like a click.
+ * Combat Aura for your own worlds and test servers: finds mobs (and players, if picked), turns towards the chosen one
+ * and attacks on full charge (or at a set rate). Runs where the PvP bot may run (singleplayer, your LAN world,
+ * operator, or a server that allows "aura") and does nothing to hide from anti-cheats – it is the normal attack.
  */
 public final class CombatAura extends Module {
     public final NumberSetting range = add(new NumberSetting("range", "Range", 3.0, 2.0, 6.0, 0.1, " m"));
-    public final ModeSetting targets = add(new ModeSetting("targets", "Targets", "Hostile", "Hostile", "Hostile + neutral", "All mobs"));
+    public final ModeSetting targets = add(new ModeSetting("targets", "Targets", "Hostile", "Hostile", "Hostile + neutral", "All mobs", "Players", "Players + hostile"));
     public final ModeSetting priority = add(new ModeSetting("priority", "Priority", "Closest", "Closest", "Lowest health", "Crosshair"));
     public final ModeSetting rotation = add(new ModeSetting("rotation", "Rotation", "Smooth", "Smooth", "Instant"));
     public final NumberSetting turn = add(new NumberSetting("turn", "Turn speed", 45, 10, 180, 5, "°/tick"));
@@ -47,7 +47,7 @@ public final class CombatAura extends Module {
     private boolean warned;
 
     public CombatAura() {
-        super("aura", "Combat Aura", "Fights hostile mobs for you – singleplayer only (R)", Category.PVP, false);
+        super("aura", "Combat Aura", "Attacks mobs or players around you – own worlds and servers only (R)", Category.PVP, false);
     }
 
     public LivingEntity target() {
@@ -61,8 +61,14 @@ public final class CombatAura extends Module {
     }
 
     private boolean wanted(LivingEntity e) {
-        if (e instanceof Player || !(e instanceof Mob)) return false; // never players
+        if (e instanceof Player pl) { // players only when picked – never spectators, creative players or friends of the server
+            if (pl.isSpectator() || pl.isCreative()) return false;
+            return targets.is("Players") || targets.is("Players + hostile");
+        }
+        if (!(e instanceof Mob)) return false;
+        if (targets.is("Players")) return false;
         return switch (targets.get()) {
+            case "Players + hostile" -> e instanceof Enemy;
             case "Hostile" -> e instanceof Enemy;
             case "Hostile + neutral" -> e instanceof Enemy || e instanceof NeutralMob;
             default -> true;
@@ -83,9 +89,9 @@ public final class CombatAura extends Module {
             target = null;
             return;
         }
-        if (!mc.hasSingleplayerServer()) { // multiplayer: off, always
+        if (!Access.allowed(mc, Access.AURA)) { // same rule as the PvP bot: singleplayer, your LAN world, operator, or a server that allows it
             if (!warned) {
-                p.sendOverlayMessage(Component.literal("§6[Peregrine]§r Combat Aura is singleplayer only – it stays off here."));
+                p.sendOverlayMessage(Component.literal(Access.deniedMessage("Combat Aura")));
                 warned = true;
             }
             target = null;

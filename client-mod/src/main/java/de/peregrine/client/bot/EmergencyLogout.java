@@ -43,7 +43,7 @@ public final class EmergencyLogout extends Module {
     private float heartsLeft;
 
     public EmergencyLogout() {
-        super("emergency", "Emergency logout", "Screenshot + log out at half a heart while the bot plays", Category.OTHER, true);
+        super("emergency", "Emergency logout", "Screenshot + log out at half a heart while the bot plays", Category.OTHER, false);
     }
 
     @Override
