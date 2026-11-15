@@ -163,7 +163,7 @@ public final class TitleMenu extends Screen {
         List<Item> items = items();
         int rowH = Math.max(17, Math.min(24, (height - (ty + Math.round(10.5f * big) + 22) - 34) / items.size()));
         int my0 = ty + Math.round(10.5f * big) + 22;
-        g.fill(x, my0 - 1, right, my0, t.line);
+        Px.hline(g, x, right, my0 - 1, t.line);
         for (int i = 0; i < items.size(); i++) {
             Item it = items.get(i);
             int y = my0 + i * rowH;

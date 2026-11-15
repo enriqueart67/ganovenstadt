@@ -114,6 +114,13 @@
   - Fußleiste: primärer Knopf EDIT HUD LAYOUT, umrandeter Knopf AI ASSISTANT. Ein atmender Lichtschein liegt hinter dem Menü.
   - Neue Bausteine: `Ui.falcon`, `Ui.glow` (Texturen `textures/gui/falcon.png` und `glow.png` aus `tools/make_marks.py`), `Ui.diamond`, `Ui.pill`, `Type.spaced`.
   - Die Modul-Einstellungsseite (Regler, Modi, Farben) ist unverändert, nutzt aber die neuen Schalter.
+- **Ladesymbol ohne Falke (`gui_launch.rs`):**
+  - Ein orbitaler Ring aus feiner Spur, fünf Phasen-Markierungen, einem innen langsam drehenden Teilkreis und einem Fortschrittsbogen mit Schweif und leuchtendem Kopf.
+  - Der Bogen folgt nur dem echten Anteil: abgeschlossene Phasen plus Dateifortschritt in „Loading libraries“, weich animiert, nie über 99,9 % vor dem Ziel. Ein schwacher, umlaufender Lichtpunkt zeigt nur Aktivität.
+  - In der Mitte steht die Phase („02 / OF 05“). Beim Erfolg schließt sich der Ring, weitet sich und verblasst.
+- **Menüs im Spiel rund und hochauflösend (`gui/Px.java`):**
+  - Zeichnet in echten Bildschirmpixeln (`pose().scale(1/guiScale)`) mit Kantenglättung über Teilabdeckungs-Pixel: abgerundete Flächen und Rahmen, Kreise, Rauten, Pfeil und Haarlinien.
+  - Umgestellt sind das Mod-Menü (Blatt mit weichem Schatten, Karten, Schalter, Regler-Knopf, Farbkreise, Knöpfe, Linien), `Ui.pill` und `Ui.diamond` sowie Assistent, Wegpunkte, Kleiderschrank, HUD-Editor und Titelmenü (Blätter, Knöpfe, Chips, Linien).
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

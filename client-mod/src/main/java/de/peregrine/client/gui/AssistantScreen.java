@@ -55,8 +55,9 @@ public final class AssistantScreen extends Screen {
         extractBackground(g, mx, my, pt);
         int W = Math.min(380, width - 16), H = Math.min(290, height - 16);
         int x0 = (width - W) / 2, y0 = (height - H) / 2;
-        g.fill(x0 + 3, y0 + 4, x0 + W + 3, y0 + H + 4, t.shadow);
-        g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
+        for (int si = 3; si >= 1; si--) Px.roundRect(g, x0 - si * 2, y0 - si * 2 + 4, W + si * 4, H + si * 4, 8 + si * 2, 0x22000000);
+        Px.roundRect(g, x0, y0, W, H, 7, 0xFF000000 | (t.bg & 0xFFFFFF));
+        Px.roundStroke(g, x0, y0, W, H, 7, 0x1C000000 | (t.text & 0xFFFFFF));
         if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
         int cx = x0 + 14, cw = W - 28;
         Type.left(g, "Assistant", Type.DISPLAY, cx, y0 + 10, 2.1f, t.text);
@@ -65,7 +66,7 @@ public final class AssistantScreen extends Screen {
         // status line
         int sy = y0 + 36;
         boolean busy = Bot.busy();
-        g.fill(cx, sy, cx + 5, sy + 5, busy ? t.accent : t.muted);
+        Px.roundRect(g, cx, sy, 5, 5, 3, busy ? t.accent : t.muted);
         Type.left(g, Type.fit(Bot.status(), Type.MONO, 0.75f, cw - 70), Type.MONO, cx + 10, sy - 1, 0.75f, busy ? t.text : t.muted);
         stopW = 0;
         if (busy) {
@@ -74,7 +75,7 @@ public final class AssistantScreen extends Screen {
             stopX = cx + cw - stopW;
             stopY = sy - 5;
             boolean h = Ui.in(mx, my, stopX, stopY, stopW, 14);
-            g.fill(stopX, stopY, stopX + stopW, stopY + 14, h ? t.accent : t.card);
+            Px.roundRect(g, stopX, stopY, stopW, 14, 3, h ? t.accent : t.card);
             Type.left(g, s, Type.MONO, stopX + 7, stopY + 4, 0.75f, h ? t.onAccent : t.text);
         }
         g.fill(cx, sy + 12, cx + cw, sy + 13, t.line);
@@ -107,7 +108,7 @@ public final class AssistantScreen extends Screen {
         g.disableScissor();
 
         // input
-        g.fill(cx, inputY, cx + cw, inputY + 18, t.card);
+        Px.roundRect(g, cx, inputY, cw, 18, 3, t.card);
         g.fill(cx, inputY + 17, cx + cw, inputY + 18, t.accent);
         boolean blink = (System.currentTimeMillis() / 500) % 2 == 0;
         if (input.isEmpty()) Type.left(g, "What should I do?" + (blink ? "|" : ""), Type.UI, cx + 6, inputY + 5, 0.9f, t.muted);
@@ -124,7 +125,7 @@ public final class AssistantScreen extends Screen {
             int w = Type.width(s, Type.MONO, 0.65f) + 10;
             if (chx + w > cx + cw) break;
             boolean h = Ui.in(mx, my, chx, chy, w, 12);
-            g.fill(chx, chy, chx + w, chy + 12, h ? t.accent : t.card);
+            Px.roundRect(g, chx, chy, w, 12, 3, h ? t.accent : t.card);
             Type.left(g, s, Type.MONO, chx + 5, chy + 3, 0.65f, h ? t.onAccent : t.muted);
             chips.add(new int[]{chx, chy, w, i});
             chx += w + 4;

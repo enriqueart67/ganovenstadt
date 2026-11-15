@@ -120,33 +120,21 @@ public final class Ui {
         tinted(g, GLOW, cx - w / 2, cy - h / 2, w, h, 256, argb);
     }
 
-    /** Status diamond built from pixel rows. */
+    /** Status diamond (smooth, in screen pixels). */
     public static void diamond(GuiGraphicsExtractor g, int cx, int cy, int r, int argb) {
-        for (int i = -r; i <= r; i++) {
-            int w = r - Math.abs(i);
-            g.fill(cx - w, cy + i, cx + w + 1, cy + i + 1, argb);
-        }
+        Px.diamond(g, cx + 0.5f, cy + 0.5f, r + 0.6f, argb);
     }
 
-    /** Pill switch like the launcher's: slides, glows when on. 20 × 10. */
+    /** Pill switch like the launcher's: round track, round knob, glows when on. 20 × 10. */
     public static void pill(GuiGraphicsExtractor g, int x, int y, float on, boolean hover, Theme t) {
-        int w = 20, h = 10;
-        int fillCol = mix(0x22000000 | (t.text & 0xFFFFFF), 0xFF000000 | (t.accent & 0xFFFFFF), on);
-        if (on > 0.3f) glow(g, x + w - 5, y + h / 2, 26, 18, ((int) (0x55 * on) << 24) | (t.accent & 0xFFFFFF));
-        // rounded body: cut the corners
-        g.fill(x + 1, y, x + w - 1, y + h, fillCol);
-        g.fill(x, y + 1, x + w, y + h - 1, fillCol);
-        if (hover) {
-            int hc = 0x66000000 | (t.text & 0xFFFFFF);
-            g.fill(x + 1, y - 1, x + w - 1, y, hc);
-            g.fill(x + 1, y + h, x + w - 1, y + h + 1, hc);
-            g.fill(x - 1, y + 1, x, y + h - 1, hc);
-            g.fill(x + w, y + 1, x + w + 1, y + h - 1, hc);
-        }
-        int kx = Math.round(x + 2 + (w - 10) * on);
-        int knob = on > 0.5f ? (0xFF000000 | (t.bg & 0xFFFFFF)) : t.muted;
-        g.fill(kx + 1, y + 2, kx + 5, y + h - 2, knob);
-        g.fill(kx, y + 3, kx + 6, y + h - 3, knob);
+        float w = 20, h = 10;
+        int track = mix(0x22000000 | (t.text & 0xFFFFFF), 0xFF000000 | (t.accent & 0xFFFFFF), on);
+        if (on > 0.3f) glow(g, x + 15, y + 5, 30, 20, ((int) (0x50 * on) << 24) | (t.accent & 0xFFFFFF));
+        Px.roundRect(g, x, y, w, h, h / 2, track);
+        if (hover || on < 0.5f) Px.roundStroke(g, x, y, w, h, h / 2, (hover ? 0x80000000 : 0x26000000) | (t.text & 0xFFFFFF));
+        float kx = x + 5 + (w - 10) * on;
+        int knob = on > 0.5f ? (0xFF000000 | (t.bg & 0xFFFFFF)) : (0xFF000000 | (t.muted & 0xFFFFFF));
+        Px.circle(g, kx, y + h / 2, 3.2f + (hover ? 0.3f : 0f), knob);
     }
 
     private static int mix(int a, int b, float f) {

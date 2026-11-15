@@ -109,22 +109,24 @@ public final class ClickGui extends Screen {
         // atmosphere: a slowly breathing icy light behind the sheet
         float breathe = 0.5f + 0.5f * (float) Math.sin(now / 2200.0);
         Ui.glow(g, width / 2, height / 2, W + 260, H + 200, ((int) ((0x26 + 0x14 * breathe) * a) << 24) | (t.accent & 0xFFFFFF));
-        g.fill(x0 + 3, y0 + 5, x0 + W + 3, y0 + H + 5, fade(t.shadow, a));
-        g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
+        // soft shadow, then the sheet with round corners and a fine top highlight
+        for (int i = 3; i >= 1; i--) Px.roundRect(g, x0 - i * 2, y0 - i * 2 + 4, W + i * 4, H + i * 4, 8 + i * 2, fade(0x22000000, a));
+        Px.roundRect(g, x0, y0, W, H, 7, 0xFF000000 | (t.bg & 0xFFFFFF));
         Ui.glow(g, x0 + W / 2, y0 + H / 2, W, H, ((int) (0x14 * a) << 24) | (t.accent & 0xFFFFFF));
         if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
-        g.fill(x0, y0, x0 + W, y0 + 1, fade(0x30000000 | (t.text & 0xFFFFFF), a));
+        Px.roundStroke(g, x0, y0, W, H, 7, fade(0x1C000000 | (t.text & 0xFFFFFF), a));
+        Px.hline(g, x0 + 10, x0 + W - 10, y0 + 0.4f, fade(0x30000000 | (t.text & 0xFFFFFF), a));
 
         // ---------- left rail: mark, wordmark and the altitude tape navigation
         int railW = 132, tape = x0 + 20;
         Ui.falcon(g, x0 + 20, y0 + 17, 13, 0xFF000000 | (t.text & 0xFFFFFF));
         Type.spaced(g, "PEREGRINE", Type.MONO, x0 + 32, y0 + 13, 0.72f, t.text, 1.6f);
-        g.fill(x0 + railW, y0 + 10, x0 + railW + 1, y0 + H - 10, t.line);
+        Px.vline(g, x0 + railW, y0 + 12, y0 + H - 12, 0x1E000000 | (t.text & 0xFFFFFF));
         int tTop = y0 + 34, tBot = y0 + H - 34;
-        g.fill(tape, tTop, tape + 1, tBot, 0x40000000 | (t.text & 0xFFFFFF));
-        for (int ty = tTop, k = 0; ty <= tBot; ty += 6, k++) {
+        Px.vline(g, tape, tTop, tBot, 0x48000000 | (t.text & 0xFFFFFF));
+        for (int ty = tTop, k = 0; ty <= tBot; ty += 4, k++) {
             boolean lng = k % 5 == 0;
-            g.fill(tape - (lng ? 5 : 2), ty, tape, ty + 1, (lng ? 0x48000000 : 0x22000000) | (t.text & 0xFFFFFF));
+            Px.hline(g, tape - (lng ? 5 : 2.5f), tape, ty, (lng ? 0x58000000 : 0x26000000) | (t.text & 0xFFFFFF));
         }
         List<Category> cats = new ArrayList<>();
         cats.add(null);
@@ -137,7 +139,7 @@ public final class ClickGui extends Screen {
             boolean sel = c == category;
             boolean hov = Ui.in(mx, my, x0, ny - rowGap / 2, railW, rowGap);
             if (sel) pointerY = ny;
-            g.fill(tape, ny, tape + (hov ? 9 : 6), ny + 1, (sel ? 0xC0000000 : hov ? 0x90000000 : 0x50000000) | (t.text & 0xFFFFFF));
+            Px.hline(g, tape, tape + (hov ? 9 : 6), ny + 0.5f, (sel ? 0xC0000000 : hov ? 0x90000000 : 0x50000000) | (t.text & 0xFFFFFF));
             Type.spaced(g, label, Type.MONO, tape + 14 + (hov ? 2 : 0), ny - 2, 0.66f, sel ? t.text : hov ? t.text : t.muted, 1.3f);
             final Category target = c;
             hits.add(new Hit(x0, ny - rowGap / 2, railW, rowGap, () -> {
@@ -160,8 +162,8 @@ public final class ClickGui extends Screen {
             int py = Math.round(pointerAnim);
             Ui.glow(g, tape + 4, py, 40, 16, 0x50000000 | (t.accent & 0xFFFFFF));
             int ac = 0xFF000000 | (t.accent & 0xFFFFFF);
-            g.fill(tape - 6, py, tape + 2, py + 1, ac);
-            for (int i = 0; i < 4; i++) g.fill(tape + 3 + i, py - i, tape + 4 + i, py + i + 1, ac); // ◀ chevron
+            Px.hline(g, tape - 7, tape + 2, py + 0.5f, ac);
+            Px.chevronLeft(g, tape + 2.5f, py + 0.5f, 5.5f, 3.2f, ac); // ◀ pointer
         }
         // bottom of the rail: count of modules on
         long on = Modules.ALL.stream().filter(m -> m.enabled).count();
@@ -176,11 +178,11 @@ public final class ClickGui extends Screen {
         // ---------- footer: primary + secondary action
         int cx = x0 + railW + 18, cw = W - railW - 32;
         int fy = y0 + H - 26;
-        g.fill(cx, fy, cx + cw, fy + 1, t.line);
+        Px.hline(g, cx, cx + cw, fy, 0x1E000000 | (t.text & 0xFFFFFF));
         String edit = "EDIT HUD LAYOUT";
         int ew = Type.spacedWidth(edit, Type.MONO, 0.7f, 1.2f) + 20;
         boolean eh = Ui.in(mx, my, cx, fy + 6, ew, 15);
-        g.fill(cx, fy + 6, cx + ew, fy + 21, eh ? (0xFF000000 | (t.accent & 0xFFFFFF)) : (0xFF000000 | (t.text & 0xFFFFFF)));
+        Px.roundRect(g, cx, fy + 6, ew, 15, 3, eh ? (0xFF000000 | (t.accent & 0xFFFFFF)) : (0xFF000000 | (t.text & 0xFFFFFF)));
         Type.spaced(g, edit, Type.MONO, cx + 10, fy + 10, 0.7f, 0xFF000000 | (t.bg & 0xFFFFFF), 1.2f);
         hits.add(new Hit(cx, fy + 6, ew, 15, () -> Ui.open(new HudEditor(this))));
         if (minecraft.player != null) { // the assistant also opens from here, in case its key is taken
@@ -188,10 +190,7 @@ public final class ClickGui extends Screen {
             int aw = Type.spacedWidth(ai, Type.MONO, 0.7f, 1.2f) + 20, ax = cx + ew + 8;
             boolean ah = Ui.in(mx, my, ax, fy + 6, aw, 15);
             int bc = ah ? (0xFF000000 | (t.accent & 0xFFFFFF)) : (0x50000000 | (t.text & 0xFFFFFF));
-            g.fill(ax, fy + 6, ax + aw, fy + 7, bc);
-            g.fill(ax, fy + 20, ax + aw, fy + 21, bc);
-            g.fill(ax, fy + 6, ax + 1, fy + 21, bc);
-            g.fill(ax + aw - 1, fy + 6, ax + aw, fy + 21, bc);
+            Px.roundStroke(g, ax, fy + 6, aw, 15, 3, bc);
             Type.spaced(g, ai, Type.MONO, ax + 10, fy + 10, 0.7f, ah ? t.accent : t.text, 1.2f);
             hits.add(new Hit(ax, fy + 6, aw, 15, () -> Ui.open(new AssistantScreen())));
         }
@@ -234,7 +233,7 @@ public final class ClickGui extends Screen {
         Type.spaced(g, "SEARCH", Type.MONO, sx, cy + 2, 0.6f, t.muted, 1.4f);
         String shown = search.isEmpty() ? "type to filter" : Type.fit(search, Type.UI, 1f, sw - 8) + (blink ? "|" : "");
         Type.left(g, shown, Type.UI, sx, cy + 11, 1f, search.isEmpty() ? t.muted2 : t.text);
-        g.fill(sx, cy + 23, sx + sw, cy + 24, search.isEmpty() ? t.line : (0xFF000000 | (t.accent & 0xFFFFFF)));
+        Px.hline(g, sx, sx + sw, cy + 23, search.isEmpty() ? (0x30000000 | (t.text & 0xFFFFFF)) : (0xFF000000 | (t.accent & 0xFFFFFF)));
 
         List<Module> list = new ArrayList<>();
         String q = search.toLowerCase(Locale.ROOT);
@@ -262,13 +261,9 @@ public final class ClickGui extends Screen {
             boolean hov = vis && Ui.in(mx, my, x, y, cardW, cardH);
             int lift = hov ? 1 : 0;
             int yy = y - lift;
-            g.fill(x, yy, x + cardW, yy + cardH, hov ? t.cardHover : t.card);
-            int edge = hov ? (0x90000000 | (t.accent & 0xFFFFFF)) : (0x14000000 | (t.text & 0xFFFFFF));
-            g.fill(x, yy, x + cardW, yy + 1, edge);
-            g.fill(x, yy + cardH - 1, x + cardW, yy + cardH, edge);
-            g.fill(x, yy, x + 1, yy + cardH, edge);
-            g.fill(x + cardW - 1, yy, x + cardW, yy + cardH, edge);
-            if (m.enabled) g.fill(x, yy + 8, x + 2, yy + cardH - 8, 0xFF000000 | (t.accent & 0xFFFFFF));
+            Px.roundRect(g, x, yy, cardW, cardH, 4, hov ? t.cardHover : t.card);
+            Px.roundStroke(g, x, yy, cardW, cardH, 4, hov ? (0x90000000 | (t.accent & 0xFFFFFF)) : (0x16000000 | (t.text & 0xFFFFFF)));
+            if (m.enabled) Px.roundRect(g, x + 1.5f, yy + 8, 1.6f, cardH - 16, 0.8f, 0xFF000000 | (t.accent & 0xFFFFFF));
             int textW = cardW - 40;
             if (compact) {
                 Type.left(g, Type.fit(m.name, Type.BOLD, 1f, textW - 50), Type.BOLD, x + 9, yy + 5, 1f, m.enabled ? t.text : t.muted);
@@ -299,7 +294,7 @@ public final class ClickGui extends Screen {
         if (maxScroll > 0) {
             int barH = Math.max(16, viewH * viewH / (viewH + maxScroll));
             int barY = top + (int) ((viewH - barH) * (scroll / maxScroll));
-            g.fill(cx + cw + 5, barY, cx + cw + 6, barY + barH, 0xFF000000 | (t.accent & 0xFFFFFF));
+            Px.roundRect(g, cx + cw + 4.5f, barY, 1.4f, barH, 0.7f, 0xFF000000 | (t.accent & 0xFFFFFF));
         }
         if (list.isEmpty()) Type.left(g, "Nothing matches “" + search + "”.", Type.UI, cx, top + 10, 1f, t.muted);
     }
@@ -340,15 +335,15 @@ public final class ClickGui extends Screen {
         int total = m.settings.size() * rowH + 16;
         int maxScroll = Math.max(0, total - (cy + ch - top));
         scrollTarget = Math.max(0, Math.min(scrollTarget, maxScroll));
-        hair(g, cx, top - 1, cw);
+        Px.hline(g, cx, cx + cw, top - 1, 0x1E000000 | (t.text & 0xFFFFFF));
         g.enableScissor(cx, top, cx + cw, cy + ch);
         int y = top - (int) scroll;
         for (Setting<?> s : m.settings) {
             boolean vis = y >= top - 2 && my >= top;
             boolean rowHov = vis && Ui.in(mx, my, cx, y, cw, rowH);
-            if (rowHov) g.fill(cx - 4, y, cx + cw + 4, y + rowH - 1, t.card);
+            if (rowHov) Px.roundRect(g, cx - 4, y + 1, cw + 8, rowH - 2, 3, t.card);
             Type.left(g, s.name, Type.UI, cx + 2, y + 8, 1f, t.text);
-            g.fill(cx, y + rowH - 1, cx + cw, y + rowH, t.line);
+            Px.hline(g, cx, cx + cw, y + rowH - 0.5f, 0x16000000 | (t.text & 0xFFFFFF));
             int rx = cx + cw - 170;
             if (s instanceof BoolSetting b) {
                 toggle(g, cx + cw - 22, y + 6, b.on(), rowHov);
@@ -358,10 +353,11 @@ public final class ClickGui extends Screen {
                 }));
             } else if (s instanceof NumberSetting n) {
                 int sw = 120;
-                g.fill(rx, y + 11, rx + sw, y + 12, t.muted2);
-                int kx = rx + (int) (n.fraction() * sw);
-                g.fill(rx, y + 10, kx, y + 13, t.accent);
-                g.fill(kx - 2, y + 6, kx + 2, y + 17, t.text);
+                float kx = rx + (float) (n.fraction() * sw);
+                Px.roundRect(g, rx, y + 10.5f, sw, 2, 1, 0x30000000 | (t.text & 0xFFFFFF));
+                Px.roundRect(g, rx, y + 10.5f, kx - rx, 2, 1, 0xFF000000 | (t.accent & 0xFFFFFF));
+                Ui.glow(g, (int) kx, y + 11, 18, 14, 0x40000000 | (t.accent & 0xFFFFFF));
+                Px.circle(g, kx, y + 11.5f, 3.6f, 0xFF000000 | (t.text & 0xFFFFFF));
                 Type.right(g, n.text(), Type.MONO, cx + cw, y + 9, 0.8f, t.text);
                 if (vis) sliders.add(new Slider(rx - 3, y, sw + 6, rowH, n));
             } else if (s instanceof ModeSetting md) {
@@ -383,8 +379,8 @@ public final class ClickGui extends Screen {
             } else if (s instanceof ColorSetting c) {
                 int px = cx + cw - ColorSetting.PALETTE.length * 14 + 3;
                 for (int col : ColorSetting.PALETTE) {
-                    if (col == c.argb()) g.fill(px - 2, y + 4, px + 13, y + 19, t.text);
-                    g.fill(px, y + 6, px + 11, y + 17, col);
+                    if (col == c.argb()) Px.circle(g, px + 5.5f, y + 11.5f, 7f, 0xFF000000 | (t.text & 0xFFFFFF));
+                    Px.circle(g, px + 5.5f, y + 11.5f, 5.2f, col | 0xFF000000);
                     final int chosen = col;
                     if (vis) hits.add(new Hit(px - 1, y + 5, 13, 13, () -> {
                         c.set(chosen);

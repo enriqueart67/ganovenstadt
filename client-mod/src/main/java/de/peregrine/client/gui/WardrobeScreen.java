@@ -195,8 +195,9 @@ public final class WardrobeScreen extends Screen {
         a = 1f - (1f - a) * (1f - a) * (1f - a);
         int W = Math.min(620, width - 16), H = Math.min(360, height - 16);
         int x0 = (width - W) / 2, y0 = (height - H) / 2 + Math.round((1f - a) * 10);
-        g.fill(x0 + 3, y0 + 4, x0 + W + 3, y0 + H + 4, t.shadow);
-        g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
+        for (int si = 3; si >= 1; si--) Px.roundRect(g, x0 - si * 2, y0 - si * 2 + 4, W + si * 4, H + si * 4, 8 + si * 2, 0x22000000);
+        Px.roundRect(g, x0, y0, W, H, 7, 0xFF000000 | (t.bg & 0xFFFFFF));
+        Px.roundStroke(g, x0, y0, W, H, 7, 0x1C000000 | (t.text & 0xFFFFFF));
         if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
 
         // ---------- top bar: back, title, tabs, close
@@ -220,12 +221,12 @@ public final class WardrobeScreen extends Screen {
         boolean xh = Ui.in(mx, my, x0 + W - 24, y0, 24, bar);
         Type.center(g, "×", Type.UI, x0 + W - 12, y0 + 6, 1.3f, xh ? t.accent : t.muted);
         hits.add(new Hit(x0 + W - 24, y0, 24, bar, this::closeAll));
-        g.fill(x0, y0 + bar, x0 + W, y0 + bar + 1, t.line);
+        Px.hline(g, x0, x0 + W, y0 + bar, t.line);
 
         // ---------- preview panel on the right
         int pw = Math.round(W * 0.42f), px = x0 + W - pw, py = y0 + bar + 1, ph = H - bar - 1;
-        g.fill(px, py, px + pw, py + ph, t.card);
-        g.fill(px, py, px + 1, py + ph, t.line);
+        Px.roundRect(g, px, py, pw, ph, 3, t.card);
+        Px.roundRect(g, px, py, 1, ph, 3, t.line);
         // floor shadow
         int fy = py + ph - 46;
         for (int i = 0; i < 6; i++) g.fill(px + pw / 2 - 30 + i * 3, fy + i, px + pw / 2 + 30 - i * 3, fy + i + 1, 0x18000000);
@@ -257,11 +258,11 @@ public final class WardrobeScreen extends Screen {
             boolean hov = vis && Ui.in(mx, my, x, y, tw, th);
             boolean on = it.name().equals(equipped);
             if (hov) hovered = it.name();
-            g.fill(x, y, x + tw, y + th, hov ? t.cardHover : t.card);
+            Px.roundRect(g, x, y, tw, th, 3, hov ? t.cardHover : t.card);
             if (on) {
-                g.fill(x, y, x + tw, y + 2, t.accent);
+                Px.roundRect(g, x, y, tw, 2, 3, t.accent);
                 g.fill(x, y + th - 2, x + tw, y + th, t.accent);
-                g.fill(x, y, x + 2, y + th, t.accent);
+                Px.roundRect(g, x, y, 2, th, 3, t.accent);
                 g.fill(x + tw - 2, y, x + tw, y + th, t.accent);
             }
             thumb(g, it.name(), x + 6, y + 6, 30, th - 12);
@@ -332,12 +333,12 @@ public final class WardrobeScreen extends Screen {
     /** Small picture on each tile: the cape's back face or the wing texture; a mark for "None". */
     private void thumb(GuiGraphicsExtractor g, String name, int x, int y, int w, int h) {
         if (name.equals("None")) {
-            g.fill(x, y, x + w, y + h, t.off);
+            Px.roundRect(g, x, y, w, h, 3, t.off);
             Type.center(g, "—", Type.UI, x + w / 2f, y + h / 2f - 5, 1.2f, t.muted);
             return;
         }
         if (name.equals(UPLOAD)) {
-            g.fill(x, y, x + w, y + h, t.accent);
+            Px.roundRect(g, x, y, w, h, 3, t.accent);
             Type.center(g, "+", Type.UI, x + w / 2f, y + h / 2f - 8, 2f, t.onAccent);
             return;
         }
@@ -345,7 +346,7 @@ public final class WardrobeScreen extends Screen {
             var def = CosmeticLayer.PETS.get(name);
             if (def == null) return;
             Identifier id = Identifier.withDefaultNamespace("textures/entity/" + def.texture() + ".png");
-            g.fill(x, y, x + w, y + h, t.off);
+            Px.roundRect(g, x, y, w, h, 3, t.off);
             int sz = Math.min(w, h) - 4;
             g.blit(RenderPipelines.GUI_TEXTURED, id, x + (w - sz) / 2, y + (h - sz) / 2, 0, 0, sz, sz, 16, 16, 64, 64);
             return;
@@ -376,7 +377,7 @@ public final class WardrobeScreen extends Screen {
                         name.equals("Halo") || name.equals("Cat ears") ? 32 : 64);
             }
         } catch (Throwable ignored) {
-            g.fill(x, y, x + w, y + h, t.off);
+            Px.roundRect(g, x, y, w, h, 3, t.off);
         }
     }
 

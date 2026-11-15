@@ -37,9 +37,9 @@ public final class HudEditor extends Screen {
     public void extractBackground(GuiGraphicsExtractor g, int mx, int my, float pt) {
         g.fill(0, 0, width, height, 0x30000000);
         for (int x = 0; x < width; x += 20) g.fill(x, 0, x + 1, height, 0x10FFFFFF);
-        for (int y = 0; y < height; y += 20) g.fill(0, y, width, y + 1, 0x10FFFFFF);
+        for (int y = 0; y < height; y += 20) Px.hline(g, 0, width, y, 0x10FFFFFF);
         g.fill(width / 2, 0, width / 2 + 1, height, 0x30FFFFFF);
-        g.fill(0, height / 2, width, height / 2 + 1, 0x30FFFFFF);
+        Px.hline(g, 0, width, height / 2, 0x30FFFFFF);
     }
 
     @Override

@@ -52,8 +52,9 @@ public final class WaypointScreen extends Screen {
         hits.clear();
         int W = Math.min(420, width - 16), H = Math.min(300, height - 16);
         int x0 = (width - W) / 2, y0 = (height - H) / 2;
-        g.fill(x0 + 3, y0 + 4, x0 + W + 3, y0 + H + 4, t.shadow);
-        g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
+        for (int si = 3; si >= 1; si--) Px.roundRect(g, x0 - si * 2, y0 - si * 2 + 4, W + si * 4, H + si * 4, 8 + si * 2, 0x22000000);
+        Px.roundRect(g, x0, y0, W, H, 7, 0xFF000000 | (t.bg & 0xFFFFFF));
+        Px.roundStroke(g, x0, y0, W, H, 7, 0x1C000000 | (t.text & 0xFFFFFF));
         if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
         int cx = x0 + 14, cw = W - 28;
         Type.left(g, "Waypoints", Type.DISPLAY, cx, y0 + 10, 2.1f, t.text);
@@ -64,14 +65,14 @@ public final class WaypointScreen extends Screen {
         String add = "ADD WAYPOINT HERE";
         int aw = Type.width(add, Type.MONO, 0.8f) + 18, ay = y0 + H - 24;
         boolean ah = Ui.in(mx, my, cx, ay, aw, 15);
-        g.fill(cx, ay, cx + aw, ay + 15, ah ? t.accent : t.text);
+        Px.roundRect(g, cx, ay, aw, 15, 3, ah ? t.accent : t.text);
         Type.left(g, add, Type.MONO, cx + 9, ay + 4, 0.8f, ah ? t.onAccent : (t.bg | 0xFF000000));
         hits.add(new Hit(cx, ay, aw, 15, () -> editing = Waypoints.addHere(minecraft, null)));
         Type.right(g, "CLICK A NAME TO RENAME   ·   ESC TO CLOSE", Type.MONO, cx + cw, ay + 4, 0.7f, t.muted);
         g.fill(x0, ay - 8, x0 + W, ay - 7, t.line);
 
         int top = y0 + 38, rowH = 22, bottom = ay - 9;
-        g.fill(cx, top - 1, cx + cw, top, t.line);
+        Px.hline(g, cx, cx + cw, top - 1, t.line);
         List<Waypoint> list = Waypoints.all(minecraft);
         int maxScroll = Math.max(0, list.size() * rowH - (bottom - top));
         scroll = Math.max(0, Math.min(scroll, maxScroll));

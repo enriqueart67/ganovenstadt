@@ -3,9 +3,9 @@
 //! (Status-Meldungen, Datei-Fortschritt, Log-Zeilen des Spiels) – es wird nie Fortschritt vorgetaeuscht.
 use std::time::Instant;
 
-use eframe::egui::{self, pos2, vec2, Align2, Id, Pos2, Rect, Sense, Shape, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, Id, Pos2, Rect, Sense, Shape, Stroke};
 
-use super::stoop_ui::{diamond, falcon, spaced};
+use super::stoop_ui::{diamond, spaced};
 use super::{App, Page};
 use crate::theme::{alpha, font, Pal, BAD};
 
@@ -190,62 +190,70 @@ impl App {
                 }
             }
 
-            // ---- phase 2: the falcon dives in, with light trails
-            let fs = 46.0;
-            let start = center + vec2(area.width() * 0.42, -area.height() * 0.55);
-            let dive = ease_out((el - 0.3) / 0.9);
-            let mut pos = start + (center - start) * dive;
-            if anim.outcome == 1 {
-                // success: dives out towards the bottom left
-                let o = ease_in((since_done - 0.5) / 0.9);
-                pos += vec2(-area.width() * 0.5, area.height() * 0.7) * o;
-            } else if dive >= 1.0 {
-                pos.y += (t * 1.6).sin() * 3.0; // hovering, alive
-            }
-            if el > 0.3 {
-                let dir = (center - start).normalized();
-                for k in 1..8 {
-                    let back = pos - dir * (k as f32 * 16.0 * (1.0 - dive * 0.8) + if anim.outcome == 1 { k as f32 * 22.0 } else { 0.0 });
-                    falcon(&p, back, fs * (1.0 - k as f32 * 0.06), alpha(pal.accent, a((90.0 / k as f32) as u8)));
+            // ---- the loader: precise orbital ring, follows only the real progress
+            if el > 0.35 {
+                let k = ease_out((el - 0.35) / 0.7);
+                // success: the ring closes, widens and fades
+                let grow = if anim.outcome == 1 { 1.0 + ease_out((since_done - 0.3) / 1.2) * 0.35 } else { 1.0 };
+                let r = 92.0 * (0.6 + 0.4 * k) * grow;
+                let fade_ring = vis * k;
+                let ring_a = |v: f32| (v * fade_ring).clamp(0.0, 255.0) as u8;
+                // real fraction: finished stages + file progress inside "Loading libraries"
+                let sub = if anim.stage == 2 && total > 0 { (done as f32 / total as f32).clamp(0.0, 1.0) } else { 0.0 };
+                let target = if anim.outcome == 1 { 1.0 } else { ((anim.stage as f32 + sub) / 5.0).min(0.999) };
+                let shown_f = ctx.animate_value_with_time(Id::new("loaderf"), target, 0.45);
+                let top = -std::f32::consts::FRAC_PI_2;
+                // track + stage notches
+                arc(&p, center, r, 0.0, std::f32::consts::TAU, Stroke::new(1.0_f32, alpha(pal.text, ring_a(30.0))));
+                for i in 0..5 {
+                    let a = top + i as f32 / 5.0 * std::f32::consts::TAU;
+                    let dir = vec2(a.cos(), a.sin());
+                    let reached = (i as f32) / 5.0 <= shown_f + 0.001;
+                    p.line_segment([center + dir * (r - 5.0), center + dir * (r + 5.0)], Stroke::new(1.2_f32, alpha(if reached { pal.accent } else { pal.text }, ring_a(if reached { 230.0 } else { 60.0 }))));
                 }
-                // streaks along the flight path
-                for i in 0..14u32 {
-                    let off = (super::stoop_ui::rnd_pub(i + 300) - 0.5) * 70.0;
-                    let n = vec2(-dir.y, dir.x);
-                    let len = 40.0 + super::stoop_ui::rnd_pub(i + 400) * 160.0 * (1.0 - dive * 0.7);
-                    let s0 = pos + n * off - dir * 30.0;
-                    p.line_segment([s0, s0 - dir * len], Stroke::new(1.0_f32, alpha(pal.accent2, a((70.0 * (1.0 - dive * 0.6)) as u8))));
+                // inner instrument dial, slowly turning
+                for i in 0..72 {
+                    let a = i as f32 / 72.0 * std::f32::consts::TAU + t * 0.08;
+                    let dir = vec2(a.cos(), a.sin());
+                    let len = if i % 6 == 0 { 6.0 } else { 2.5 };
+                    p.line_segment([center + dir * (r * 0.78), center + dir * (r * 0.78 - len)], Stroke::new(1.0_f32, alpha(pal.text, ring_a(if i % 6 == 0 { 46.0 } else { 20.0 }))));
                 }
-                super::stoop_ui::glow_at(&p, pos, 70.0, 70.0, pal.accent, 50.0 * vis);
-                falcon(&p, pos, fs, alpha(pal.text, a(255)));
+                // progress arc with a soft tail and a glowing head
+                if shown_f > 0.001 {
+                    let a1 = top + shown_f * std::f32::consts::TAU;
+                    let tail = (shown_f * std::f32::consts::TAU).min(1.6);
+                    let steps = 28;
+                    for s2 in 0..steps {
+                        let f0 = s2 as f32 / steps as f32;
+                        let f1 = (s2 + 1) as f32 / steps as f32;
+                        let b0 = a1 - tail * (1.0 - f0);
+                        let b1 = a1 - tail * (1.0 - f1);
+                        arc(&p, center, r, b0, b1, Stroke::new(2.6_f32, alpha(pal.accent, ring_a(40.0 + 215.0 * f1))));
+                    }
+                    if shown_f * std::f32::consts::TAU > tail {
+                        arc(&p, center, r, top, a1 - tail, Stroke::new(2.6_f32, alpha(pal.accent, ring_a(40.0))));
+                    }
+                    let head = center + vec2(a1.cos(), a1.sin()) * r;
+                    super::stoop_ui::glow_at(&p, head, 22.0, 22.0, pal.accent, 90.0 * fade_ring);
+                    p.circle_filled(head, 3.2, alpha(Color32::WHITE, ring_a(235.0)));
+                }
+                // activity (not progress): a faint light orbiting while work is going on
+                if anim.outcome == 0 {
+                    let a = t * 1.7;
+                    let o = center + vec2(a.cos(), a.sin()) * (r + 12.0);
+                    p.circle_filled(o, 1.6, alpha(pal.accent2, ring_a(110.0)));
+                    arc(&p, center, r + 12.0, a - 0.5, a, Stroke::new(1.0_f32, alpha(pal.accent2, ring_a(50.0))));
+                }
+                // centre: current stage
+                let cur = if anim.outcome == 1 { 5 } else { anim.stage + 1 };
+                p.text(center + vec2(0.0, -6.0), Align2::CENTER_CENTER, format!("{cur:02}"), font(44.0 * (0.9 + 0.1 * k), "display"), alpha(pal.text, ring_a(255.0)));
+                spaced(&p, center + vec2(0.0, 26.0), Align2::CENTER_CENTER, "OF 05", font(9.0, "monom"), alpha(pal.muted, ring_a(220.0)), 2.6);
             }
 
-            // ---- phase 3: progress ring of 5 real stages, wordmark, stages
+            // ---- wordmark, title, stages
             if el > 0.9 {
                 let k = ease_out((el - 0.9) / 0.6);
                 let r = 96.0;
-                let seg = std::f32::consts::TAU / 5.0;
-                let gap = 0.08;
-                for i in 0..5 {
-                    let a0 = -std::f32::consts::FRAC_PI_2 + i as f32 * seg + gap;
-                    let a1 = a0 + seg - gap * 2.0;
-                    arc(&p, center, r, a0, a1, Stroke::new(1.0_f32, alpha(pal.text, a((26.0 * k) as u8))));
-                    let full = i < anim.stage || anim.outcome == 1;
-                    if full {
-                        arc(&p, center, r, a0, a1, Stroke::new(2.4_f32, alpha(pal.accent, a((255.0 * k) as u8))));
-                    } else if i == anim.stage && anim.outcome == 0 {
-                        if i == 2 && total > 0 {
-                            // real file progress fills this segment
-                            let f = (done as f32 / total as f32).clamp(0.0, 1.0);
-                            arc(&p, center, r, a0, a0 + (a1 - a0) * f, Stroke::new(2.4_f32, alpha(pal.accent, a((255.0 * k) as u8))));
-                        } else {
-                            // no numbers available: a light travels through the segment – it never fills by itself
-                            let ph = (t * 0.9) % 1.0;
-                            let m = a0 + (a1 - a0) * ph;
-                            arc(&p, center, r, (m - 0.18).max(a0), (m + 0.18).min(a1), Stroke::new(2.4_f32, alpha(pal.accent, a((200.0 * k) as u8))));
-                        }
-                    }
-                }
                 // wordmark: letters close in while it appears
                 let wk = ease_out((el - 1.0) / 0.8);
                 spaced(&p, pos2(center.x, center.y + r + 46.0), Align2::CENTER_CENTER, "PEREGRINE", font(26.0, "display"), alpha(pal.text, a((255.0 * wk) as u8)), 9.0 + (1.0 - wk) * 26.0);
