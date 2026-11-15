@@ -251,6 +251,13 @@
   - Ohne Schild: Windladung in die Flugbahn eines Gegners, der mit Mace von oben kommt.
   - Nicht im Spiel getestet.
 - **Kein Ausruhen mehr, Heilen nur 100 Blöcke weg:** Der Ausruh-Zweig im `Guard` ist entfernt („I'm hurt – resting …“ gibt es nicht mehr). Bei wenig Leben ohne Essen jagt er unterwegs. `Combat.healTrip` nur mit Elytra und Raketen (≤ 2 Herzen, kein Totem): Er fliegt, bis kein Spieler näher als 110 Blöcke ist (höchstens 30 s), landet und heilt erst, wenn niemand innerhalb von 100 Blöcken ist. Kommt jemand näher, startet er wieder. Ohne Elytra gibt es keine Heilpause, er kämpft weiter (goldene Äpfel im Laufen bleiben). Nicht im Spiel getestet.
+- **Elytra-Mace neu, Kollisionsschutz, Meteor-Regeln, nie Ausruhen:**
+  - **Elytra-Mace (`elytraMace`):** 1) Elytra an, springen, Flügel öffnen. 2) Mit Raketen auf 25 Blöcke über dem Gegner steigen. 3) Waagerecht fliegen, bis er über ihm ist (etwas früher, je nach Tempo). 4) **Dort die beste Brustplatte anziehen**, die Elytra geht aus, freier Fall. Vorher blieb die Elytra an, er glitt hinunter und hatte kaum Fallhöhe. 5) Mace-Schlag oder Stun Slam beim Fallen; verfehlt und der Boden ist nah: Windladung unter die Füße. Der allgemeine Fall-Cancel ist während des Flugs aus, damit er den Schlag nicht vorwegnimmt.
+  - **Nie gegen Blöcke fliegen (`steerClear`):** Raycasts 8 Blöcke voraus in Wunschrichtung und 10 entlang der Bewegung, auf Kopf-, Fuß- und Überkopfhöhe. Ist etwas im Weg, steigt er (−45° oder −70°) und dreht zur freien Seite (±35°, ±70°, ±110°), notfalls mit Rakete, sonst zurück und hoch. Gilt bei Elytra-Mace und Heil-Flug.
+  - **Crystal nach Meteor-Vorbild** (Meteor Client `CrystalAura`, nur Spielregeln, keine Tarnung): Mindestschaden 6, wenn das Leben des Gegners ≤ 8 ist nur 1,5 (Face-Place); erst zerschlagen, dann setzen; kein Kristall in der Hitbox des Gegners; hinter Wänden nur bis 3 Blöcke; Weakness → erst Waffe in die Hand; gerade angegriffene Kristalle 4 Ticks ignorieren.
+  - **Wind Burst:** Nach einem Mace-Treffer mit Wind Burst bleibt er im Mace-Modus (Kette).
+  - **Nie Ausruhen:** Er isst auch, wenn er getroffen wird (kein Abbruch, keine Sperre). Der Heil-Flug wartet nicht mehr auf Regeneration: landen, essen, sofort zurück.
+  - Nicht im Spiel getestet.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

@@ -159,18 +159,17 @@ public final class Combat {
             // cornered, it keeps fighting. Normal food only when hungry and nobody is close.
             // Being hit = keep fighting (no snack under fire). With a totem left it stays in the fight and only eats in
             // a quiet moment; with no totem left and low health it gets away first, then heals.
-            boolean hitNow = ticks - lastHurt < 20;
-            boolean totems = Guard.hasTotem(p) || Bot.count(mc, "totem_of_undying") > 0;
+                        boolean totems = Guard.hasTotem(p) || Bot.count(mc, "totem_of_undying") > 0;
             boolean needHeal = hp < 9 || (hp < 13 && d > 6);
             if (healTrip(mc, p, hp, totems, d)) return false;
             if (!totems && hp < 6 && d < 6 && backOff < 40) { // no totem left and nearly dead: a short dash away (eats on the run)
                 backOff++;
                 mode = "no totem – getting away";
                 Guard.backOff(mc, p, target.position());
-                if (!hitNow && Guard.canGapple(mc, p)) Guard.eatGapple(mc);
+                if (Guard.canGapple(mc, p)) Guard.eatGapple(mc);
                 return false;
             }
-            if (needHeal && !hitNow && Guard.canGapple(mc, p) && Guard.eatGapple(mc)) { // no pause: strafing goes on
+            if (needHeal && Guard.canGapple(mc, p) && Guard.eatGapple(mc)) { // eats right in the fight, hit or not – no pause
                 mode = "golden apple";
                 return false;
             }
@@ -362,9 +361,10 @@ public final class Combat {
                         else if (!p.isFallFlying()) mc.options.keyJump.setDown(tripTicks % 2 == 0);
                         else {
                             mc.options.keyJump.setDown(false);
-                            p.setYRot(yaw);
-                            p.setXRot(-25f);
-                            if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", yaw, -25f)) rocketCd = 25;
+                            float[] aim = steerClear(mc, p, yaw, -25f);
+                            p.setYRot(aim[0]);
+                            p.setXRot(aim[1]);
+                            if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 25;
                         }
                         if (far >= 110 || tripTicks > 20 * 30) tripStage = 2; // a bit over 100, so landing still leaves 100
                     } else {
@@ -373,10 +373,11 @@ public final class Combat {
                         return false;
                     }
                 }
-                case 2 -> { // land (glide down, look ahead)
+                case 2 -> { // land (glide down, look ahead, nothing in the way)
                     mode = "landing to heal";
-                    p.setYRot(yaw);
-                    p.setXRot(20f);
+                    float[] aim = steerClear(mc, p, yaw, 20f);
+                    p.setYRot(aim[0]);
+                    p.setXRot(aim[1]);
                     if (p.onGround() || p.isInWater()) {
                         Guard.keepElytra = false;
                         Guard.gear(mc);
@@ -393,15 +394,14 @@ public final class Combat {
                         for (Player o : mc.level.players()) if (o != p && o.distanceTo(p) < 100) tripFrom = o.position();
                         return true;
                     }
-                    mode = "healing far away";
-                    Bot.release(mc);
-                    if (p.getHealth() >= 16 || tripTicks > 20 * 60) {
-                        tripStage = 0;
-                        Bot.say("Healed – going back in.");
-                        return false;
-                    }
-                    if (Guard.canGapple(mc, p)) Guard.eatGapple(mc);
-                    else if (p.getFoodData().getFoodLevel() < 20) Guard.eatNow(mc, false);
+                    mode = "eating far away";
+                    // no resting: eat what there is, then straight back into the fight
+                    if (Guard.canGapple(mc, p) && Guard.eatGapple(mc)) return true;
+                    if (p.getHealth() < 16 && p.getFoodData().getFoodLevel() < 20 && Guard.eatNow(mc, false)) return true;
+                    if (p.isUsingItem()) return true;
+                    tripStage = 0;
+                    Bot.say("Back into the fight.");
+                    return false;
                 }
                 default -> tripStage = 0;
             }
@@ -553,7 +553,7 @@ public final class Combat {
                 }
             }
             // no fall damage: wind charge at the ground just before landing from high up
-            if (maceStage == 0 && p.fallDistance > 6 && p.getDeltaMovement().y < -0.6 && has(mc, "wind_charge")) {
+            if (maceStage == 0 && flyStage == 0 && p.fallDistance > 6 && p.getDeltaMovement().y < -0.6 && has(mc, "wind_charge")) {
                 BlockPos below = p.blockPosition();
                 for (int i = 1; i <= 3; i++) {
                     if (Bot.solid(mc, below.below(i))) {
@@ -749,8 +749,10 @@ public final class Combat {
                 mc.options.keyUp.setDown(d > 1.0);
                 boolean falling = p.getDeltaMovement().y < -0.1;
                 if (falling && d <= 3.2 && holding(p, "mace")) {
+                    boolean burst = enchanted(p.getMainHandItem(), "wind_burst");
                     smash(mc, p);
-                    maceStage = 0;
+                    maceStage = burst ? 1 : 0; // wind burst throws us up again: stay in the air and smash again
+                    if (burst) mode = "mace · wind burst chain";
                 }
                 return true;
             }
@@ -789,8 +791,10 @@ public final class Combat {
         }
 
         /**
-         * Elytra mace: elytra on, take off, rockets up until high above the target, then a steep dive and the mace
-         * smash on the way down (stun slam against a shield). Afterwards the chestplate goes back on.
+         * Elytra mace, done the way it works: elytra on, take off, rockets up, then fly level until it is right above
+         * the target – there the chestplate goes back on (the elytra comes off), so it free-falls and the fall distance
+         * builds up – and the mace smash lands on the way down (stun slam against a shield). Missed and close to the
+         * ground: a wind charge under the feet takes the fall. Never flies into blocks (see {@link #steerClear}).
          */
         private boolean elytraMace(Minecraft mc, LocalPlayer p, double d) {
             if (flyCd > 0) flyCd--;
@@ -801,23 +805,20 @@ public final class Combat {
                 flyTicks = 0;
             }
             flyTicks++;
-            Guard.keepElytra = true;
             mode = "elytra mace";
-            if (flyTicks > 20 * 14 || !target.isAlive()) return endFlight(mc);
-            if (flyStage >= 3 && !openAbove(mc, target)) { // they went under a roof: a dive would only hit blocks
-                flyStage = 5;
+            if (flyTicks > 20 * 20 || !target.isAlive()) return endFlight(mc);
+            if (flyStage >= 3 && flyStage <= 4 && !openAbove(mc, target)) { // they went under a roof: a dive would only hit blocks
+                flyStage = 6;
                 mode = "elytra mace · they're under cover";
             }
             Vec3 t = target.position();
+            double hd = Math.hypot(t.x - p.getX(), t.z - p.getZ());
+            float yawT = (float) Math.toDegrees(Math.atan2(-(t.x - p.getX()), t.z - p.getZ()));
             switch (flyStage) {
-                case 1 -> { // put the elytra on, jump
+                case 1 -> { // elytra on, jump
+                    Guard.keepElytra = true;
                     if (!wearingElytra(p)) {
-                        var inv = p.getInventory();
-                        for (int i = 0; i < 36; i++)
-                            if (id(inv.getItem(i)).equals("elytra")) {
-                                Inv.equip(mc, i, net.minecraft.world.entity.EquipmentSlot.CHEST);
-                                break;
-                            }
+                        equip(mc, p, "elytra");
                         return true;
                     }
                     if (p.onGround()) {
@@ -836,34 +837,112 @@ public final class Combat {
                         if (p.onGround() && flyTicks > 20) return endFlight(mc);
                     }
                 }
-                case 3 -> { // climb with rockets until well above them
+                case 3 -> { // climb: rockets, up to ~25 above them
                     mc.options.keyJump.setDown(false);
-                    float yaw = (float) Math.toDegrees(Math.atan2(-(t.x - p.getX()), t.z - p.getZ()));
-                    p.setYRot(yaw);
-                    p.setXRot(-55f);
-                    if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", yaw, -55f)) rocketCd = 22;
-                    if (p.getY() > t.y + 20) flyStage = 4;
+                    float pitch = -50f;
+                    float[] aim = steerClear(mc, p, yawT, pitch);
+                    p.setYRot(aim[0]);
+                    p.setXRot(aim[1]);
+                    if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 20;
+                    if (p.getY() > t.y + 25) flyStage = 4;
                     if (!p.isFallFlying() && p.onGround()) return endFlight(mc);
                 }
-                case 4 -> { // dive steeply onto them and smash
-                    Vec3 aim = target.getEyePosition();
-                    double hd = Math.hypot(aim.x - p.getX(), aim.z - p.getZ());
-                    float yaw = (float) Math.toDegrees(Math.atan2(-(aim.x - p.getX()), aim.z - p.getZ()));
-                    float pitch = (float) Math.toDegrees(Math.atan2(p.getEyeY() - aim.y, Math.max(0.1, hd)));
-                    p.setYRot(yaw);
-                    p.setXRot(Math.max(35f, Math.min(88f, pitch))); // steep: fast fall keeps the fall distance growing
-                    hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
-                    if (p.distanceTo(target) <= 3.4 && p.getDeltaMovement().y < -0.4) {
-                        smash(mc, p);
+                case 4 -> { // level flight until right above them
+                    float pitch = p.getY() < t.y + 20 ? -15f : 5f;
+                    float[] aim = steerClear(mc, p, yawT, pitch);
+                    p.setYRot(aim[0]);
+                    p.setXRot(aim[1]);
+                    double speed = p.getDeltaMovement().horizontalDistance();
+                    if (hd > 12 && speed < 0.9 && --rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 30;
+                    // drop a little early: the momentum carries it on for a few blocks
+                    if (hd < 2.0 + speed * 4) {
+                        Guard.keepElytra = false;
+                        equip(mc, p, "chestplate"); // elytra off → free fall
+                        hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
                         flyStage = 5;
+                        mode = "elytra mace · chestplate on, falling";
+                    }
+                    if (!p.isFallFlying() && p.onGround()) return endFlight(mc);
+                }
+                case 5 -> { // free fall onto them, steer a little, smash
+                    Bot.look(p, target.getEyePosition());
+                    mc.options.keyUp.setDown(hd > 0.8);
+                    hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
+                    if (p.distanceTo(target) <= 3.4 && p.getDeltaMovement().y < -0.3) {
+                        smash(mc, p);
+                        flyStage = 6;
+                        return true;
+                    }
+                    // missed and the ground is close: a wind charge under the feet takes the fall
+                    if (p.fallDistance > 6 && has(mc, "wind_charge")) {
+                        for (int i = 1; i <= 3; i++)
+                            if (Bot.solid(mc, p.blockPosition().below(i))) {
+                                if (quickUse(mc, p, "wind_charge", p.getYRot(), 90f)) mode = "elytra mace · missed, fall cancel";
+                                break;
+                            }
                     }
                     if (p.onGround()) return endFlight(mc);
                 }
-                default -> { // landing
+                default -> { // done or aborted: land
+                    if (wearingElytra(p) && p.isFallFlying()) {
+                        float[] aim = steerClear(mc, p, p.getYRot(), 20f);
+                        p.setYRot(aim[0]);
+                        p.setXRot(aim[1]);
+                    }
                     if (p.onGround() || !p.isFallFlying()) return endFlight(mc);
                 }
             }
             return true;
+        }
+
+        /** Best chestplate (netherite first) or the elytra into the chest slot. */
+        private void equip(Minecraft mc, LocalPlayer p, String what) {
+            var inv = p.getInventory();
+            int best = -1, bestTier = -1;
+            for (int i = 0; i < 36; i++) {
+                String id = id(inv.getItem(i));
+                int tier = what.equals("elytra") ? (id.equals("elytra") ? 1 : -1)
+                        : !id.endsWith("_chestplate") ? -1 : id.startsWith("netherite") ? 6 : id.startsWith("diamond") ? 5 : id.startsWith("iron") ? 4 : id.startsWith("chainmail") ? 3 : id.startsWith("golden") ? 2 : 1;
+                if (tier > bestTier) {
+                    bestTier = tier;
+                    best = i;
+                }
+            }
+            if (best >= 0) Inv.equip(mc, best, net.minecraft.world.entity.EquipmentSlot.CHEST);
+        }
+
+        /**
+         * Keeps the elytra flight out of blocks: looks 8 blocks ahead along the wanted direction and along the current
+         * motion. If something is in the way it climbs steeply and turns away to the side that is free.
+         * Returns {yaw, pitch}.
+         */
+        private float[] steerClear(Minecraft mc, LocalPlayer p, float yaw, float pitch) {
+            Vec3 eye = p.getEyePosition();
+            if (!blocked(mc, p, eye, dir(yaw, pitch), 8) && !blocked(mc, p, eye, p.getDeltaMovement(), 10)) return new float[]{yaw, pitch};
+            for (float turn : new float[]{35, -35, 70, -70, 110, -110}) // climb and turn to whichever side is open
+                for (float up : new float[]{-45, -70})
+                    if (!blocked(mc, p, eye, dir(yaw + turn, up), 8)) {
+                        if (rocketCd > 5 && has(mc, "firework_rocket") && quickUse(mc, p, "firework_rocket", yaw + turn, up)) rocketCd = 20;
+                        mode = "elytra · avoiding blocks";
+                        return new float[]{yaw + turn, up};
+                    }
+            return new float[]{yaw + 180, -60}; // boxed in: back the way it came, upwards
+        }
+
+        private static Vec3 dir(float yaw, float pitch) {
+            double y = Math.toRadians(yaw), x = Math.toRadians(pitch);
+            return new Vec3(-Math.sin(y) * Math.cos(x), -Math.sin(x), Math.cos(y) * Math.cos(x));
+        }
+
+        private static boolean blocked(Minecraft mc, LocalPlayer p, Vec3 from, Vec3 dir, double len) {
+            if (dir.lengthSqr() < 1e-4) return false;
+            Vec3 d = dir.normalize().scale(len);
+            for (Vec3 off : new Vec3[]{Vec3.ZERO, new Vec3(0, -1.2, 0), new Vec3(0, 0.3, 0)}) { // head, feet and a bit above
+                var hit = mc.level.clip(new net.minecraft.world.level.ClipContext(from.add(off), from.add(off).add(d),
+                        net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.ANY, p));
+                if (hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) return true;
+            }
+            return false;
         }
 
         /** Nothing solid in the 24 blocks above them – otherwise a dive from above only hits the roof. */
@@ -897,6 +976,7 @@ public final class Combat {
         }
 
         private int sinceSwordHit = 100;
+        private final java.util.Map<Integer, Integer> recentlyHit = new java.util.HashMap<>();
 
         private boolean crystal(Minecraft mc, LocalPlayer p) {
             float hp = p.getHealth() + p.getAbsorptionAmount();
@@ -919,21 +999,26 @@ public final class Combat {
                 mode = "crystal · hit up";
                 return true;
             }
-            // 1) break any crystal that hurts them more than us
+            // minimum damage for a crystal to be worth it: 3 hearts – down to 0.75 hearts when they are nearly dead
+            double minDmg = target.getHealth() + target.getAbsorptionAmount() <= 8 ? 1.5 : 6;
+            recentlyHit.entrySet().removeIf(e -> ticks - e.getValue() > 4);
+            // 1) break any crystal that hurts them more than us (breaking comes before placing)
             EndCrystal hit = null;
             double hitScore = 0;
-            for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), c -> c.isAlive())) {
+            for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), c -> c.isAlive() && !recentlyHit.containsKey(c.getId()))) {
                 if (eye.distanceTo(c.position().add(0, 1, 0)) > 4.6) continue;
                 double them = crystalDamage(target, c.position()), us = crystalDamage(p, c.position());
                 if (!safeForUs(us, hp) || !crystalsAroundSafe(mc, p, hp, null)) continue; // never risk blowing ourselves up – totem or not; neighbours go off too
                 double score = them - us * 0.6;
-                if (them > 2 && score > hitScore) {
+                if (them >= minDmg && score > hitScore) {
                     hitScore = score;
                     hit = c;
                 }
             }
             if (hit != null) {
+                if (p.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS)) Bot.holdBest(mc, Guard::weaponScore); // a fist can't break it with weakness
                 Bot.look(p, hit.position().add(0, 0.8, 0));
+                recentlyHit.put(hit.getId(), ticks);
                 mc.gameMode.attack(p, hit);
                 Bot.swing(p);
                 return true;
@@ -953,10 +1038,15 @@ public final class Combat {
                 if (!mc.level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, new AABB(a1)).isEmpty()) continue;
                 if (eye.distanceTo(Vec3.atCenterOf(b).add(0, 0.5, 0)) > 4.5) continue;
                 Vec3 c = Vec3.atBottomCenterOf(a1);
+                if (target.getBoundingBox().intersects(new AABB(a1).expandTowards(0, 1, 0))) continue; // would sit inside them
+                var seen = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, Vec3.atCenterOf(b).add(0, 0.5, 0),
+                        net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE, p));
+                if (seen.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK && !seen.getBlockPos().equals(b)
+                        && eye.distanceTo(Vec3.atCenterOf(b)) > 3) continue; // behind a wall and not close: skip
                 double them = crystalDamage(target, c), us = crystalDamage(p, c);
                 if (!safeForUs(us, hp) || !crystalsAroundSafe(mc, p, hp, c)) continue;
                 double score = them - us * 0.6;
-                if (them >= 4 && score > bestScore) {
+                if (them >= minDmg && score > bestScore) {
                     bestScore = score;
                     best = b.immutable();
                 }

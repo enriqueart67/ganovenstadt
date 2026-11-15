@@ -68,7 +68,6 @@ final class Guard {
         if (eatTicks > 0) return "Eating";
         if (fleeTicks > 0) return "Running from a creeper";
         if (prey != null || loot != null) return "Hunting for food (" + hearts + " hearts)";
-        if (resting) return "Resting – " + hearts + " hearts";
         return "Staying safe from mobs (" + hearts + " hearts)";
     }
 
@@ -117,19 +116,7 @@ final class Guard {
             return true;
         }
         if (gapCd > 0) gapCd--;
-        // 4) finish eating – unless someone is right on us: then stop and hit back
-        if (eatTicks > 8) {
-            boolean close = !mc.level.getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(2.5),
-                    e -> e instanceof Enemy && e.isAlive() && e.distanceTo(p) < 2.5).isEmpty();
-            if (Bot.current() instanceof Combat.Duel duelNow && duelNow.target() != null && duelNow.target().distanceTo(p) < 2.5) close = true;
-            if (p.hurtTime > 0) close = true; // got hit while eating: fight back instead
-            if (close) {
-                eatTicks = 0;
-                mc.options.keyUse.setDown(false);
-                if (p.isUsingItem()) mc.gameMode.releaseUsingItem(p);
-                Bot.note("Too close – fighting instead of eating.");
-            }
-        }
+        // 4) finish eating – also while being hit (no pauses, no giving up a bite)
         if (eatTicks > 0) {
             eatTicks--;
             mc.options.keyUse.setDown(eatTicks > 0);
@@ -205,7 +192,7 @@ final class Guard {
         }
         // 7) low in a fight: a golden apple – but first get some room, eating next to a monster gets you killed
         // (no extra pause: it eats while it keeps moving, but not in the second it is being hit)
-        if (hp < 8 && enemy != null && p.hurtTime == 0 && canGapple(mc, p) && eatGapple(mc)) return true;
+        if (hp < 8 && enemy != null && canGapple(mc, p) && eatGapple(mc)) return true;
         // 8) fighting (in a duel only mobs that are really close – the player is the main target)
         if (enemy != null && (!duel || ed < 3)) {
             fight(mc, p, enemy, ed);
