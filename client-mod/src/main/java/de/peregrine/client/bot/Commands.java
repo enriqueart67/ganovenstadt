@@ -141,6 +141,12 @@ public final class Commands {
         }
         if (t.matches("(help|hilfe|\\?|was kannst du.*|what can you do.*|befehle|commands)")) return help();
         if (t.matches("(status|was machst du.*|what are you doing.*)")) return Bot.status();
+        if (t.matches("(combat log|kampf ?log|kampfprotokoll|fight log)")) {
+            java.nio.file.Path f = CombatLog.file();
+            de.peregrine.client.gui.EmergencyScreen.open(f.getParent().toFile());
+            return java.nio.file.Files.exists(f) ? "Opened the folder – the file is " + f.getFileName() + ". Send it over after a fight, it shows every jump, hit and miss."
+                    : "No fight logged yet. After the next fight it is in " + f.getParent() + ".";
+        }
 
         // own commands: remember / forget / list / show
         Matcher rem = Pattern.compile("^(?:merke?|merk dir|speicher(?:e)?|lerne?|remember|save|learn|teach|new command|neuer befehl)\\s+(?:dir\\s+)?(?:den befehl\\s+|command\\s+)?\"?([\\p{L}\\d _<>{}-]{1,32}?)\"?\\s*[:=]\\s*(.+)$").matcher(t);
@@ -351,6 +357,12 @@ public final class Commands {
         if (c.matches("(drop junk|throw away junk|clean inventory|clear inventory|wirf müll weg|wirf muell weg|müll wegwerfen|muell wegwerfen|inventar aufräumen|inventar aufraeumen)")) {
             jobs.add(Actions.DropJunk::new);
             said.add("throwing away junk");
+            return null;
+        }
+        if (c.matches("(guard|guard here|guard this spot|bewache|bewach|bewache hier|bewache den platz|wache|wache halten)")) {
+            BlockPos at = mc.player != null ? mc.player.blockPosition() : BlockPos.ZERO;
+            jobs.add(() -> new Actions.GuardSpot(at));
+            said.add("guarding this spot – every monster within 16 blocks, until you say stop");
             return null;
         }
         if (c.matches("(come back|go back|return|komm zurück|komm zurueck|geh zurück|geh zurueck|zurück|zurueck)")) {

@@ -221,7 +221,7 @@ final class Guard {
     }
 
     // ------------------------------------------------------------------ fighting
-    private static void fight(Minecraft mc, LocalPlayer p, LivingEntity enemy, double d) {
+    static void fight(Minecraft mc, LocalPlayer p, LivingEntity enemy, double d) {
         mc.options.keyUse.setDown(false);
         Bot.holdBest(mc, Guard::weaponScore);
         Bot.look(p, enemy.getEyePosition().subtract(0, 0.4, 0));
@@ -255,6 +255,68 @@ final class Guard {
             safeWalk(mc, archer && d > 5);
         }
         Bot.note("Fighting a " + type(enemy).replace('_', ' ') + ".");
+    }
+
+    private static String potion(ItemStack s) {
+        String id = BuiltInRegistries.ITEM.getKey(s.getItem()).getPath();
+        if (!id.equals("potion") && !id.equals("splash_potion")) return "";
+        var c = s.get(DataComponents.POTION_CONTENTS);
+        return id + ":" + (c == null ? "" : c.toString().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private static int potionCd;
+
+    /**
+     * Healing from potions when there is no golden apple: a splash potion of healing is thrown at the own feet
+     * (instant), a drinkable healing or regeneration potion is drunk. Returns true while it handles it.
+     */
+    static boolean healPotion(Minecraft mc) {
+        LocalPlayer p = mc.player;
+        if (potionCd > 0) {
+            potionCd--;
+            return false;
+        }
+        var inv = p.getInventory();
+        for (int i = 0; i < 9; i++) {
+            String k = potion(inv.getItem(i));
+            if (k.startsWith("splash_potion") && (k.contains("healing") || k.contains("regeneration"))) {
+                int prev = inv.getSelectedSlot();
+                float pitch = p.getXRot();
+                inv.setSelectedSlot(i);
+                p.setXRot(90f);
+                mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+                p.setXRot(pitch);
+                inv.setSelectedSlot(prev);
+                potionCd = 20;
+                Bot.note("Splash potion.");
+                return true;
+            }
+        }
+        if (p.hasEffect(net.minecraft.world.effect.MobEffects.REGENERATION)) return false;
+        if (!Bot.holdBest(mc, st -> {
+            String k = potion(st);
+            return k.startsWith("potion") && k.contains("healing") ? 3 : k.startsWith("potion") && k.contains("regeneration") ? 2 : 0;
+        })) return false;
+        if (!potion(p.getMainHandItem()).startsWith("potion")) return true; // still swapping
+        mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+        mc.options.keyUse.setDown(true);
+        eatTicks = 36;
+        potionCd = 40;
+        Bot.note("Drinking a potion.");
+        return true;
+    }
+
+    /** A strength potion at the start of a fight, if there is one and no strength yet. */
+    static boolean strengthPotion(Minecraft mc) {
+        LocalPlayer p = mc.player;
+        if (p.hasEffect(net.minecraft.world.effect.MobEffects.STRENGTH) || potionCd > 0) return false;
+        if (!Bot.holdBest(mc, st -> potion(st).startsWith("potion") && potion(st).contains("strength") ? 1 : 0)) return false;
+        if (!potion(p.getMainHandItem()).contains("strength")) return true;
+        mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+        mc.options.keyUse.setDown(true);
+        eatTicks = 36;
+        potionCd = 40;
+        return true;
     }
 
     /** A golden apple is there, none eaten in the last 5 s, and no regeneration running. */

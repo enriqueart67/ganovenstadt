@@ -294,6 +294,67 @@ public final class Actions {
         }
     }
 
+    /** Guards a spot: attacks every monster within 16 blocks, then goes back to the spot. Until you say stop. */
+    public static final class GuardSpot implements Bot.Task {
+        private final BlockPos home;
+        private Navigator nav;
+        private boolean atHome;
+
+        public GuardSpot(BlockPos home) {
+            this.home = home;
+        }
+
+        @Override
+        public boolean idle() {
+            return atHome;
+        }
+
+        @Override
+        public String status() {
+            return "Guarding " + home.getX() + " " + home.getY() + " " + home.getZ();
+        }
+
+        @Override
+        public void unstuck(Minecraft mc) {
+            nav = null;
+        }
+
+        @Override
+        public boolean tick(Minecraft mc) {
+            LocalPlayer p = mc.player;
+            net.minecraft.world.entity.LivingEntity enemy = null;
+            double best = 16;
+            for (var e : mc.level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, new AABB(home).inflate(16),
+                    x -> x instanceof net.minecraft.world.entity.monster.Enemy && x.isAlive())) {
+                double d = e.distanceTo(p);
+                if (d < best) {
+                    best = d;
+                    enemy = e;
+                }
+            }
+            if (enemy != null) {
+                atHome = false;
+                if (best > 3.5) {
+                    if (nav == null || p.tickCount % 30 == 0) nav = new Navigator(enemy.blockPosition(), 2.5, p.getDirection());
+                    if (nav.tick(mc)) nav = null;
+                } else {
+                    nav = null;
+                    Guard.fight(mc, p, enemy, best);
+                }
+                return false;
+            }
+            atHome = p.blockPosition().distManhattan(home) <= 1;
+            if (atHome) {
+                nav = null;
+                Bot.release(mc);
+                return false;
+            }
+            if (nav == null) nav = new Navigator(home, 0, p.getDirection());
+            if (nav.tick(mc)) nav = null;
+            return false;
+        }
+    }
+
     /** Goes back to where the command was given. */
     public static Bot.Task back(BlockPos where) {
         return new Tasks.GoTo(where, "the start");

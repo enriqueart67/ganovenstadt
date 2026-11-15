@@ -36,7 +36,7 @@ public final class EmergencyScreen extends Screen {
         return false;
     }
 
-    private static void open(File f) {
+    public static void open(File f) {
         try {
             Object os = net.minecraft.util.Util.class.getMethod("getPlatform").invoke(null);
             for (String m : new String[]{"openFile", "openPath"}) {
