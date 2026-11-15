@@ -42,6 +42,11 @@ public abstract class Module {
     public void tick(Minecraft mc) {
     }
 
+    /** Optional own settings screen (e.g. the block picker of Block ESP); null = only the normal settings. */
+    public net.minecraft.client.gui.screens.Screen editor(net.minecraft.client.gui.screens.Screen parent) {
+        return null;
+    }
+
     public void reset() {
         enabled = defaultEnabled;
         settings.forEach(Setting::reset);

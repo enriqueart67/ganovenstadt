@@ -236,7 +236,7 @@ public final class Bot {
     private static boolean swingLooked;
 
     /** Arm swing; the method's signature differs between versions, so look it up once. */
-    static void swing(LocalPlayer p) {
+    public static void swing(LocalPlayer p) {
         try {
             if (!swingLooked) {
                 swingLooked = true;

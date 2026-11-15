@@ -25,7 +25,7 @@ public final class PeregrineClient implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Peregrine");
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("peregrine", "main"));
 
-    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey, assistantKey;
+    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey, assistantKey, espKey, auraKey;
 
     @Override
     public void onInitializeClient() {
@@ -39,6 +39,8 @@ public final class PeregrineClient implements ClientModInitializer {
         freelookKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.freelook", InputConstants.KEY_LALT, CATEGORY));
         waypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.waypoints", InputConstants.KEY_M, CATEGORY));
         assistantKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.assistant", InputConstants.KEY_K, CATEGORY));
+        espKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.esp", InputConstants.KEY_X, CATEGORY));
+        auraKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.aura", InputConstants.KEY_R, CATEGORY));
         net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
             if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
         });
@@ -47,6 +49,8 @@ public final class PeregrineClient implements ClientModInitializer {
             if (HudEditor.active) return;
             Minecraft mc = Minecraft.getInstance();
             HudModule.layout(g.guiWidth(), g.guiHeight(), Modules.huds());
+            Modules.BLOCK_ESP.render(g, mc);
+            Modules.AURA.render(g, mc);
             Waypoints.render(g, mc);
             for (HudModule h : Modules.huds()) if (h.enabled) h.render(g, mc, false);
         });
@@ -121,6 +125,8 @@ public final class PeregrineClient implements ClientModInitializer {
         SessionStats.tick(mc);
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
+        while (espKey.consumeClick()) toggle(mc, Modules.BLOCK_ESP);
+        while (auraKey.consumeClick()) toggle(mc, Modules.AURA);
         while (waypointKey.consumeClick()) if (Modules.WAYPOINTS.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.WaypointScreen());
         Zoom.setHeld(zoomKey.isDown());
         FreelookState.update(mc, freelookKey.isDown());

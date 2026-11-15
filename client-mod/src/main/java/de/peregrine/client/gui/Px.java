@@ -140,4 +140,20 @@ public final class Px {
         g.fill(Math.round(x * s), Math.round(y1 * s), Math.round(x * s) + 1, Math.round(y2 * s), argb);
         end(g);
     }
+
+    /** Straight line at any angle, width in screen pixels (one rotated rectangle – cheap). */
+    public static void line(GuiGraphicsExtractor g, float x1, float y1, float x2, float y2, float width, int argb) {
+        float s = scale();
+        float X1 = x1 * s, Y1 = y1 * s, X2 = x2 * s, Y2 = y2 * s;
+        float dx = X2 - X1, dy = Y2 - Y1;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.5f || len > 20000f) return;
+        g.pose().pushMatrix();
+        g.pose().scale(1f / s, 1f / s);
+        g.pose().translate(X1, Y1);
+        g.pose().rotate((float) Math.atan2(dy, dx));
+        int wpx = Math.max(1, Math.round(width));
+        g.fill(0, -wpx / 2, Math.round(len), -wpx / 2 + wpx, argb);
+        g.pose().popMatrix();
+    }
 }

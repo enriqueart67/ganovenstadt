@@ -144,6 +144,31 @@
     - Pearl Catch: Zwei Ticks nach der Angriffs-Perle folgt eine Windladung an die eigenen Füße in Richtung Gegner.
   - **Lunge Swap:** Speer mit Lunge (Verzauberung per `getEnchantments().toString()` erkannt) bei 3,6–8,5 Blöcken. Er löst den normalen Angriff per Reflection auf `Minecraft.startAttack` aus (Stoß mit Vorwärtsschub der Verzauberung) und kehrt im nächsten Tick zur Waffe zurück.
   - Nicht im Spiel getestet: Die Demo-Welt hat keine dieser Items und keinen zweiten Spieler.
+- **Block ESP und Combat Aura (`client-mod/src/main/java/de/peregrine/client/feature/`):**
+  - **Wiederverwendet:**
+    - das Modul- und Einstellungssystem: `Module`, die Settings und `Store`, das automatisch speichert;
+    - das Mod-Menü (Karten, Einstellungsseite), Tasten über `KeyMappingHelper` und `toggle()` mit Hinweis;
+    - die HUD-Ebene, die Kamera-Projektion der Wegpunkte (jetzt `Waypoints.camera` öffentlich und als `Projector` mit Clipping an der Kamera-Ebene), `Px` und `Ui.glow`;
+    - `Bot.allowed` (Einzelspieler, LAN oder Operator) und das versionssichere `Bot.swing`.
+  - **Neu:**
+    - `ListSetting` (JSON-Array) für die Blockliste;
+    - `Module.editor(parent)` für eigene Bildschirme;
+    - `Px.line` (gedrehtes Rechteck in Bildschirmpixeln);
+    - Kategorien heißen jetzt „Combat“ (früher PvP) und „Render“ (früher Visuals).
+  - **Block ESP** (Render, Taste X, `key.peregrine.esp`):
+    - Sucht rollierend pro Tick bis zu 320 Abschnitte, die schnell über `LevelChunkSection.maybeHas` (Palette) geprüft werden, und durchsucht höchstens 6 Abschnitte voll. Treffer werden je Abschnitt gemerkt; wer den Chunk-Radius verlässt, wird aufgeräumt.
+    - Gezeichnet wird als Overlay: die Kontur nur der Flächen ohne Nachbar-Treffer (eine Ader bekommt eine Außenlinie), dazu der Lichtschein. Die nächsten N sind höchstens 10× pro Sekunde neu sortiert. Bis zu 10 Beschriftungen ohne Überlappung, die nächsten zuerst.
+    - Einstellungen: Blöcke, Farbe, Deckkraft, Linie 1–4 px, Reichweite 16–128, max. Hervorhebungen, Name und Entfernung.
+    - `gui/BlockPickerScreen`: Suche über alle Blöcke mit Autovervollständigung, Item-Symbolen, IDs und Enter = bester Treffer; Live-Vorschau, Palette, Regler, gewählte Blöcke, Zähler „FOUND“.
+    - **Nur** im Einzelspieler, in eigenen LAN-Welten und auf Servern mit Operator-Recht (sonst ein Hinweis, nichts wird gesucht).
+    - Getestet in 26.2 (Kohle/Eisen/Kupfer unter der Erde sichtbar, Dialog, Einstellungen).
+  - **Combat Aura** (Combat, Taste R, `key.peregrine.aura`):
+    - Reichweite 2–6 m; Ziele Hostile / Hostile + neutral / All mobs, nie Spieler (`Player` ausgeschlossen, nur `Mob`); Priorität Closest / Lowest health / Crosshair.
+    - Drehung Smooth (°/tick) oder Instant; Timing „volle Ladung“ oder feste CPS.
+    - Markierung: Ring (animiert), Box oder Glow, plus Name und HP-Balken. Optional durch Wände, optional nur mit Waffe.
+    - Pausiert bei offenem Menü. **Nur `hasSingleplayerServer()`**, im Multiplayer immer aus. Nutzt nur den normalen Angriff, keine Tarnung.
+    - Getestet in 26.2: Kuh erkannt, Ring und HP angezeigt, mitgeschlagen.
+  - Launcher: `client_mods::KEYS` (X, R) und `MODULES` ergänzt, Kategorienamen angepasst.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

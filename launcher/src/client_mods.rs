@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 43] = [
+pub const MODULES: [(&str, &str, &str); 45] = [
     ("HUD", "FPS", "Frames per second"),
     ("HUD", "CPS", "Clicks per second (left | right)"),
     ("HUD", "Coordinates", "X, Y, Z and facing"),
@@ -51,20 +51,20 @@ pub const MODULES: [(&str, &str, &str); 43] = [
     ("HUD", "Biome", "Current biome"),
     ("HUD", "Session time", "Time spent in this session"),
     ("HUD", "Resource packs", "Active resource packs"),
-    ("PvP", "Freelook", "Look around without turning (hold Left Alt)"),
+    ("Combat", "Freelook", "Look around without turning (hold Left Alt)"),
     ("HUD", "Minimap", "Top-down map of your surroundings with waypoints"),
     ("World", "Waypoints", "Save places and find them again (M)"),
     ("World", "Time", "Choose the time of day you see"),
-    ("PvP", "Low fire", "Fire overlay moved down so you can see"),
-    ("Visuals", "Block outline", "Colored outline of the targeted block"),
+    ("Combat", "Low fire", "Fire overlay moved down so you can see"),
+    ("Render", "Block outline", "Colored outline of the targeted block"),
     ("Misc", "Mention highlight", "Highlights chat messages with your name"),
     ("Misc", "Main menu", "Peregrine's own title screen"),
     ("Misc", "Chat timestamps", "Time in front of chat messages"),
     ("Misc", "Auto-GG", "Sends “gg” when a round ends"),
-    ("PvP", "Crosshair", "Custom shape, size and color"),
-    ("PvP", "No hurt cam", "No camera shake when hit"),
-    ("Visuals", "Zoom", "Hold C, adjustable strength, smooth"),
-    ("Visuals", "Fullbright", "Full brightness (G)"),
+    ("Combat", "Crosshair", "Custom shape, size and color"),
+    ("Combat", "No hurt cam", "No camera shake when hit"),
+    ("Render", "Zoom", "Hold C, adjustable strength, smooth"),
+    ("Render", "Fullbright", "Full brightness (G)"),
     ("World", "Weather", "Choose the weather you see"),
     ("Movement", "Auto-Sprint", "Always sprint (V)"),
     ("Movement", "Toggle sneak", "Press once instead of holding"),
@@ -74,6 +74,8 @@ pub const MODULES: [(&str, &str, &str); 43] = [
     ("Cosmetics", "Pet", "Parrot, bee, allay, fox, axolotl, frog or copper golem next to you"),
     ("Cosmetics", "Emotes", "16 emotes – hold B, your figure previews the one you aim at"),
     ("Misc", "HUD style", "Colors and background of all HUD elements"),
+    ("Render", "Block ESP", "Highlights chosen blocks through walls (X)"),
+    ("Combat", "Combat Aura", "Fights hostile mobs for you – singleplayer only (R)"),
 ];
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -107,7 +109,7 @@ pub const TURBO: [(&str, &str, &str); 5] = [
     ("entityculling", "Entity Culling", "skips mobs and chests you cannot see"),
 ];
 /// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
-pub const KEYS: [(&str, &str, &str); 8] = [
+pub const KEYS: [(&str, &str, &str); 10] = [
     ("key.peregrine.menu", "Open mod menu", "key.keyboard.right.shift"),
     ("key.peregrine.zoom", "Zoom (hold)", "key.keyboard.c"),
     ("key.peregrine.fullbright", "Toggle fullbright", "key.keyboard.g"),
@@ -116,6 +118,8 @@ pub const KEYS: [(&str, &str, &str); 8] = [
     ("key.peregrine.freelook", "Freelook (hold)", "key.keyboard.left.alt"),
     ("key.peregrine.waypoints", "Waypoints", "key.keyboard.m"),
     ("key.peregrine.assistant", "AI assistant", "key.keyboard.k"),
+    ("key.peregrine.esp", "Block ESP on/off", "key.keyboard.x"),
+    ("key.peregrine.aura", "Combat Aura on/off (singleplayer)", "key.keyboard.r"),
 ];
 
 /// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).

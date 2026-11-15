@@ -2,8 +2,8 @@ package de.peregrine.client.module;
 
 public enum Category {
     HUD("HUD"),
-    PVP("PvP"),
-    GRAPHICS("Visuals"),
+    PVP("Combat"),
+    GRAPHICS("Render"),
     MOVEMENT("Movement"),
     WORLD("World"),
     COSMETICS("Cosmetics"),

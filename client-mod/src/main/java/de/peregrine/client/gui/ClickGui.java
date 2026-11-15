@@ -376,6 +376,16 @@ public final class ClickGui extends Screen {
                         Store.save();
                     }));
                 }
+            } else if (s instanceof de.peregrine.client.setting.ListSetting ls) {
+                // e.g. the blocks of Block ESP: count + a button for the module's own editor
+                Screen ed = m.editor(this);
+                String lbl = "CHOOSE";
+                int bw = Type.spacedWidth(lbl, Type.MONO, 0.65f, 1.2f) + 16, bx = cx + cw - bw;
+                boolean bh2 = vis && Ui.in(mx, my, bx, y + 5, bw, 13);
+                Type.right(g, ls.get().size() + " SELECTED", Type.MONO, bx - 10, y + 9, 0.7f, t.muted);
+                Px.roundRect(g, bx, y + 5, bw, 13, 3, bh2 ? (0xFF000000 | (t.accent & 0xFFFFFF)) : (0xFF000000 | (t.text & 0xFFFFFF)));
+                Type.spaced(g, lbl, Type.MONO, bx + 8, y + 8, 0.65f, 0xFF000000 | (t.bg & 0xFFFFFF), 1.2f);
+                if (vis && ed != null) hits.add(new Hit(cx - 4, y, cw + 8, rowH, () -> Ui.open(ed)));
             } else if (s instanceof ColorSetting c) {
                 int px = cx + cw - ColorSetting.PALETTE.length * 14 + 3;
                 for (int col : ColorSetting.PALETTE) {

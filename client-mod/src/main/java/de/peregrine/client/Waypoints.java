@@ -155,7 +155,7 @@ public final class Waypoints {
     private static java.lang.reflect.Method cameraGetter;
 
     /** The main camera – the getter is called mainCamera() from 26.2 and getMainCamera() in 26.1. */
-    private static Camera camera(Minecraft mc) {
+    public static Camera camera(Minecraft mc) {
         try {
             if (cameraGetter == null) {
                 try {
