@@ -225,7 +225,7 @@ pub fn write_theme(pal: &crate::theme::Pal) -> Result<()> {
     let v = serde_json::json!({
         "bg": c(pal.bg), "surface": c(pal.surface), "surface2": c(pal.surface2), "border": c(pal.border),
         "text": c(pal.text), "muted": c(pal.muted), "accent": c(pal.accent), "onAccent": c(pal.on_accent),
-        "light": pal.light,
+        "light": pal.light, "pattern": if pal.chart { "chart" } else { "none" },
     });
     let dir = shared_dir();
     std::fs::create_dir_all(&dir)?;

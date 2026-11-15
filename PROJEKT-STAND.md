@@ -69,6 +69,22 @@
     - Bei mehr als 10 Blöcken Abstand läuft er per A* hin.
   - **Im Duell:** `Guard` ruht nicht, jagt nicht und zieht sich nicht vor Gruppen zurück. Mobs bekämpft er nur, wenn sie näher als 3 Blöcke sind.
   - **Getestet:** nur „kill cow“ in 26.2 (finden, hinlaufen, schlagen, Sieg erkennen). Gegen echte Spieler, Crystal und Mace ist nichts getestet (geht im Container nicht). Es ist ein Regelwerk, kein trainiertes Modell.
+- **Design 4 „Stoop“ (aktuell, `theme::DESIGN = 4`, `launcher/src/gui_stoop.rs`):** benannt nach dem Sturzflug des Wanderfalken. Vorgabe des Nutzers: fast schwarz `#08090C`, Anthrazit `#111319`, Silber, ein gedämpftes Eisblau `#8DB4D4`, kein Neon, kein Glas, keine typischen Karten.
+  - **Navigation:** ein Höhenband links (Teilstriche wie ein Höhenmesser). Hauptseiten HOME, MODS, VERSIONS, ACCOUNTS, PERFORMANCE, SETTINGS; darunter kleiner Profiles, Servers, Screenshots, Appearance, Console. Ein eisblauer Zeiger gleitet animiert zur aktiven Seite. Beim Überfahren werden Teilstrich und Label länger bzw. rücken nach rechts. Unten stehen Konto-Raute und Version.
+  - **Titelleiste:** Falken-Bildmarke (`falcon`, Flügel angelegt) und gesperrte Wortmarke. In der Mitte steht der Status als Raute (READY, PREPARING oder IN FLIGHT, pulsierend).
+  - **Startseite:**
+    - Mitte: eine 3D-Blockfigur (eigener Mini-Renderer: Boxen, Painter-Sortierung, Licht von oben links, eisblaues Kantenlicht, leuchtende Augen, Falke auf der Brust). Sie schwenkt sanft, atmet mit Armen und Beinen, folgt der Maus und lässt sich per Ziehen drehen.
+    - Die Figur steht auf einem perspektivischen Lichtring mit Skala. **Der Ring ist der PLAY-Knopf** (auch Enter). Beim Überfahren kreisen Lichtbögen und Lichtpunkte steigen auf. Beim Laden wird der Ring zur Fortschrittsanzeige.
+    - Links: Gruß, große Versionsnummer (Klick öffnet die Versionsliste), Loader-Wahl mit gleitendem Strich, Block SESSION (Pilot, Last flight, Flights, Memory, Client mods). Die Werte kommen aus der neuen `Config.stats_last_launch`/`stats_launches`.
+    - Rechts: RECENT (Profile) und SERVERS mit Live-Ping (`App::server_status` in `gui_extra.rs`); ein Klick verbindet direkt.
+  - **Neue Seiten:**
+    - Versions: Filter, Suche, Loader, Raster mit „Latest release“ und einer Raute, wenn Peregrine-Mods für die Version verfügbar sind.
+    - Accounts: Abzeichen mit Initiale, Art der Anmeldung, Knöpfe.
+    - Performance: Speicher als 16-Zellen-Leiste zum Klicken oder Ziehen plus Voreinstellungen, Turbo-Mods, Java, Fenstergröße. Performance und Java sind dafür aus Settings herausgenommen.
+  - **Hintergrund „Atmosphere“:** atmender eisblauer Lichtschein mit Parallaxe, kühler Gegenschein und 34 feine Luftströme, die schräg „herabstürzen“. Oben und unten ist der Rand abgedunkelt.
+  - **Seitenwechsel:** Die Seite blendet in 0,32 s ein und gleitet dabei 14 px nach oben (`page_fade`, Kind-Ui mit `set_opacity`).
+  - **Mod:** liest `pattern` aus `theme.json`. Die Höhenlinien gibt es nur beim Hintergrund „Chart“. Ohne Launcher nutzt die Mod jetzt die Stoop-Farben.
+  - Die alten Funktionen `title_bar`, `home` und `visual` in `gui.rs` sind ungenutzt (`#[allow(dead_code)]`). Das Flugkarten-Design gibt es weiter als Preset „Chart“ und als Hintergrund „Chart“.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

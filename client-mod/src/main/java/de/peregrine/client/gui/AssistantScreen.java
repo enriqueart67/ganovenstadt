@@ -57,7 +57,7 @@ public final class AssistantScreen extends Screen {
         int x0 = (width - W) / 2, y0 = (height - H) / 2;
         g.fill(x0 + 3, y0 + 4, x0 + W + 3, y0 + H + 4, t.shadow);
         g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
-        Ui.chart(g, x0, y0, W, H, t.light);
+        if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
         int cx = x0 + 14, cw = W - 28;
         Type.left(g, "Assistant", Type.DISPLAY, cx, y0 + 10, 2.1f, t.text);
         Type.right(g, "SINGLEPLAYER · OWN SERVER", Type.MONO, cx + cw, y0 + 14, 0.7f, t.muted);

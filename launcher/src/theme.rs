@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 pub type Rgb = [u8; 3];
 
-/// Aktuelle Design-Generation (3 = Peregrine-Design „Flugkarte“: Kartenpapier, Hoehenlinien, Airbus-Schrift B612).
-pub const DESIGN: u32 = 3;
+/// Aktuelle Design-Generation (4 = „Stoop“: fast schwarz, Silber, gedaempftes Eisblau, Hoehenband-Navigation; 3 = Flugkarte).
+pub const DESIGN: u32 = 4;
 
 pub const GOOD: Color32 = Color32::from_rgb(52, 199, 120);
 pub const BAD: Color32 = Color32::from_rgb(235, 72, 72);
@@ -20,11 +20,12 @@ pub fn c(rgb: Rgb) -> Color32 {
 }
 
 // ------------------------------------------------------------------ Einstellbares Aussehen
-pub const PRESETS: [&str; 8] = ["Chart", "Night flight", "Paper", "Night", "Graphite", "OLED", "Midnight", "Light"];
-pub const BACKGROUNDS: [&str; 6] = ["Chart", "None", "Landscape", "Gradient", "Solid", "Image"];
+pub const PRESETS: [&str; 9] = ["Stoop", "Chart", "Night flight", "Paper", "Night", "Graphite", "OLED", "Midnight", "Light"];
+pub const BACKGROUNDS: [&str; 7] = ["Atmosphere", "Chart", "None", "Landscape", "Gradient", "Solid", "Image"];
 pub const SCENES: [&str; 3] = ["Evening", "Day", "Night"];
 pub const FONTS: [&str; 4] = ["B612", "Plex", "Poppins", "Standard"];
-pub const ACCENTS: [(&str, Rgb); 11] = [
+pub const ACCENTS: [(&str, Rgb); 12] = [
+    ("Ice", [141, 180, 212]),
     ("Chart magenta", [168, 36, 104]),
     ("Chart cyan", [22, 112, 146]),
     ("Signal orange", [255, 79, 0]),
@@ -82,14 +83,14 @@ impl Default for Look {
             text: [0; 3],
             muted: [0; 3],
             accent: ACCENTS[0].1,
-            accent2: [22, 112, 146],
+            accent2: [201, 211, 221],
             gradients: false,
             glow: false,
             animations: true,
             rounding: 2.0,
             ui_scale: 1.0,
             font: "B612".into(),
-            background: "Chart".into(),
+            background: "Atmosphere".into(),
             scene: "Night".into(),
             image_path: String::new(),
             dim: 0.25,
@@ -100,7 +101,7 @@ impl Default for Look {
             show_tagline: true,
             show_logo: false,
         };
-        l.apply_preset("Chart");
+        l.apply_preset("Stoop");
         l
     }
 }
@@ -123,6 +124,8 @@ impl Look {
         let (bg, s, s2, b, t, m): (Rgb, Rgb, Rgb, Rgb, Rgb, Rgb) = match name {
             // Peregrine-Design: warmes Papier bzw. tiefe Nacht, Flaechen = Hintergrund (nur Haarlinien)
             // Flugkarte: leicht gruenliches Kartenpapier mit Navy-Tinte bzw. Nachtflug-Cockpit
+            // Stoop: fast schwarz, tiefe Anthrazit-Flaechen, silberne Schrift
+            "Stoop" => ([8, 9, 12], [17, 19, 25], [23, 26, 33], [34, 38, 47], [228, 231, 236], [122, 128, 140]),
             "Chart" => ([236, 233, 222], [236, 233, 222], [225, 221, 207], [199, 194, 176], [27, 41, 51], [104, 112, 110]),
             "Night flight" => ([13, 19, 22], [13, 19, 22], [22, 31, 35], [40, 52, 56], [226, 222, 207], [127, 140, 138]),
             "Paper" => ([243, 241, 236], [243, 241, 236], [231, 228, 221], [210, 206, 197], [17, 17, 16], [112, 108, 100]),
@@ -151,6 +154,8 @@ pub struct Pal {
     pub r: f32,
     pub grad: bool,
     pub light: bool,
+    /// Hintergrund "Chart": die Mod legt im Spiel ihre Hoehenlinien unter die Menues.
+    pub chart: bool,
 }
 
 pub fn luminance(c: Color32) -> f32 {
@@ -173,6 +178,7 @@ impl Pal {
             r: l.rounding,
             grad: l.gradients,
             light: luminance(c(l.bg)) > 0.5,
+            chart: l.background == "Chart",
         }
     }
     /// Akzentflaeche: einfarbig oder (optional) mit Verlauf.

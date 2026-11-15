@@ -42,6 +42,10 @@ pub struct Config {
     pub look: crate::theme::Look,
     pub active_profile: Option<String>,
     pub client: crate::client_mods::ClientMods,
+    /// Unix-Zeit des letzten Starts (Startseite „Last flight“).
+    pub stats_last_launch: u64,
+    /// Anzahl der Starts (Startseite „Flights“).
+    pub stats_launches: u32,
 }
 
 impl Default for Config {
@@ -69,6 +73,8 @@ impl Default for Config {
             look: Default::default(),
             active_profile: None,
             client: Default::default(),
+            stats_last_launch: 0,
+            stats_launches: 0,
         }
     }
 }

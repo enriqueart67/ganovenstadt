@@ -82,6 +82,23 @@ impl App {
         }
     }
 
+    /// Saved servers with their live status for the home page: (name, address, 0 pending / 1 online / 2 offline, info).
+    pub(super) fn server_status(&mut self) -> Vec<(String, String, u8, String)> {
+        if !self.cfg.servers.is_empty() && self.extra.pinged_at.is_none_or(|t| t.elapsed().as_secs() > 60) {
+            self.ping_all();
+        }
+        let pings = lock(&self.extra.pings).clone();
+        self.cfg
+            .servers
+            .iter()
+            .map(|s| match pings.get(&s.address) {
+                Some(Ping::Ok(st)) => (s.name.clone(), s.address.clone(), 1, format!("{} / {} online", thousands(st.online), thousands(st.max))),
+                Some(Ping::Offline) => (s.name.clone(), s.address.clone(), 2, "offline".into()),
+                _ => (s.name.clone(), s.address.clone(), 0, "checking …".into()),
+            })
+            .collect()
+    }
+
     pub(super) fn servers_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
         // refresh when the page is opened and once a minute while it stays open
         if self.extra.pinged_at.is_none_or(|t| t.elapsed().as_secs() > 60) {

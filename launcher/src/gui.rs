@@ -14,11 +14,16 @@ mod profiles_ui;
 mod client_ui;
 #[path = "gui_extra.rs"]
 mod extra_ui;
+#[path = "gui_stoop.rs"]
+mod stoop_ui;
 use profiles_ui::ProfilesUi;
 
 #[derive(PartialEq, Clone, Copy)]
 enum Page {
     Home,
+    Versions,
+    Accounts,
+    Performance,
     Profiles,
     Client,
     Servers,
@@ -60,6 +65,7 @@ pub struct App {
     cape_path: String,
     cape_msg: Option<String>,
     extra: extra_ui::ExtraUi,
+    stoop: stoop_ui::StoopState,
 }
 
 impl App {
@@ -98,6 +104,7 @@ impl App {
             cape_path: String::new(),
             cape_msg: None,
             extra: extra_ui::ExtraUi::default(),
+            stoop: Default::default(),
         };
         app.load_versions();
         app.refresh_login();
@@ -259,6 +266,10 @@ impl App {
     }
 
     fn play(&mut self) {
+        if !self.h.lock().busy {
+            self.cfg.stats_launches += 1;
+            self.cfg.stats_last_launch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        }
         match self.active_profile() {
             Some(p) => self.play_profile(p),
             None => {
@@ -421,6 +432,7 @@ impl App {
 
     // -------------------------------------------------------------- Rahmen
     /// Titelleiste mit Logo, Text-Navigation, Konto und Fenster-Knoepfen.
+    #[allow(dead_code)]
     fn title_bar(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal, account: &Option<config::Account>, action: &mut Option<Action>) {
         let prism_acc = if account.is_none() && self.cfg.use_prism { self.h.lock().prism_account.clone() } else { None };
         let ctx = ui.ctx().clone();
@@ -533,6 +545,7 @@ impl App {
     }
 
     /// Optionales Bild/Landschaft im Rahmen (wenn unter Aussehen ein Hintergrund gewaehlt ist).
+    #[allow(dead_code)]
     fn visual(&mut self, ui: &mut egui::Ui, rect: Rect, t: f32, pal: &Pal) {
         let look = self.cfg.look.clone();
         let ctx = ui.ctx().clone();
@@ -574,6 +587,7 @@ impl App {
     }
 
     // -------------------------------------------------------------- Startseite
+    #[allow(dead_code)]
     fn home(&mut self, ui: &mut egui::Ui, area: Rect, t: f32, pal: &Pal, account: &Option<config::Account>, action: &mut Option<Action>) {
         let look = self.cfg.look.clone();
         let active = self.active_profile();
@@ -1149,14 +1163,6 @@ impl App {
             header(ui, pal, "Settings", "Changes are saved automatically");
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
                 let c = &mut self.cfg;
-                card(ui, pal, "Performance", |ui| {
-                    ui.label(RichText::new("Memory for Minecraft. 4–8 GB is usually enough, more with many mods.").color(pal.muted).size(12.5));
-                    ui.horizontal(|ui| {
-                        ui.add(egui::Slider::new(&mut c.ram_mb, 1024..=32768).step_by(512.0).show_value(false));
-                        ui.label(RichText::new(format!("{:.1} GB", c.ram_mb as f32 / 1024.0)).font(font(16.0, "semibold")));
-                    });
-                    field(ui, pal, "Extra JVM arguments", &mut c.extra_jvm_args, "e.g. -XX:+UseZGC");
-                });
                 card(ui, pal, "Game", |ui| {
                     ui.horizontal(|ui| {
                         field(ui, pal, "Game folder", &mut c.game_dir, "");
@@ -1178,9 +1184,6 @@ impl App {
                         theme::toggle(ui, pal, &mut c.close_on_launch);
                         ui.label("Close the launcher when the game starts");
                     });
-                });
-                card(ui, pal, "Java", |ui| {
-                    field(ui, pal, "Java path (empty = the right version is downloaded automatically)", &mut c.java_path, "automatic");
                 });
                 let (prism_found, prism_acc) = {
                     let s = self.h.lock();
@@ -1280,7 +1283,7 @@ fn card(ui: &mut egui::Ui, pal: &Pal, title: &str, body: impl FnOnce(&mut egui::
     ui.add_space(10.0);
     ui.horizontal(|ui| {
         let (m, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-        theme::waypoint(ui.painter(), m.center(), 4.0, pal.accent, false);
+        stoop_ui::diamond(ui.painter(), m.center(), 3.2, pal.accent, 0.0);
         ui.label(RichText::new(title.to_uppercase()).font(font(11.5, "monom")).color(pal.text));
     });
     ui.add_space(2.0);
@@ -1411,24 +1414,47 @@ impl eframe::App for App {
         self.refresh_prism();
         let mut action = None;
 
+        let account_name = match &account {
+            Some(a) => Some(a.name.clone()),
+            None if self.cfg.use_prism => self.h.lock().prism_account.clone(),
+            None => None,
+        };
         egui::CentralPanel::default().frame(egui::Frame::none().fill(pal.bg)).show(ctx, |ui| {
             let full = ui.max_rect();
-            let title = Rect::from_min_size(full.min, vec2(full.width(), 48.0));
-            let content = Rect::from_min_max(pos2(full.left() + 40.0, title.bottom() + 30.0), pos2(full.right() - 40.0, full.bottom() - 28.0));
-            if self.cfg.look.background == "Chart" {
-                theme::paint_chart(&ui.painter().with_clip_rect(full), Rect::from_min_max(pos2(full.left(), title.bottom()), full.max), &pal);
+            let title = Rect::from_min_size(full.min, vec2(full.width(), 44.0));
+            let rail = Rect::from_min_max(pos2(full.left(), title.bottom()), pos2(full.left() + 188.0, full.bottom()));
+            let content = Rect::from_min_max(pos2(rail.right() + 8.0, title.bottom() + 22.0), pos2(full.right() - 36.0, full.bottom() - 24.0));
+            // Hintergrund
+            let mouse = ui.input(|i| i.pointer.hover_pos()).unwrap_or(full.center());
+            let par = vec2((mouse.x - full.center().x) / full.width(), (mouse.y - full.center().y) / full.height());
+            match self.cfg.look.background.as_str() {
+                "Atmosphere" => stoop_ui::paint_atmosphere(&ui.painter().with_clip_rect(full), full, &pal, t, par),
+                "Chart" => theme::paint_chart(&ui.painter().with_clip_rect(full), Rect::from_min_max(pos2(full.left(), title.bottom()), full.max), &pal),
+                _ => {}
             }
+            // Seite blendet beim Wechsel ein und gleitet dabei leicht nach oben
+            let fade = self.page_fade();
+            if fade < 1.0 {
+                ctx.request_repaint();
+            }
+            let shifted = content.translate(vec2(0.0, (1.0 - fade) * 14.0));
+            let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(full));
+            cui.set_opacity(fade.max(0.02));
             match self.page {
-                Page::Home => self.home(ui, content, t, &pal, &account, &mut action),
-                Page::Profiles => self.profiles_page(ui, content, &pal),
-                Page::Client => self.client_page(ui, content, &pal),
-                Page::Servers => self.servers_page(ui, content, &pal),
-                Page::Shots => self.shots_page(ui, content, &pal),
-                Page::Look => self.look_page(ui, content, &pal),
-                Page::Console => self.console(ui, content, &pal),
-                Page::Settings => self.settings(ui, content, &pal),
+                Page::Home => self.stoop_home(&mut cui, shifted, t, &pal, account_name.clone(), &mut action),
+                Page::Versions => self.versions_page(&mut cui, shifted, &pal),
+                Page::Accounts => self.accounts_page(&mut cui, shifted, &pal, &account, &mut action),
+                Page::Performance => self.performance_page(&mut cui, shifted, &pal),
+                Page::Profiles => self.profiles_page(&mut cui, shifted, &pal),
+                Page::Client => self.client_page(&mut cui, shifted, &pal),
+                Page::Servers => self.servers_page(&mut cui, shifted, &pal),
+                Page::Shots => self.shots_page(&mut cui, shifted, &pal),
+                Page::Look => self.look_page(&mut cui, shifted, &pal),
+                Page::Console => self.console(&mut cui, shifted, &pal),
+                Page::Settings => self.settings(&mut cui, shifted, &pal),
             }
-            self.title_bar(ui, title, &pal, &account, &mut action);
+            self.nav_rail(ui, rail, &pal, account_name.clone());
+            self.stoop_title(ui, title, &pal, busy);
             let grip = Rect::from_min_size(full.max - vec2(14.0, 14.0), vec2(14.0, 14.0));
             let g = ui.interact(grip, Id::new("grip"), Sense::drag());
             if g.hovered() {
@@ -1480,7 +1506,7 @@ impl eframe::App for App {
             config::save_config(&self.cfg);
             self.saved = self.cfg.clone();
         }
-        if (self.page == Page::Home && self.cfg.look.animations && self.cfg.look.background == "Landscape") || busy || self.prof.busy() {
+        if (self.cfg.look.animations && (self.page == Page::Home || matches!(self.cfg.look.background.as_str(), "Landscape" | "Atmosphere"))) || busy || self.prof.busy() {
             ctx.request_repaint_after(Duration::from_millis(33));
         }
     }

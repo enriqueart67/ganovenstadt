@@ -15,6 +15,8 @@ import java.nio.file.Path;
 public final class Theme {
     public final int bg, side, card, cardHover, line, text, muted, muted2, accent, accentHover, accentSoft, accentSoftText, off, offHover, onAccent, shadow;
     public final boolean light;
+    /** Launcher background "Chart": contour lines under the menus. */
+    public boolean chart;
 
     private Theme(int bg, int surface2, int border, int text, int muted, int accent, int onAccent, boolean light) {
         this.light = light;
@@ -54,7 +56,7 @@ public final class Theme {
     }
 
     public static Theme fallback() {
-        return new Theme(0xECE9DE, 0xE1DDCF, 0xC7C2B0, 0x1B2933, 0x68706E, 0xA82468, 0xFFFFFF, true); // "Chart" design
+        return new Theme(0x08090C, 0x171A21, 0x22262F, 0xE4E7EC, 0x7A808C, 0x8DB4D4, 0x101014, false); // "Stoop" design
     }
 
     /** Aktuelles Design laden (bei jedem Öffnen des Menüs, damit Änderungen im Launcher sofort gelten). */
@@ -66,9 +68,11 @@ public final class Theme {
             if (!Files.exists(p)) return fallback();
             JsonObject o = JsonParser.parseString(Files.readString(p)).getAsJsonObject();
             boolean light = o.has("light") && o.get("light").getAsBoolean();
-            return new Theme(rgb(o, "bg", 0xECE9DE), rgb(o, "surface2", 0xE1DDCF), rgb(o, "border", 0xC7C2B0),
-                    rgb(o, "text", 0x1B2933), rgb(o, "muted", 0x68706E), rgb(o, "accent", 0xA82468),
-                    rgb(o, "onAccent", 0xFFFFFF), light);
+            Theme th = new Theme(rgb(o, "bg", 0x08090C), rgb(o, "surface2", 0x171A21), rgb(o, "border", 0x22262F),
+                    rgb(o, "text", 0xE4E7EC), rgb(o, "muted", 0x7A808C), rgb(o, "accent", 0x8DB4D4),
+                    rgb(o, "onAccent", 0x101014), light);
+            th.chart = o.has("pattern") && o.get("pattern").getAsString().equals("chart");
+            return th;
         } catch (Exception e) {
             return fallback();
         }
