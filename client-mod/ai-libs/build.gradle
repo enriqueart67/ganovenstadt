@@ -1,0 +1,41 @@
+// Libraries for the assistant's Claude mode (official Anthropic Java SDK and what it needs), packed as one
+// Fabric mod with nested jars. Built once, it fits 26.1, 26.2 and 26.3 – the launcher ships it next to the client mod.
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = "${project.anthropic_version}"
+group = 'de.peregrine'
+base { archivesName = 'peregrine-ai-libs' }
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+}
+
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+
+configurations {
+    bundled
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    bundled "com.anthropic:anthropic-java:${project.anthropic_version}"
+}
+
+afterEvaluate {
+    configurations.bundled.resolvedConfiguration.resolvedArtifacts.each { a ->
+        def id = a.moduleVersion.id
+        if (id.group == 'org.slf4j') return // Minecraft already has it
+        dependencies.add('include', "${id.group}:${id.name}:${id.version}")
+    }
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(25) }
+}

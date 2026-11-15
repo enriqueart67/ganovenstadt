@@ -1,0 +1,6 @@
+name: PeregrineGrant
+version: 1.0.0
+main: de.peregrine.grant.PeregrineGrant
+api-version: "1.20"
+description: Lets the players you list use the Peregrine Client features (ESP, assistant, aura) on this server, and bans Peregrine clients without the access code.
+author: Peregrine Client

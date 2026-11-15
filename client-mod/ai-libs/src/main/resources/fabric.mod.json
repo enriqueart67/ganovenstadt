@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "peregrine-ai-libs",
+  "version": "${version}",
+  "name": "Peregrine AI libraries",
+  "description": "Anthropic Java SDK and its libraries for the Peregrine assistant's Claude mode.",
+  "authors": ["Peregrine Client"],
+  "license": "MIT",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.18.4"
+  }
+}

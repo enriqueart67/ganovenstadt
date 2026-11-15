@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "peregrine",
+  "version": "${version}",
+  "name": "Peregrine Client",
+  "description": "Peregrine Client: in-game mod menu (Right Shift) with HUD modules, waypoints, minimap, cosmetics and more.",
+  "authors": [
+    "Peregrine Client"
+  ],
+  "license": "MIT",
+  "icon": "assets/peregrine/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "de.peregrine.client.PeregrineClient"
+    ]
+  },
+  "mixins": [
+    "peregrine.mixins.json",
+    "peregrine.optional.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=25"
+  }
+}

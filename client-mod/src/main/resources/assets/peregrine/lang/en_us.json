@@ -1,0 +1,15 @@
+{
+  "key.categories.peregrine.main": "Peregrine Client",
+  "key.peregrine.zoom": "Zoom",
+  "key.peregrine.fullbright": "Toggle Fullbright",
+  "key.peregrine.sprint": "Toggle Auto-Sprint",
+  "key.peregrine.menu": "Open Peregrine menu",
+  "key.peregrine.emote": "Emote wheel",
+  "key.peregrine.freelook": "Freelook (hold)",
+  "key.peregrine.waypoints": "Waypoints",
+  "key.peregrine.assistant": "Assistant (AI helper)",
+  "key.category.peregrine.main": "Peregrine Client",
+  "key.peregrine.esp": "Block ESP (toggle)",
+  "key.peregrine.aura": "Combat Aura (toggle)",
+  "key.peregrine.entityesp": "Entity ESP (toggle)"
+}
