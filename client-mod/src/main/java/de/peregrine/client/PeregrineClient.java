@@ -46,6 +46,7 @@ public final class PeregrineClient implements ClientModInitializer {
         });
 
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("peregrine", "hud"), (g, dt) -> {
+            Modules.EMERGENCY.onFrame();
             if (HudEditor.active) return;
             Minecraft mc = Minecraft.getInstance();
             HudModule.layout(g.guiWidth(), g.guiHeight(), Modules.huds());

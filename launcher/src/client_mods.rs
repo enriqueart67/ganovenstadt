@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 45] = [
+pub const MODULES: [(&str, &str, &str); 46] = [
     ("HUD", "FPS", "Frames per second"),
     ("HUD", "CPS", "Clicks per second (left | right)"),
     ("HUD", "Coordinates", "X, Y, Z and facing"),
@@ -76,6 +76,7 @@ pub const MODULES: [(&str, &str, &str); 45] = [
     ("Misc", "HUD style", "Colors and background of all HUD elements"),
     ("Render", "Block ESP", "Highlights chosen blocks through walls (X)"),
     ("Combat", "Combat Aura", "Fights hostile mobs for you – singleplayer only (R)"),
+    ("Misc", "Emergency logout", "Screenshot + log out at half a heart while the bot plays"),
 ];
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]

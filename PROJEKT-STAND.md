@@ -185,6 +185,16 @@
     4. Steiler Sturzflug (35–88°, damit der Fall-Abstand wächst), Mace in die Hand, Treffer bei ≤ 3,4 Blöcken und Sinkgeschwindigkeit < −0,4.
     5. Nach der Landung kommt die Brustplatte wieder an. Abbruch nach 14 s, danach 3 s Pause.
   - Nicht im Spiel getestet (keine Elytra, Raketen oder Mace in der Demo).
+- **Notfall-Ausloggen (`bot/EmergencyLogout.java`, Modul „Emergency logout“, Misc, standardmäßig an):**
+  - Einstellungen: Auslösen bei 0,5–5 Herzen (Standard 0,5), „nur während der Assistent spielt“ (Standard an), Screenshot an/aus.
+  - Ablauf:
+    1. Bot stoppen und einen Bericht schreiben: Zeit, was dich getroffen hat (Todesnachricht der letzten Schadensquelle), Leben, Hunger, Rüstung, was der Bot tat, Position und Dimension, Hand und zweite Hand, Monster und Spieler im Umkreis von 24 Blöcken, die letzten 3 Chatzeilen des Assistenten.
+    2. Offene Menüs schließen und **zwei gezeichnete Bilder abwarten.** Die Bilder zählt der HUD-Layer über `onFrame`. Bei niedrigen FPS laufen sonst viele Ticks pro Bild, und der Screenshot zeigt einen alten Stand. Sicherheitsgrenze: 5 s.
+    3. Screenshot `screenshots/peregrine-emergency-<Zeit>.png` über `Screenshot.grab`; das Hauptbild wird per Reflection gesucht, weil die Methode zwischen den Versionen umbenannt wurde.
+    4. Zwei Bilder später ausloggen wie im Pause-Menü (`level.disconnect` + `disconnect(EmergencyScreen, false)`).
+  - Der Bericht liegt zusätzlich als `.txt` neben dem Bild.
+  - `gui/EmergencyScreen`: Bericht und die Knöpfe OPEN SCREENSHOT, SCREENSHOT FOLDER und MAIN MENU. Dateien werden per Reflection über `Util.getPlatform().openFile/openPath` geöffnet, sonst über `java.awt.Desktop`.
+  - Getestet in 26.2 mit vorübergehend erhöhter Schwelle (Screenshot zeigt die Welt, Bericht, Bildschirm).
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---
