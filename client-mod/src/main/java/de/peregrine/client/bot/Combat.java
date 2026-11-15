@@ -64,6 +64,10 @@ public final class Combat {
         private boolean strafeLeft, hadTarget;
         private final Random rnd = new Random();
 
+        public LivingEntity target() {
+            return target;
+        }
+
         public Duel(String wanted) {
             this.wanted = wanted == null || wanted.isBlank() ? null : wanted.toLowerCase(Locale.ROOT).trim();
         }

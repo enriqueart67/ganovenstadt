@@ -195,6 +195,18 @@
   - Der Bericht liegt zusätzlich als `.txt` neben dem Bild.
   - `gui/EmergencyScreen`: Bericht und die Knöpfe OPEN SCREENSHOT, SCREENSHOT FOLDER und MAIN MENU. Dateien werden per Reflection über `Util.getPlatform().openFile/openPath` geöffnet, sonst über `java.awt.Desktop`.
   - Getestet in 26.2 mit vorübergehend erhöhter Schwelle (Screenshot zeigt die Welt, Bericht, Bildschirm).
+- **Entity ESP (`feature/EntityEsp.java`, Render, Taste J, `key.peregrine.entityesp`):**
+  - Farben: Monster rot, Tiere grün, Spieler blau, Items gelb, jeweils einzeln an/aus.
+  - Stil: Box + Glow, Box oder Glow; Reichweite 8–128.
+  - Name, Entfernung und Lebensbalken für die nächsten 12 (ohne Überlappung), dazu optionale Tracer vom unteren Bildschirmrand.
+  - Positionen werden mit dem Teil-Tick interpoliert (`getPosition(pt)`), damit sie flüssig mitlaufen. Höchstens 160 Einträge.
+  - Nur bei `Bot.allowed` (Einzelspieler, LAN, Operator).
+- **Bot nutzt das Entity ESP:**
+  - `Guard` erfasst jede Runde alle Monster im Umkreis von 24 Blöcken, auch ohne Sichtlinie (`EntityEsp.threats`), und daraus `Navigator.danger`. Der A* zahlt (6 − Abstand) × 1,3 Aufschlag für Felder nahe an Monstern, macht also einen Bogen.
+  - Ein Creeper ohne Sichtlinie näher als 4,5 Blöcke löst die Flucht aus.
+  - Jagd: Beute bis 48 Blöcke auch ohne Sicht (sichtbare zählen 1,4× günstiger); ist sie verdeckt, geht er per A* hin.
+  - `EntityEsp.watch(ids)` hebt beobachtete Monster (< 16 Blöcke), die Beute und das Duell-Ziel hervor, auch bei ausgeschaltetem Modul. Bei Stop oder Fertig wird es geleert.
+  - Getestet in 26.2: ESP mit Tieren, Monstern, Items und Tracern; „kill cow“ läuft mit Route zur verdeckten Kuh, das Ziel ist markiert.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

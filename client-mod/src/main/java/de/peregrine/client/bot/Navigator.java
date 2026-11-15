@@ -32,6 +32,8 @@ public final class Navigator {
     private List<BlockPos> toClear = new ArrayList<>();
     private int lastProgressTick, ticks, failedPlans;
     public String problem;
+    /** Where monsters are (from the Entity ESP picture): routes keep away from them. */
+    public static volatile List<net.minecraft.world.phys.Vec3> danger = List.of();
     /** Give up after this many ticks without getting closer (default 20 s). */
     public int timeout = 20 * 20;
     private double bestDist = Double.MAX_VALUE;
@@ -271,6 +273,10 @@ public final class Navigator {
         BlockPos land = drop > 0 ? floor.above() : cell;
         for (Direction n : Direction.values()) if (Bot.isLava(mc.level.getBlockState(land.relative(n)))) return null;
         cost += drop * 0.6;
+        for (net.minecraft.world.phys.Vec3 m : danger) { // a detour is better than walking past a monster
+            double dd = m.distanceTo(net.minecraft.world.phys.Vec3.atCenterOf(land));
+            if (dd < 6) cost += (6 - dd) * 1.3;
+        }
         clear.removeIf(b -> Bot.passable(mc, b));
         return new Move(feet.immutable(), land.immutable(), clear, cost, d);
     }

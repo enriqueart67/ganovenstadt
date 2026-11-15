@@ -96,6 +96,8 @@ public final class Bot {
         if (task != null) lastStatus = why != null ? why : "Stopped";
         task = null;
         de.peregrine.client.Modules.BLOCK_ESP.setAssist(java.util.Set.of()); // the assistant's highlights go away
+        de.peregrine.client.Modules.ENTITY_ESP.watch(java.util.Set.of());
+        Navigator.danger = java.util.List.of();
         Guard.reset();
         release(Minecraft.getInstance());
         if (why != null) say(why);
@@ -122,6 +124,7 @@ public final class Bot {
                 Task done = task;
                 task = null;
                 de.peregrine.client.Modules.BLOCK_ESP.setAssist(java.util.Set.of());
+                de.peregrine.client.Modules.ENTITY_ESP.watch(java.util.Set.of());
                 lastStatus = done.status();
                 release(mc);
             }

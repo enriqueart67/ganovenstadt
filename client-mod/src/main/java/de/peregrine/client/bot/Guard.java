@@ -47,6 +47,7 @@ final class Guard {
     private static boolean resting, strafeLeft;
     private static BlockPos lastTorch;
     private static LivingEntity prey;
+    private static Navigator huntNav;
     private static final Set<String> BAD_FOOD = Set.of("rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chorus_fruit", "suspicious_stew");
     private static final Set<String> ARCHERS = Set.of("skeleton", "stray", "bogged", "pillager", "witch", "blaze", "ghast", "drowned");
     private static final Set<String> PREY = Set.of("cow", "pig", "sheep", "chicken", "rabbit", "mooshroom");
@@ -100,6 +101,17 @@ final class Guard {
             return true;
         }
 
+        // the ESP picture: every monster around, seen or not (behind walls, in caves) – for routes and warnings
+        List<LivingEntity> threats = de.peregrine.client.feature.EntityEsp.threats(mc, p.position(), 24);
+        List<Vec3> spots = new ArrayList<>();
+        for (LivingEntity e : threats) spots.add(e.position());
+        Navigator.danger = spots;
+        java.util.Set<Integer> watch = new java.util.HashSet<>();
+        for (LivingEntity e : threats) if (e.distanceTo(p) < 16) watch.add(e.getId());
+        if (prey != null && prey.isAlive()) watch.add(prey.getId());
+        if (Bot.current() instanceof Combat.Duel fight && fight.target() != null) watch.add(fight.target().getId());
+        de.peregrine.client.Modules.ENTITY_ESP.watch(watch);
+
         // look around
         List<LivingEntity> enemies = new ArrayList<>();
         LivingEntity enemy = null, creeper = null;
@@ -109,7 +121,7 @@ final class Guard {
             double d = e.distanceTo(p);
             boolean seen = p.hasLineOfSight(e);
             if (e instanceof Creeper) {
-                if (d < 7 && seen && d < cd) {
+                if ((seen ? d < 7 : d < 4.5) && d < cd) { // also the one behind the wall
                     cd = d;
                     creeper = e;
                 }
@@ -328,14 +340,15 @@ final class Guard {
                 }
             }
             double best = Double.MAX_VALUE;
-            for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(28),
+            for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(48),
                     e -> e.isAlive() && !e.isBaby() && PREY.contains(type(e)))) {
-                double d = e.distanceTo(p);
-                if (d < best && p.hasLineOfSight(e)) {
+                double d = e.distanceTo(p) * (p.hasLineOfSight(e) ? 1 : 1.4); // visible ones are a bit cheaper
+                if (d < best) {
                     best = d;
                     prey = e;
                 }
             }
+            huntNav = null;
             if (prey == null) {
                 BlockPos drop = Bot.dropNear(mc, p.blockPosition());
                 if (drop != null && !drop.equals(p.blockPosition())) { // food lying around from the last hunt
@@ -349,6 +362,12 @@ final class Guard {
             Bot.say("I'm out of food – hunting a " + type(prey).replace('_', ' ') + ".");
         }
         double d = prey.distanceTo(p);
+        if (d > 4 && !p.hasLineOfSight(prey)) { // seen through the ESP only: walk there by route
+            if (huntNav == null || p.tickCount % 60 == 0) huntNav = new Navigator(prey.blockPosition(), 2.5, null);
+            if (huntNav.tick(mc)) huntNav = null;
+            return true;
+        }
+        huntNav = null;
         Bot.holdBest(mc, Guard::weaponScore);
         Bot.look(p, prey.getEyePosition().subtract(0, 0.3, 0));
         if (d <= 2.8) {
