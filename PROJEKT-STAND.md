@@ -126,6 +126,11 @@
   - Schnee oberhalb einer zerfransten Schneegrenze, Kantenlicht in Eisblau, eine dunstige hintere Kette, Bodendunst und dunkle Vorberge.
   - Drei Ebenen mit unterschiedlicher Parallaxe. Die Flächen sind Meshes mit Farbverlauf.
   - Wichtig: Farben hier mit `mix` in Bildschirmfarben mischen. `theme::lerp_color` mischt linear und macht dunkle Töne viel zu hell.
+- **Hintergrundbild „Peak“ (Wunsch des Nutzers, sein eigenes Bild):**
+  - Das Bild liegt unter `launcher/assets/backgrounds/peak.jpg`. Das Original hatte 800×450; es ist mit Lanczos und leichtem Nachschärfen auf 1920×1080 vergrößert.
+  - Eingebunden ist es in `paint_atmosphere` über `paint_peak`: formatfüllend mit 5 % Überstand für die Parallaxe und Abdunklung (Alpha 70). Auf allen Seiten außer Home wird zusätzlich abgedunkelt (Alpha 120), damit Text lesbar bleibt.
+  - Der gezeichnete Berg (`paint_mountains`) bleibt im Code, wird aber nicht mehr genutzt.
+  - Herkunft und Rechte des Bildes sind unbekannt (vom Nutzer hochgeladen).
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

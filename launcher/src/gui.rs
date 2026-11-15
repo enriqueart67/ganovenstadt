@@ -1437,7 +1437,13 @@ impl eframe::App for App {
             let mouse = ui.input(|i| i.pointer.hover_pos()).unwrap_or(full.center());
             let par = vec2((mouse.x - full.center().x) / full.width(), (mouse.y - full.center().y) / full.height());
             match self.cfg.look.background.as_str() {
-                "Atmosphere" => stoop_ui::paint_atmosphere(&ui.painter().with_clip_rect(full), full, &pal, t, par),
+                "Atmosphere" => {
+                    stoop_ui::paint_atmosphere(&ui.painter().with_clip_rect(full), full, &pal, t, par);
+                    if self.page != Page::Home {
+                        // pages full of text: the mountain steps back a little
+                        ui.painter().rect_filled(full, 0.0, alpha(pal.bg, 120));
+                    }
+                }
                 "Chart" => theme::paint_chart(&ui.painter().with_clip_rect(full), Rect::from_min_max(pos2(full.left(), title.bottom()), full.max), &pal),
                 _ => {}
             }

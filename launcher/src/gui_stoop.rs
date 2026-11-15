@@ -125,7 +125,7 @@ pub(super) fn paint_atmosphere(p: &egui::Painter, r: Rect, pal: &Pal, t: f32, pa
     let breathe = 0.5 + 0.5 * (t * 0.45).sin();
     ellipse_glow(p, pos2(r.center().x + par.x * 18.0, r.top() + r.height() * 0.52 + par.y * 10.0), r.width() * 0.42, r.height() * 0.46, pal.accent, 18.0 + 8.0 * breathe);
     ellipse_glow(p, pos2(r.left() + r.width() * 0.12 + par.x * 8.0, r.top() + r.height() * 0.08), r.width() * 0.35, r.height() * 0.30, pal.accent2, 7.0);
-    paint_mountains(p, r, pal, par);
+    paint_peak(p, r, pal, par);
     // Luftstroeme: duenne Linien, die schraeg nach unten links fallen
     let dir = vec2(-0.32, 1.0).normalized();
     for i in 0..34u32 {
@@ -186,6 +186,7 @@ fn fill_range(p: &egui::Painter, pts: &[Pos2], base: f32, top: Color32, bottom: 
 
 /// Der Berg im Hintergrund: ein markanter Gipfel (Matterhorn-artig, asymmetrisch) mit Schnee im Eislicht,
 /// dahinter eine dunstige Kette, davor dunkle Vorberge. Leichte Parallaxe mit der Maus.
+#[allow(dead_code)]
 fn paint_mountains(p: &egui::Painter, r: Rect, pal: &Pal, par: Vec2) {
     let w = r.width();
     let h = r.height();
@@ -251,6 +252,34 @@ fn paint_mountains(p: &egui::Painter, r: Rect, pal: &Pal, par: Vec2) {
         pos2(x, y)
     }).collect();
     fill_range(p, &front, base, mix(pal.bg, Color32::BLACK, 0.3), mix(pal.bg, Color32::BLACK, 0.5));
+}
+
+/// Hintergrundbild „Peak“ (vom Nutzer gewaehlt): formatfuellend, leicht groesser als das Fenster fuer die
+/// Parallaxe, etwas abgedunkelt, damit Text darueber gut lesbar bleibt.
+fn paint_peak(p: &egui::Painter, r: Rect, pal: &Pal, par: Vec2) {
+    let ctx = p.ctx();
+    let id = Id::new("peregrine-peak-bg");
+    let tex: Option<egui::TextureHandle> = ctx.data_mut(|d| d.get_temp(id));
+    let tex = match tex {
+        Some(t) => t,
+        None => {
+            let Ok(img) = image::load_from_memory(include_bytes!("../assets/backgrounds/peak.jpg")) else { return };
+            let rgba = img.to_rgba8();
+            let size = [rgba.width() as usize, rgba.height() as usize];
+            let ci = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+            let t = ctx.load_texture("peak-bg", ci, egui::TextureOptions::LINEAR);
+            ctx.data_mut(|d| d.insert_temp(id, t.clone()));
+            t
+        }
+    };
+    let [w, h] = tex.size();
+    let over = 1.05;
+    let (ia, ra) = (w as f32 / h as f32, r.width() / r.height());
+    let (dw, dh) = if ia > ra { (r.height() * ia * over, r.height() * over) } else { (r.width() * over, r.width() / ia * over) };
+    let c = r.center() + vec2(-par.x * 22.0, -par.y * 12.0);
+    let dst = Rect::from_center_size(c, vec2(dw, dh));
+    p.image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    p.rect_filled(r, 0.0, alpha(pal.bg, 70));
 }
 
 // ------------------------------------------------------------------ Figur
