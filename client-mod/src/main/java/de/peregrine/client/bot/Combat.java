@@ -230,8 +230,15 @@ public final class Combat {
             // ---- getting there
             if (d > 10) {
                 mode = "closing in";
-                if (nav == null || ++navAge > 40) {
-                    nav = new Navigator(target.blockPosition(), 3.0, null);
+                // intercept: run to where they will be when we get there (sprint ≈ 0.28 blocks per tick), and re-plan
+                // as soon as they change course by more than 3 blocks – not on a fixed timer
+                Vec3 tv = target.getDeltaMovement();
+                double lead = Math.min(40, d / 0.28) * 0.6;
+                BlockPos goal = BlockPos.containing(target.getX() + tv.x * lead, target.getY(), target.getZ() + tv.z * lead);
+                if (!Bot.solid(mc, goal.below())) goal = target.blockPosition(); // predicted spot in the air or over a gap
+                ++navAge;
+                if (nav == null || navAge > 60 || nav.goal().distSqr(goal) > 9) {
+                    nav = new Navigator(goal, 3.0, null);
                     navAge = 0;
                 }
                 if (nav.tick(mc)) nav = null;

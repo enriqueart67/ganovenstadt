@@ -83,7 +83,14 @@ public final class Navigator {
         }
 
         // advance along the route; re-plan when we left it or it ended
-        while (path != null && index < path.size() && feet.equals(path.get(index).cell())) index++;
+        if (path != null) { // also skips steps we cut past (corner cutting)
+            for (int k = Math.min(path.size() - 1, index + 8); k >= index; k--)
+                if (feet.equals(path.get(k).cell())) {
+                    index = k + 1;
+                    toClear = new ArrayList<>();
+                    break;
+                }
+        }
         if (path == null || index >= path.size() || offRoute(feet)) {
             if (!plan(mc, feet)) {
                 Bot.release(mc);
@@ -114,14 +121,45 @@ public final class Navigator {
             Bot.mine(mc, b);
             return false;
         }
-        // 2) walk into the step cell
+        // 2) walk: aim at the farthest step of the route that is straight ahead and free (cuts corners instead of
+        //    zig-zagging cell by cell), sprint, and sprint-jump on long flat stretches – the fastest way on foot
         BlockPos target = m.cell();
+        int far = index;
+        for (int j = index + 1; j < Math.min(path.size(), index + 8); j++) {
+            Move mj = path.get(j);
+            if (mj.clear() != null && !mj.clear().isEmpty() || mj.cell().getY() != feet.getY() || !straightLine(mc, p.position(), mj.cell())) break;
+            far = j;
+        }
+        if (target.getY() == feet.getY() && far > index) target = path.get(far).cell();
         Vec3 t = Vec3.atBottomCenterOf(target);
         Bot.look(p, new Vec3(t.x, p.getEyeY() - (target.getY() < feet.getY() ? 0.6 : 0), t.z));
         mc.options.keyUp.setDown(true);
+        boolean canSprint = p.getFoodData().getFoodLevel() > 6 && !p.isInWater() && !p.isShiftKeyDown();
+        mc.options.keySprint.setDown(canSprint);
         boolean up = target.getY() > feet.getY();
-        mc.options.keyJump.setDown(up && p.onGround() || p.horizontalCollision && p.onGround() || p.isInWater());
+        // sprint-jump: at least 4 flat free steps ahead, room above the head, already running
+        boolean flatRun = far - index >= 3 && target.getY() == feet.getY() && Bot.passable(mc, feet.above(2)) && Bot.passable(mc, feet.relative(p.getDirection()).above(2));
+        boolean hop = canSprint && flatRun && p.onGround() && p.getDeltaMovement().horizontalDistance() > 0.2;
+        mc.options.keyJump.setDown(up && p.onGround() || p.horizontalCollision && p.onGround() || p.isInWater() || hop);
         return false;
+    }
+
+    /** Can we walk straight from here to that cell: free at feet and head height, floor all the way, no drops? */
+    private static boolean straightLine(Minecraft mc, Vec3 from, BlockPos to) {
+        Vec3 end = Vec3.atBottomCenterOf(to);
+        double dist = Math.hypot(end.x - from.x, end.z - from.z);
+        int steps = (int) Math.ceil(dist * 2);
+        for (int i = 1; i <= steps; i++) {
+            double f = (double) i / steps;
+            for (double side : new double[]{-0.3, 0.3}) { // both shoulders, so it does not clip corners
+                double dx = end.x - from.x, dz = end.z - from.z, len = Math.max(1e-6, Math.hypot(dx, dz));
+                double x = from.x + dx * f + (-dz / len) * side, z = from.z + dz * f + (dx / len) * side;
+                BlockPos c = BlockPos.containing(x, to.getY(), z);
+                if (!Bot.passable(mc, c) || !Bot.passable(mc, c.above()) || !Bot.solid(mc, c.below()) || AVOID.contains(c)) return false;
+                if (Bot.isLava(mc.level.getBlockState(c.below())) || Bot.isWater(mc.level.getBlockState(c))) return false;
+            }
+        }
+        return true;
     }
 
     private boolean offRoute(BlockPos feet) {
