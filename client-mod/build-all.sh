@@ -16,4 +16,7 @@ done <<'LIST'
 26.2   0.161.0+26.2
 26.3   0.166.2+26.3
 LIST
+# libraries for the assistant's Claude mode – one jar for every version
+(cd ai-libs && ../gradlew build --console=plain -q) || { echo "FAILED ai-libs"; exit 1; }
+cp ai-libs/build/libs/peregrine-ai-libs-*.jar "$OUT/peregrine-ai-libs.jar"
 ls -la "$OUT"

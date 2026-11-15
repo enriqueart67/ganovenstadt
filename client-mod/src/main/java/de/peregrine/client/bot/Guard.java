@@ -45,6 +45,12 @@ final class Guard {
     static boolean keepElytra;
     private static int eatTicks, fleeTicks, critTicks, strafeTicks, gearTicks, huntTicks;
     private static boolean resting, strafeLeft;
+    private static int restTicks, restCooldown; // resting is capped, so a slow heal never freezes the job
+
+    /** True while it waits for health to come back (the stuck detector leaves it alone then). */
+    static boolean resting() {
+        return resting;
+    }
     private static BlockPos lastTorch;
     private static LivingEntity prey;
     private static Navigator huntNav;
@@ -56,7 +62,10 @@ final class Guard {
         keepElytra = false;
         eatTicks = fleeTicks = critTicks = strafeTicks = huntTicks = 0;
         resting = false;
+        restTicks = restCooldown = 0;
         prey = null;
+        loot = null;
+        hunts = 0;
     }
 
     private static String type(LivingEntity e) {
@@ -185,7 +194,13 @@ final class Guard {
             huntTicks = 0;
         }
         // 11) resting when badly hurt (health comes back by itself with a full food bar)
-        if (hp < 10 || (resting && hp < 18)) {
+        if (restCooldown > 0) restCooldown--;
+        if ((hp < 10 || (resting && hp < 18)) && restCooldown == 0 && hp >= 4 && ++restTicks > 20 * 45) {
+            resting = false; // 45 s is enough – carry on carefully and rest again later
+            restTicks = 0;
+            restCooldown = 20 * 60;
+            Bot.note("Rested long enough – carrying on.");
+        } else if ((hp < 10 || (resting && hp < 18)) && (restCooldown == 0 || hp < 4)) {
             if (food < 18 && !hasFood(mc)) {
                 if (hunt(mc, p)) return true;
                 Bot.stop("Your health is low and I couldn't find anything to eat – I stopped. Eat something, then ask me again.");
@@ -197,6 +212,7 @@ final class Guard {
             return true;
         }
         resting = false;
+        restTicks = 0;
         // 12) light up dark tunnels (doesn't take the tick)
         torch(mc, p);
         return false;
@@ -326,19 +342,29 @@ final class Guard {
     }
 
     /** Hunts the nearest farm animal and walks over its drops. Returns false when there is nothing to hunt. */
+    private static BlockPos loot;
+    private static int lootTicks, hunts;
+
     private static boolean hunt(Minecraft mc, LocalPlayer p) {
         if (huntTicks++ > 20 * 90) return false; // give up after 90 s
-        if (prey == null || !prey.isAlive()) {
-            if (prey != null) { // just killed it: pick up what it dropped
-                BlockPos drop = Bot.dropNear(mc, prey.blockPosition());
-                prey = null;
-                if (drop != null) {
-                    Vec3 t = Vec3.atCenterOf(drop);
-                    Bot.look(p, new Vec3(t.x, p.getEyeY(), t.z));
-                    safeWalk(mc, false);
-                    return true;
-                }
+        if (prey != null && !prey.isAlive()) { // just killed it: go and pick up what it dropped
+            loot = prey.blockPosition();
+            lootTicks = 20 * 5;
+            prey = null;
+        }
+        if (loot != null && lootTicks-- > 0) {
+            BlockPos drop = Bot.dropNear(mc, loot);
+            if (drop != null) {
+                Vec3 t = Vec3.atCenterOf(drop);
+                Bot.look(p, new Vec3(t.x, p.getEyeY(), t.z));
+                if (p.blockPosition().distManhattan(drop) <= 0) Bot.release(mc);
+                else safeWalk(mc, false);
+                return true;
             }
+            loot = null;
+            if (hasFood(mc)) return false; // got something to eat – eating comes next
+        }
+        if (prey == null || !prey.isAlive()) {
             double best = Double.MAX_VALUE;
             for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(48),
                     e -> e.isAlive() && !e.isBaby() && PREY.contains(type(e)))) {
@@ -359,7 +385,9 @@ final class Guard {
                 }
                 return false;
             }
-            Bot.say("I'm out of food – hunting a " + type(prey).replace('_', ' ') + ".");
+            String what = "I'm out of food – hunting a " + type(prey).replace('_', ' ') + ".";
+            if (hunts++ == 0) Bot.say(what);
+            else Bot.note(what);
         }
         double d = prey.distanceTo(p);
         if (d > 4 && !p.hasLineOfSight(prey)) { // seen through the ESP only: walk there by route

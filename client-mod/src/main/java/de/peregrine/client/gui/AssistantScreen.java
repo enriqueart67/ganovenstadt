@@ -17,9 +17,11 @@ import java.util.List;
 public final class AssistantScreen extends Screen {
     private final Theme t = Theme.load();
     private String input = "";
-    private static final String[] SUGGESTIONS = {"get 5 diamonds", "iron armor", "16 torches", "go to Home", "my commands", "help"};
+    private static final String[] SUGGESTIONS = {"my commands", "get 5 diamonds", "fight ", "follow me", "go to ", "help"};
     private final List<int[]> chips = new ArrayList<>(); // x, y, w, index
     private int stopX, stopY, stopW;
+    private final List<Object[]> heads = new ArrayList<>(); // x, y, w, action
+    private boolean keyMode; // typing the Anthropic API key (shown masked, never in the chat)
 
     public AssistantScreen() {
         super(Component.literal("Assistant"));
@@ -61,13 +63,42 @@ public final class AssistantScreen extends Screen {
         if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
         int cx = x0 + 14, cw = W - 28;
         Type.left(g, "Assistant", Type.DISPLAY, cx, y0 + 10, 2.1f, t.text);
-        Type.right(g, "SINGLEPLAYER · OWN SERVER", Type.MONO, cx + cw, y0 + 14, 0.7f, t.muted);
+        // Claude switch + key button (top right)
+        heads.clear();
+        boolean ai = de.peregrine.client.bot.Claude.enabled() && de.peregrine.client.bot.Claude.hasKey();
+        int hx = cx + cw;
+        String keyL = keyMode ? "CANCEL" : "KEY";
+        int kw = Type.width(keyL, Type.MONO, 0.65f) + 10;
+        hx -= kw;
+        boolean kh = Ui.in(mx, my, hx, y0 + 11, kw, 12);
+        Px.roundRect(g, hx, y0 + 11, kw, 12, 3, kh ? t.accent : t.card);
+        Type.left(g, keyL, Type.MONO, hx + 5, y0 + 14, 0.65f, kh ? t.onAccent : t.muted);
+        heads.add(new Object[]{hx, y0 + 11, kw, (Runnable) () -> {
+            keyMode = !keyMode;
+            input = "";
+        }});
+        String cl = "CLAUDE " + (ai ? "ON" : "OFF");
+        int clw = Type.width(cl, Type.MONO, 0.65f) + 18;
+        hx -= clw + 4;
+        boolean ch = Ui.in(mx, my, hx, y0 + 11, clw, 12);
+        Px.roundRect(g, hx, y0 + 11, clw, 12, 3, ai ? t.accent : ch ? t.cardHover : t.card);
+        Px.roundRect(g, hx + 5, y0 + 15, 4, 4, 2, ai ? t.onAccent : t.muted);
+        Type.left(g, cl, Type.MONO, hx + 12, y0 + 14, 0.65f, ai ? t.onAccent : t.muted);
+        heads.add(new Object[]{hx, y0 + 11, clw, (Runnable) () -> {
+            if (!de.peregrine.client.bot.Claude.hasKey()) {
+                keyMode = true;
+                input = "";
+                return;
+            }
+            de.peregrine.client.bot.Claude.setEnabled(!de.peregrine.client.bot.Claude.enabled());
+        }});
 
         // status line
         int sy = y0 + 36;
         boolean busy = Bot.busy();
         Px.roundRect(g, cx, sy, 5, 5, 3, busy ? t.accent : t.muted);
-        Type.left(g, Type.fit(Bot.status(), Type.MONO, 0.75f, cw - 70), Type.MONO, cx + 10, sy - 1, 0.75f, busy ? t.text : t.muted);
+        String line = de.peregrine.client.bot.Claude.thinking() ? "Claude is thinking…" + (busy ? "  ·  " + Bot.status() : "") : Bot.status();
+        Type.left(g, Type.fit(line, Type.MONO, 0.75f, cw - 70), Type.MONO, cx + 10, sy - 1, 0.75f, busy || de.peregrine.client.bot.Claude.thinking() ? t.text : t.muted);
         stopW = 0;
         if (busy) {
             String s = "STOP";
@@ -85,7 +116,7 @@ public final class AssistantScreen extends Screen {
         List<Object[]> rows = new ArrayList<>(); // {text, you?}
         List<String[]> chat = new ArrayList<>(Bot.CHAT);
         if (chat.isEmpty()) {
-            for (String l : wrap("Tell me what you want and I'll play for you. \"get 5 diamonds\" – I chop wood, build a crafting table, make wooden, stone and iron pickaxes, smelt the iron and dig down to the diamonds. German works too: \"hol 64 holz und dann 20 fackeln\". Save your own commands with \"remember name: …\". Esc closes this window; I keep working.", 0.85f, cw - 12))
+            for (String l : wrap("Tell me what you want and I'll play for you. \"get 5 diamonds\" – I chop wood, build a crafting table, make wooden, stone and iron pickaxes, smelt the iron and dig down to the diamonds. German works too: \"hol 64 holz und dann 20 fackeln\". Attack a player: \"fight Steve\" or \"greif Steve an\". Your own commands: MY COMMANDS below, or \"remember name: …\". Esc closes this window; I keep working.", 0.85f, cw - 12))
                 rows.add(new Object[]{l, false});
         }
         for (String[] m : chat) {
@@ -111,7 +142,10 @@ public final class AssistantScreen extends Screen {
         Px.roundRect(g, cx, inputY, cw, 18, 3, t.card);
         g.fill(cx, inputY + 17, cx + cw, inputY + 18, t.accent);
         boolean blink = (System.currentTimeMillis() / 500) % 2 == 0;
-        if (input.isEmpty()) Type.left(g, "What should I do?" + (blink ? "|" : ""), Type.UI, cx + 6, inputY + 5, 0.9f, t.muted);
+        if (keyMode) {
+            String shown = input.isEmpty() ? "Paste your Anthropic API key (Ctrl+V), then Enter. It stays on this PC." : "•".repeat(Math.min(40, input.length())) + "  " + input.length() + " characters";
+            Type.left(g, Type.fit(shown + (blink ? "|" : ""), Type.UI, 0.9f, cw - 12), Type.UI, cx + 6, inputY + 5, 0.9f, input.isEmpty() ? t.muted : t.text);
+        } else if (input.isEmpty()) Type.left(g, (de.peregrine.client.bot.Claude.active() ? "Ask Claude anything…" : "What should I do?") + (blink ? "|" : ""), Type.UI, cx + 6, inputY + 5, 0.9f, t.muted);
         else {
             String shown = input + (blink ? "|" : "");
             while (Type.width(shown, Type.UI, 0.9f) > cw - 12 && shown.length() > 1) shown = shown.substring(1);
@@ -121,7 +155,7 @@ public final class AssistantScreen extends Screen {
         chips.clear();
         int chx = cx, chy = inputY + 24;
         for (int i = 0; i < SUGGESTIONS.length; i++) {
-            String s = SUGGESTIONS[i].toUpperCase();
+            String s = SUGGESTIONS[i].trim().toUpperCase() + (SUGGESTIONS[i].endsWith(" ") ? " …" : "");
             int w = Type.width(s, Type.MONO, 0.65f) + 10;
             if (chx + w > cx + cw) break;
             boolean h = Ui.in(mx, my, chx, chy, w, 12);
@@ -135,7 +169,35 @@ public final class AssistantScreen extends Screen {
     private void send(String text) {
         text = text.trim();
         if (text.isEmpty()) return;
+        if (keyMode) {
+            keyMode = false;
+            if (!text.startsWith("sk-")) {
+                Bot.CHAT.add(new String[]{"bot", "That doesn't look like an Anthropic API key (they start with sk-ant-). Get one at console.anthropic.com."});
+                return;
+            }
+            de.peregrine.client.bot.Claude.setKey(text);
+            de.peregrine.client.bot.Claude.setEnabled(true);
+            Bot.CHAT.add(new String[]{"bot", de.peregrine.client.bot.Claude.libsPresent()
+                    ? "Key saved. Claude is my brain now – just talk to me normally."
+                    : "Key saved, but the Claude libraries are missing. Start Minecraft from the Peregrine launcher – it installs them."});
+            return;
+        }
         Bot.CHAT.add(new String[]{"you", text});
+        String low = text.toLowerCase(java.util.Locale.ROOT);
+        boolean local = low.matches("(stop|stopp|halt|abbrechen|cancel)[.!]*") || low.matches("(forget|vergiss) (the )?(chat|conversation|gespräch|gespraech)");
+        if (low.matches("(forget|vergiss) (the )?(chat|conversation|gespräch|gespraech)")) {
+            de.peregrine.client.bot.Claude.forgetConversation();
+            Bot.CHAT.add(new String[]{"bot", "Fresh start – I forgot our conversation."});
+            return;
+        }
+        if (!local && de.peregrine.client.bot.Claude.active()) {
+            if (de.peregrine.client.bot.Claude.thinking()) {
+                Bot.CHAT.add(new String[]{"bot", "Still thinking about the last one – a second, please."});
+                return;
+            }
+            de.peregrine.client.bot.Claude.ask(text);
+            return;
+        }
         String reply = Tasks.command(text);
         if (reply != null) Bot.CHAT.add(new String[]{"bot", reply});
         while (Bot.CHAT.size() > 60) Bot.CHAT.remove(0);
@@ -144,6 +206,12 @@ public final class AssistantScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent e, boolean doubleClick) {
         if (e.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            for (Object[] h : heads) {
+                if (Ui.in(e.x(), e.y(), (int) h[0], (int) h[1], (int) h[2], 12)) {
+                    ((Runnable) h[3]).run();
+                    return true;
+                }
+            }
             if (stopW > 0 && Ui.in(e.x(), e.y(), stopX, stopY, stopW, 14)) {
                 send("stop");
                 return true;
@@ -151,7 +219,8 @@ public final class AssistantScreen extends Screen {
             for (int[] c : chips) {
                 if (Ui.in(e.x(), e.y(), c[0], c[1], c[2], 12)) {
                     String s = SUGGESTIONS[c[3]];
-                    if (s.startsWith("go to")) input = "go to ";
+                    if (s.equals("my commands")) Ui.open(new CommandsScreen(this));
+                    else if (s.endsWith(" ")) input = s;
                     else send(s);
                     return true;
                 }
@@ -167,6 +236,11 @@ public final class AssistantScreen extends Screen {
             input = "";
             return true;
         }
+        if (e.isPaste()) {
+            input = (input + net.minecraft.client.Minecraft.getInstance().keyboardHandler.getClipboard().replaceAll(keyMode ? "\\s+" : "[\\r\\n]+", keyMode ? "" : " "));
+            if (input.length() > 300) input = input.substring(0, 300);
+            return true;
+        }
         if (e.key() == InputConstants.KEY_BACKSPACE) {
             if (!input.isEmpty()) input = input.substring(0, input.length() - 1);
             return true;
@@ -177,7 +251,7 @@ public final class AssistantScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent e) {
-        if (e.isAllowedChatCharacter() && input.length() < 120) {
+        if (e.isAllowedChatCharacter() && input.length() < 300) {
             input += e.codepointAsString();
             return true;
         }

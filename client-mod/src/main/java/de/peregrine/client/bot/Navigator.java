@@ -37,6 +37,15 @@ public final class Navigator {
     /** Give up after this many ticks without getting closer (default 20 s). */
     public int timeout = 20 * 20;
     private double bestDist = Double.MAX_VALUE;
+    /** Blocks that would not break (wrong tool, protected area …): routes go around them. */
+    public static final java.util.Set<BlockPos> AVOID = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Forget the current route (after being stuck): the next tick plans a fresh one. */
+    public void reset() {
+        path = null;
+        toClear = new ArrayList<>();
+        lastProgressTick = ticks;
+    }
 
     /** One step of a route: the cell the feet end up in and the blocks that have to go first. */
     private record Move(BlockPos from, BlockPos cell, List<BlockPos> clear, double cost, Direction dir) {
@@ -97,7 +106,7 @@ public final class Navigator {
                 lastProgressTick = ticks; // breaking blocks is progress too
                 continue;
             }
-            if (Bot.isLava(mc.level.getBlockState(b)) || Bot.unsafeToMine(mc, b)) { // world changed: re-plan
+            if (Bot.isLava(mc.level.getBlockState(b)) || Bot.unsafeToMine(mc, b) || AVOID.contains(b)) { // world changed: re-plan
                 path = null;
                 toClear.clear();
                 return false;
@@ -248,7 +257,7 @@ public final class Navigator {
             BlockState s = mc.level.getBlockState(b);
             if (Bot.isLava(s)) return null;
             if (!Bot.passable(mc, b)) {
-                if (Bot.unsafeToMine(mc, b)) return null;
+                if (Bot.unsafeToMine(mc, b) || AVOID.contains(b)) return null;
                 float hard = s.getDestroySpeed(mc.level, b);
                 cost += 1.5 + hard * 2.5; // digging is slow – walk around when that is not much longer
             } else if (Bot.isWater(s)) cost += 2.5;

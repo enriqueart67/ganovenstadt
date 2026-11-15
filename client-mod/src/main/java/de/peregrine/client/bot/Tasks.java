@@ -67,6 +67,15 @@ public final class Tasks {
         }
 
         @Override
+        public void unstuck(Minecraft mc) {
+            if (target != null) skip.add(target);
+            target = null;
+            collect = null;
+            nav = null;
+            dir = dir == null ? null : dir.getClockWise();
+        }
+
+        @Override
         public String status() {
             Minecraft mc = Minecraft.getInstance();
             int got = mc.player == null || start < 0 ? 0 : have(mc) - start;
@@ -90,15 +99,15 @@ public final class Tasks {
             }
             if (!Bot.hasToolFor(mc, sample)) { // never had one, or it just broke
                 if (quiet) return true; // the plan will craft a new one
-                Bot.stop("For " + ore.name() + " I need at least " + (ore.pickaxe().startsWith("i") ? "an " : "a ") + ore.pickaxe() + " pickaxe.");
+                Bot.fail("For " + ore.name() + " I need at least " + (ore.pickaxe().startsWith("i") ? "an " : "a ") + ore.pickaxe() + " pickaxe.");
                 return false;
             }
             if (Bot.inventoryFull(mc) && !Bot.makeRoom(mc)) {
-                Bot.stop("Your inventory is full of useful things – I stopped. Empty it and ask me again.");
+                Bot.fail("Your inventory is full of useful things – I stopped. Empty it and ask me again.");
                 return false;
             }
             if (p.getFoodData().getFoodLevel() <= 6) {
-                Bot.stop("You're hungry – eat something, then ask me again.");
+                Bot.fail("You're hungry – eat something, then ask me again.");
                 return false;
             }
 
@@ -125,6 +134,11 @@ public final class Tasks {
                 return false;
             }
             // 2) mining an ore we found
+            if (target != null && Navigator.AVOID.contains(target)) {
+                skip.add(target);
+                target = null;
+                nav = null;
+            }
             if (target != null) {
                 phase = "mining " + ore.name();
                 if (!ore.blocks().contains(Bot.id(mc.level.getBlockState(target)))) { // gone
@@ -223,6 +237,14 @@ public final class Tasks {
             this.wanted = wanted;
         }
 
+        @Override
+        public void unstuck(Minecraft mc) {
+            if (tree != null) skip.add(tree);
+            tree = null;
+            collect = null;
+            nav = null;
+        }
+
         private static boolean isLog(String id) {
             return id.endsWith("_log") || id.endsWith("_stem");
         }
@@ -256,7 +278,7 @@ public final class Tasks {
                 return true;
             }
             if (Bot.inventoryFull(mc) && !Bot.makeRoom(mc)) {
-                Bot.stop("Your inventory is full – I stopped.");
+                Bot.fail("Your inventory is full – I stopped.");
                 return false;
             }
             if (collect != null) {
@@ -283,7 +305,7 @@ public final class Tasks {
             if (tree == null) {
                 tree = nearestLog(mc, p.blockPosition());
                 if (tree == null) {
-                    Bot.stop("I can't see any trees near here. Walk to a forest and ask me again.");
+                    Bot.fail("I can't see any trees near here. Walk to a forest and ask me again.");
                     return false;
                 }
                 nav = null;
@@ -303,6 +325,12 @@ public final class Tasks {
                 return false;
             }
             phase = "chopping";
+            if (Navigator.AVOID.contains(log)) {
+                skip.add(tree);
+                tree = null;
+                nav = null;
+                return false;
+            }
             if (p.getEyePosition().distanceTo(Vec3.atCenterOf(log)) <= 4.3) {
                 Bot.mine(mc, log);
                 return false;
@@ -347,6 +375,11 @@ public final class Tasks {
         }
 
         @Override
+        public void unstuck(Minecraft mc) {
+            nav.reset();
+        }
+
+        @Override
         public String status() {
             Minecraft mc = Minecraft.getInstance();
             int d = mc.player == null ? 0 : (int) Math.sqrt(mc.player.blockPosition().distSqr(nav.goal()));
@@ -357,7 +390,7 @@ public final class Tasks {
         @Override
         public boolean tick(Minecraft mc) {
             if (nav.tick(mc)) {
-                if (nav.problem != null) Bot.stop(nav.problem);
+                if (nav.problem != null) Bot.fail(nav.problem);
                 else Bot.say("I'm at " + name + ".");
                 return nav.problem == null;
             }

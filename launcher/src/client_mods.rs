@@ -14,6 +14,9 @@ const JARS: [(&str, &[u8]); 3] = [
     ("26.3", include_bytes!("../assets/client-mod/peregrine-client-26.3.jar")),
 ];
 const JAR_NAME: &str = "peregrine-client.jar";
+/// Anthropic Java SDK for the assistant's Claude mode, one jar for all versions (client-mod/ai-libs).
+const AI_LIBS: &[u8] = include_bytes!("../assets/client-mod/peregrine-ai-libs.jar");
+const AI_LIBS_NAME: &str = "peregrine-ai-libs.jar";
 pub const FABRIC_API: &str = "P7dR8mSH";
 
 pub fn supported() -> Vec<&'static str> {
@@ -396,9 +399,11 @@ pub fn prepare(run_dir: &Path, version: &str, loader: &str, cm: &ClientMods) -> 
     let bytes = jar_for(version);
     if !cm.enabled || bytes.is_none() {
         let _ = std::fs::remove_file(&jar);
+        let _ = std::fs::remove_file(mods.join(AI_LIBS_NAME));
         return Ok(if cm.enabled { Prepared::Unsupported } else { Prepared::Off });
     }
     write_if_changed(&jar, bytes.unwrap())?;
+    write_if_changed(&mods.join(AI_LIBS_NAME), AI_LIBS)?;
     let has_api = std::fs::read_dir(&mods)
         .into_iter()
         .flatten()

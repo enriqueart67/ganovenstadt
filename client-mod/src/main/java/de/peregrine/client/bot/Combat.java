@@ -54,6 +54,11 @@ public final class Combat {
     }
 
     public static final class Duel implements Bot.Task {
+        @Override
+        public boolean idle() { // circling and waiting for a charged hit is not being stuck
+            return target != null;
+        }
+
         private final String wanted; // player name, entity type or null = nearest player
         private LivingEntity target;
         private Navigator nav;
@@ -112,7 +117,7 @@ public final class Combat {
                 target = find(mc, p);
                 if (target == null) {
                     if (++lost > 20 * 15) {
-                        Bot.stop("I can't find " + (wanted == null ? "anyone to fight" : "\"" + wanted + "\"") + " nearby.");
+                        Bot.fail("I can't find " + (wanted == null ? "anyone to fight" : "\"" + wanted + "\"") + " nearby.");
                     }
                     Bot.release(mc);
                     return false;

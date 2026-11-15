@@ -125,6 +125,7 @@ public final class PeregrineClient implements ClientModInitializer {
         if (aiDown && !aiWasDown) openAi = true;
         aiWasDown = aiDown;
         if (openAi && mc.player != null && !(Ui.current() instanceof de.peregrine.client.gui.AssistantScreen)) Ui.open(new de.peregrine.client.gui.AssistantScreen());
+        removeOldDummies(mc);
         de.peregrine.client.bot.Bot.tick(mc);
         SessionStats.tick(mc);
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
@@ -138,6 +139,27 @@ public final class PeregrineClient implements ClientModInitializer {
         while (fullbrightKey.consumeClick()) toggle(mc, Modules.FULLBRIGHT);
         while (sprintKey.consumeClick()) toggle(mc, Modules.TOGGLE_SPRINT);
         for (Module m : Modules.ALL) m.tick(mc);
+    }
+
+    private static int dummyCheck;
+
+    /**
+     * An earlier test build had a "Combat Trainer" that spawned mobs tagged peregrine_dummy. It was removed, but
+     * dummies saved in a world come back as normal hostile mobs – remove them (every 5 s, since entities load
+     * a little after the chunks).
+     */
+    private static void removeOldDummies(Minecraft mc) {
+        if (mc.level == null || ++dummyCheck % 100 != 0) return;
+        var server = mc.getSingleplayerServer();
+        if (server == null) return;
+        server.execute(() -> {
+            java.util.List<net.minecraft.world.entity.Entity> old = new java.util.ArrayList<>();
+            for (var level : server.getAllLevels())
+                for (var e : level.getAllEntities())
+                    if (e.entityTags().contains("peregrine_dummy")) old.add(e);
+            old.forEach(net.minecraft.world.entity.Entity::discard);
+            if (!old.isEmpty()) LOG.info("Removed {} old training dummies", old.size());
+        });
     }
 
     private static void toggle(Minecraft mc, Module m) {

@@ -293,6 +293,11 @@ public final class Planner {
         }
 
         @Override
+        public void unstuck(Minecraft mc) {
+            if (sub != null) sub.unstuck(mc);
+        }
+
+        @Override
         public String status() {
             String head = "Getting " + nice(key, amount);
             return sub == null ? head : head + " · " + sub.status();
@@ -316,7 +321,7 @@ public final class Planner {
             List<Step> steps = new ArrayList<>();
             String err = ensure(inv, key, target, steps, 0);
             if (err != null) {
-                Bot.stop(err);
+                Bot.fail(err);
                 return false;
             }
             if (steps.isEmpty()) {
@@ -325,18 +330,18 @@ public final class Planner {
             }
             if (turns == 0 && steps.size() > 1) Bot.say("Plan: " + describe(steps) + ".");
             if (++turns > 150) {
-                Bot.stop("This is taking far too many steps – I stopped.");
+                Bot.fail("This is taking far too many steps – I stopped.");
                 return false;
             }
             Step step = steps.get(0);
             if (step.kind() != Kind.GATHER && !mc.hasSingleplayerServer()) {
-                Bot.stop("On a server I can gather, but crafting needs your hands: " + step.describe() + ", then ask me again. (Plan: " + describe(steps) + ")");
+                Bot.fail("On a server I can gather, but crafting needs your hands: " + step.describe() + ", then ask me again. (Plan: " + describe(steps) + ")");
                 return false;
             }
             String invSig = snapshot(mc).toString();
             if (step.describe().equals(lastStep) && invSig.equals(lastInv)) {
                 if (++sameSteps >= 3) {
-                    Bot.stop("I can't make progress with \"" + step.describe() + "\" – I stopped.");
+                    Bot.fail("I can't make progress with \"" + step.describe() + "\" – I stopped.");
                     return false;
                 }
             } else sameSteps = 0;

@@ -28,6 +28,15 @@ public final class Bot {
         boolean tick(Minecraft mc);
 
         String status();
+
+        /** Called when the stuck detector sees no progress: forget routes and targets, try something else. */
+        default void unstuck(Minecraft mc) {
+        }
+
+        /** Standing still is part of the job right now (waiting, following someone who stopped …). */
+        default boolean idle() {
+            return false;
+        }
     }
 
     private static Task task;
@@ -81,14 +90,113 @@ public final class Bot {
         return best;
     }
 
+    /** Told when the current jobs end ("finished: …" / "failed: …"); used by Claude mode to plan the next step. */
+    public static java.util.function.Consumer<String> watcher;
+
+    private static void tell(String what) {
+        var w = watcher;
+        watcher = null;
+        if (w != null) w.accept(what);
+    }
+
     public static void start(Task t) {
         stop(null);
+        watcher = null;
         Guard.reset();
+        Navigator.AVOID.clear();
         task = t;
+        resetWatch();
+    }
+
+    /**
+     * A step failed. In a chain of jobs the rest still runs ("skipping to the next job"); a single job stops.
+     * Use {@link #stop} for things that must end everything (you died, not allowed here, emergency).
+     */
+    public static void fail(String why) {
+        if (task instanceof Commands.Chain c && c.skip()) {
+            say(why + " Skipping to the next job.");
+            release(Minecraft.getInstance());
+            Guard.reset();
+            resetWatch();
+            return;
+        }
+        stop(why);
+    }
+
+    // ------------------------------------------------------------------ stuck detector
+    private static Vec3 watchPos;
+    private static String watchInv = "";
+    private static int watchTicks, stuckLevel, escapeTicks, broken;
+    private static boolean escapeLeft;
+
+    private static void resetWatch() {
+        watchPos = null;
+        watchTicks = 0;
+        stuckLevel = 0;
+        escapeTicks = 0;
+    }
+
+    private static String invSig(LocalPlayer p) {
+        var inv = p.getInventory();
+        int h = 0;
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
+            if (!s.isEmpty()) h = h * 31 + s.getItem().hashCode() * 7 + s.getCount();
+        }
+        return Integer.toString(h);
+    }
+
+    /**
+     * No progress for a while – not moved a block, nothing gained, nothing broken – means the job hangs.
+     * 12 s: back off, jump, re-plan. 25 s: the same, sideways. 40 s: give up on this step, tell you why, go on.
+     */
+    private static boolean watchdog(Minecraft mc, LocalPlayer p) {
+        if (escapeTicks > 0) { // backing off: back + sideways + jump
+            escapeTicks--;
+            mc.options.keyUp.setDown(false);
+            mc.options.keyDown.setDown(true);
+            (escapeLeft ? mc.options.keyLeft : mc.options.keyRight).setDown(escapeTicks % 20 < 12);
+            mc.options.keyJump.setDown(p.onGround() || p.isInWater());
+            if (escapeTicks == 0) release(mc);
+            return true;
+        }
+        if (Guard.resting() || task.idle() || p.isUsingItem()) {
+            watchPos = null;
+            return false;
+        }
+        if (++watchTicks % 20 != 0) return false;
+        String inv = invSig(p);
+        if (watchPos == null || p.position().distanceTo(watchPos) > 1.2 || !inv.equals(watchInv) || broken > 0) {
+            watchPos = p.position();
+            watchInv = inv;
+            broken = 0;
+            watchTicks = 0;
+            stuckLevel = 0;
+            return false;
+        }
+        int secs = watchTicks / 20;
+        if (secs >= 12 && stuckLevel == 0 || secs >= 25 && stuckLevel == 1) {
+            stuckLevel++;
+            note(stuckLevel == 1 ? "Stuck – backing off and trying another way." : "Still stuck – trying the other side.");
+            mining = null;
+            escapeLeft = stuckLevel == 1 ? Math.random() < 0.5 : !escapeLeft;
+            escapeTicks = 30;
+            task.unstuck(mc);
+            return true;
+        }
+        if (secs >= 40) {
+            BlockPos b = p.blockPosition();
+            resetWatch();
+            fail("I was stuck at " + b.getX() + " " + b.getY() + " " + b.getZ() + " for 40 seconds and couldn't get free.");
+            return true;
+        }
+        return false;
     }
 
     public static void stop(String why) {
         if (task != null) lastStatus = why != null ? why : "Stopped";
+        if (task != null && why != null) tell("failed: " + why);
+        else watcher = null;
         task = null;
         de.peregrine.client.Modules.BLOCK_ESP.setAssist(java.util.Set.of()); // the assistant's highlights go away
         de.peregrine.client.Modules.ENTITY_ESP.watch(java.util.Set.of());
@@ -114,6 +222,7 @@ public final class Bot {
             return;
         }
         try {
+            if (watchdog(mc, p)) return;
             if (Guard.tick(mc)) return; // fighting, eating or resting first
             if (task != null && task.tick(mc)) {
                 Task done = task;
@@ -122,9 +231,11 @@ public final class Bot {
                 de.peregrine.client.Modules.ENTITY_ESP.watch(java.util.Set.of());
                 lastStatus = done.status();
                 release(mc);
+                tell("finished: " + lastStatus);
             }
         } catch (Throwable e) {
-            stop("Something went wrong: " + e.getMessage());
+            de.peregrine.client.PeregrineClient.LOG.warn("Assistant step failed", e);
+            fail("Something went wrong (" + e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + e.getMessage() : "") + ").");
         }
     }
 
@@ -211,9 +322,11 @@ public final class Bot {
     public static boolean mine(Minecraft mc, BlockPos pos) {
         LocalPlayer p = mc.player;
         if (passable(mc, pos)) {
+            if (pos.equals(mining)) broken++;
             mining = null;
             return true;
         }
+        if (Navigator.AVOID.contains(pos)) return true; // tried before, it would not break
         BlockState s = mc.level.getBlockState(pos);
         if (!pos.equals(mining)) {
             mining = pos;
@@ -229,7 +342,12 @@ public final class Bot {
         mc.options.keyUp.setDown(false);
         mc.gameMode.continueDestroyBlock(pos, face);
         swing(p);
-        if (miningTicks > 20 * 30) throw new IllegalStateException("cannot break " + id(s) + " – wrong tool?");
+        if (miningTicks > 20 * 15) { // not breaking (wrong tool, protected spot, out of reach): go around it
+            Navigator.AVOID.add(pos.immutable());
+            mining = null;
+            note("Can't break " + id(s).replace('_', ' ') + " – going around it.");
+            return true;
+        }
         return false;
     }
 
