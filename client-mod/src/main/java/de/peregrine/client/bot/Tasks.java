@@ -390,7 +390,12 @@ public final class Tasks {
         @Override
         public boolean tick(Minecraft mc) {
             if (nav.tick(mc)) {
-                if (nav.problem != null) Bot.fail(nav.problem);
+                if (nav.problem != null) {
+                    BlockPos g = nav.goal(), f = mc.player.blockPosition();
+                    boolean under = Math.abs(g.getX() - f.getX()) + Math.abs(g.getZ() - f.getZ()) <= 3 && Math.abs(g.getY() - f.getY()) > 2;
+                    Bot.fail(under ? "I'm at " + g.getX() + " " + g.getZ() + ", but Y " + g.getY() + " is out of reach – I don't build up or dig that far."
+                            : nav.problem + " (" + (int) Math.sqrt(f.distSqr(g)) + " m short of " + name + ")");
+                }
                 else Bot.say("I'm at " + name + ".");
                 return nav.problem == null;
             }

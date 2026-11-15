@@ -65,8 +65,10 @@ public final class Combat {
         private String mode = "looking", targetName = "";
         private int ticks, lost, wtap, strafeT, crystalCd, navAge, maceStage;
         private int restoreSlot = -1, catchIn = -1, lungeCd, pearlCd;
+        private float catchYaw;
         private int flyStage, flyTicks, rocketCd, flyCd;
         private boolean strafeLeft, hadTarget;
+        private int lastHurt = -1000, obiPlaced, obiWindow;
         private final Random rnd = new Random();
 
         public LivingEntity target() {
@@ -142,6 +144,11 @@ public final class Combat {
                 return false;
             }
 
+            if (p.hurtTime > 0) lastHurt = ticks;
+
+            // ---- they walled themselves in: break the block between us
+            if (d < 7 && breakIn(mc, p)) return false;
+
             // ---- special moves (pearls, wind charges, lunge)
             if (techniques(mc, p, d)) return false;
 
@@ -171,6 +178,44 @@ public final class Combat {
             }
             melee(mc, p, d);
             return false;
+        }
+
+        /** A calm moment: not hit in the last 1.5 s and enough health – only then risky moves (pearls, jumps, flying). */
+        private boolean calm(LocalPlayer p, float minHealth) {
+            return ticks - lastHurt > 30 && p.getHealth() + p.getAbsorptionAmount() >= minHealth;
+        }
+
+        /**
+         * Target out of sight behind blocks (built in, in a hole, behind a wall): mine the first block on the line
+         * between our eyes and theirs. Walks closer first when that block is out of reach.
+         */
+        private boolean breakIn(Minecraft mc, LocalPlayer p) {
+            Vec3 eye = p.getEyePosition();
+            Vec3 to = target.getEyePosition();
+            if (p.hasLineOfSight(target)) return false;
+            var hit = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, to, net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                    net.minecraft.world.level.ClipContext.Fluid.NONE, p));
+            if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) {
+                to = target.position().add(0, 0.4, 0); // try their feet
+                hit = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, to, net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE, p));
+                if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return false;
+            }
+            BlockPos b = hit.getBlockPos();
+            if (Bot.unsafeToMine(mc, b) || Navigator.AVOID.contains(b)) return false;
+            mode = "breaking in";
+            if (eye.distanceTo(Vec3.atCenterOf(b)) > 4.3) {
+                if (nav == null || ++navAge > 40) {
+                    nav = new Navigator(b, 3.5, null);
+                    navAge = 0;
+                }
+                if (nav.tick(mc)) nav = null;
+                return true;
+            }
+            mc.options.keyLeft.setDown(false);
+            mc.options.keyRight.setDown(false);
+            Bot.mine(mc, b);
+            return true;
         }
 
         // ------------------------------------------------------------------ hotbar swaps
@@ -246,7 +291,8 @@ public final class Combat {
             if (pearlCd > 0) pearlCd--;
             // pearl catch: the wind charge right after the engage pearl – fly after it with momentum
             if (catchIn >= 0 && catchIn-- == 0) {
-                if (quickUse(mc, p, "wind_charge", yawTo(p.position(), target.position()), 90f)) {
+                // the charge hits the ground just behind us: the blast throws us forward and up, after the pearl
+                if (quickUse(mc, p, "wind_charge", catchYaw + 180f, 68f)) {
                     mode = "pearl catch";
                     return true;
                 }
@@ -258,6 +304,10 @@ public final class Combat {
                 if (quickUse(mc, p, "ender_pearl", away, -28f)) {
                     pearlCd = 40;
                     mode = "escape pearl";
+                    if (has(mc, "wind_charge") && p.onGround()) { // catch it: away even faster
+                        catchIn = 1;
+                        catchYaw = away;
+                    }
                     Bot.note("Pearling out.");
                     return true;
                 }
@@ -285,19 +335,25 @@ public final class Combat {
                 }
             }
             // engage pearl (+ pearl catch) when they are far away and visible
-            if (d > 14 && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target)) {
+            boolean catchKit = has(mc, "ender_pearl") && has(mc, "wind_charge");
+            if ((d > 14 || (catchKit && d > 9)) && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target)
+                    && calm(p, 10) && p.onGround()) {
                 Vec3 t = target.position();
                 double hd = Math.hypot(t.x - eye.x, t.z - eye.z) - 2.0;
                 float pitch = pearlPitch(hd, t.y - eye.y);
                 if (quickUse(mc, p, "ender_pearl", yawTo(eye, t), pitch)) {
                     pearlCd = 30;
                     mode = "engage pearl";
-                    if (has(mc, "wind_charge") && p.onGround()) catchIn = 2;
+                    if (has(mc, "wind_charge")) {
+                        catchIn = 1;
+                        catchYaw = yawTo(eye, t);
+                        mode = "pearl catch";
+                    }
                     return true;
                 }
             }
             // lunge swap: spear with Lunge, jab to dash in, back to the weapon
-            if (lungeCd == 0 && d > 3.6 && d < 8.5 && p.onGround()) {
+            if (lungeCd == 0 && d > 3.6 && d < 8.5 && p.onGround() && catchIn < 0 && ticks - lastHurt > 10) {
                 int spear = hotbar(mc, s -> id(s).endsWith("_spear") && enchanted(s, "lunge") ? 1 : 0);
                 if (spear >= 0) {
                     var inv = p.getInventory();
@@ -325,13 +381,41 @@ public final class Combat {
          * the item whose attributes should hit (axe against a shield, mace while falling or Breach against armor),
          * attacks, and switches straight back – the server uses the charge of the first and the stats of the second.
          */
+        /** Rough hit damage of an item right now (base + sharpness, mace fall bonus, density, breach vs. armor). */
+        private double hitDamage(ItemStack s, LocalPlayer p, LivingEntity t, double dist) {
+            String id = id(s);
+            double dmg;
+            if (id.endsWith("_sword")) dmg = switch (id) {
+                case "netherite_sword" -> 8; case "diamond_sword" -> 7; case "iron_sword" -> 6; case "stone_sword" -> 5; default -> 4;
+            };
+            else if (id.endsWith("_axe")) dmg = switch (id) {
+                case "netherite_axe" -> 10; case "diamond_axe", "iron_axe", "stone_axe" -> 9; default -> 7;
+            };
+            else if (id.equals("mace")) {
+                double f = p.fallDistance;
+                dmg = 6 + (f <= 1.5 ? 0 : f <= 3 ? 4 * f : f <= 8 ? 12 + 2 * (f - 3) : 22 + (f - 8));
+                if (enchanted(s, "density") && f > 1.5) dmg += 1.5 * f;
+                if (enchanted(s, "breach")) dmg *= 1 + Math.min(0.4, t.getArmorValue() / 50.0);
+            } else if (id.endsWith("_spear")) dmg = switch (id) {
+                case "netherite_spear" -> 7; case "diamond_spear" -> 6; case "iron_spear" -> 5; default -> 4;
+            };
+            else return 0;
+            if (dist > 3.0 && !id.endsWith("_spear")) return 0; // only the spear reaches that far
+            if (enchanted(s, "sharpness")) dmg += 2.5;
+            return dmg;
+        }
+
         private void attackWithSwap(Minecraft mc, LocalPlayer p, LivingEntity t) {
             var inv = p.getInventory();
             int hand = inv.getSelectedSlot();
+            double dist = p.getEyePosition().distanceTo(t.getBoundingBox().getCenter()) - t.getBbWidth() / 2;
             int swap = -1;
-            if (t.isBlocking()) swap = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0);
-            if (swap < 0 && p.fallDistance > 1.5) swap = hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
-            if (swap < 0 && t.getArmorValue() >= 12) swap = hotbar(mc, s -> id(s).equals("mace") && enchanted(s, "breach") ? 1 : 0);
+            if (t.isBlocking()) swap = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0); // shield: axe first
+            if (swap < 0) { // otherwise whatever hits hardest now – the charge comes from the fast weapon in hand
+                double handDmg = hitDamage(inv.getItem(hand), p, t, dist);
+                int best = hotbar(mc, s -> hitDamage(s, p, t, dist));
+                if (best >= 0 && hitDamage(inv.getItem(best), p, t, dist) > handDmg + 0.5) swap = best;
+            }
             if (swap >= 0 && swap != hand) {
                 inv.setSelectedSlot(swap);
                 mc.gameMode.attack(p, t);
@@ -384,7 +468,8 @@ public final class Combat {
             }
             mc.options.keyJump.setDown(false);
             boolean falling = !p.onGround() && p.getDeltaMovement().y < -0.08;
-            if (ready && d <= 3.0 && (!wantCrit || falling || p.isInWater())) {
+            boolean spear = hotbar(mc, s -> id(s).endsWith("_spear") ? 1 : 0) >= 0;
+            if (ready && (d <= 3.0 || (spear && d <= 4.3)) && (!wantCrit || falling || p.isInWater())) {
                 attackWithSwap(mc, p, target);
                 if (!wantCrit) wtap = 3;
             }
@@ -394,7 +479,7 @@ public final class Combat {
         private boolean mace(Minecraft mc, LocalPlayer p, double d) {
             boolean charges = has(mc, "wind_charge");
             // stage 1: on the ground, close enough – wind charge at our own feet to launch up
-            if (maceStage == 0 && charges && p.onGround() && d < 5.5 && d > 1.2) {
+            if (maceStage == 0 && charges && p.onGround() && d < 5.5 && d > 2.0 && calm(p, 8)) {
                 if (!Bot.holdBest(mc, s -> id(s).equals("wind_charge") ? 1 : 0)) return false;
                 if (!holding(p, "wind_charge")) return true; // still swapping
                 if (p.getCooldowns().isOnCooldown(p.getMainHandItem())) return false;
@@ -463,7 +548,7 @@ public final class Combat {
             if (flyCd > 0) flyCd--;
             boolean can = has(mc, "mace") && has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
             if (flyStage == 0) {
-                if (!can || flyCd > 0 || d < 7 || d > 48 || p.getHealth() < 8) return false;
+                if (!can || flyCd > 0 || d < 12 || d > 48 || !calm(p, 12) || !mc.level.canSeeSky(p.blockPosition().above(2))) return false;
                 flyStage = 1;
                 flyTicks = 0;
             }
@@ -592,10 +677,21 @@ public final class Combat {
                 crystalCd = 1;
                 return true;
             }
-            // 3) no spot: put obsidian right next to them
+            // 3) no spot: one obsidian base two blocks from them on our side – never right next to them (that would
+            //    only wall them in), and at most two bases every 10 s
             if (!has(mc, "obsidian")) return false;
-            for (Direction dir : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
-                BlockPos spot = t.relative(dir);
+            if (++obiWindow > 200) {
+                obiWindow = 0;
+                obiPlaced = 0;
+            }
+            if (obiPlaced >= 2) return false;
+            Vec3 toUs = p.position().subtract(target.position()).multiply(1, 0, 1);
+            java.util.List<BlockPos> spots = new java.util.ArrayList<>();
+            for (int dx = -2; dx <= 2; dx++)
+                for (int dz = -2; dz <= 2; dz++)
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) == 2) spots.add(t.offset(dx, 0, dz));
+            spots.sort(java.util.Comparator.comparingDouble(b -> -(toUs.x * (b.getX() - t.getX()) + toUs.z * (b.getZ() - t.getZ()))));
+            for (BlockPos spot : spots) {
                 if (!mc.level.getBlockState(spot).isAir() || !mc.level.getBlockState(spot.above()).isAir()) continue;
                 if (!Bot.solid(mc, spot.below())) continue;
                 if (spot.equals(p.blockPosition()) || spot.equals(p.blockPosition().above())) continue;
@@ -608,6 +704,8 @@ public final class Combat {
                 mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false));
                 Bot.swing(p);
                 crystalCd = 1;
+                obiPlaced++;
+                mode = "crystal · obsidian base";
                 return true;
             }
             return false;

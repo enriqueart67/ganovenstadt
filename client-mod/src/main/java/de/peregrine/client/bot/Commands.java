@@ -85,7 +85,8 @@ public final class Commands {
         @Override
         public String status() {
             Bot.Task c = cur();
-            return (jobs.size() > 1 ? (i + 1) + "/" + jobs.size() + " · " : "") + (c == null ? "done" : c.status());
+            if (c == null) return "Done: " + (names.isEmpty() ? "all jobs" : String.join(", then ", names));
+            return (jobs.size() > 1 ? (i + 1) + "/" + jobs.size() + " · " : "") + c.status();
         }
 
         @Override
@@ -598,7 +599,7 @@ public final class Commands {
                 int score;
                 if (name.equals(p) || spaced.equals(p) || id.equals(p)) score = 0;
                 else if (name.equals(p + "s") || spaced.equals(p + "s") || (p.endsWith("s") && spaced.equals(p.substring(0, p.length() - 1)))) score = 1;
-                else if (name.contains(p) || spaced.contains(p)) score = 10 + Math.min(name.length(), spaced.length()) - p.length();
+                else if (p.length() >= 3 && (name.contains(p) || spaced.contains(p))) score = 10 + Math.min(name.length(), spaced.length()) - p.length();
                 else continue;
                 if (score < bestScore) {
                     bestScore = score;

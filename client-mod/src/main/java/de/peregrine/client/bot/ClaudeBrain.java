@@ -182,7 +182,7 @@ final class ClaudeBrain {
         Minecraft mc = Minecraft.getInstance();
         String state = snapshot(mc);
         autoTurns = 0;
-        submit(state + "\n\n[player] " + text);
+        submit(state + "\n\n[player] " + text, text);
     }
 
     /** A job ended – Claude decides what to do next (limited number of times per request). */
@@ -192,10 +192,25 @@ final class ClaudeBrain {
             Bot.say("I'll stop planning on my own here – tell me how to go on.");
             return;
         }
-        submit(snapshot(mc) + "\n\n[result] The jobs you started " + what);
+        submit(snapshot(mc) + "\n\n[result] The jobs you started " + what, null);
     }
 
-    private static void submit(String userText) {
+    /** Claude can't be reached: do what was typed with the built-in command parser instead of dropping it. */
+    private static void fallback(String why, String original) {
+        if (original == null) {
+            reply(why);
+            return;
+        }
+        Minecraft.getInstance().execute(() -> {
+            synchronized (ClaudeBrain.class) {
+                if (!history.isEmpty()) history.remove(history.size() - 1); // the unanswered message
+            }
+            String r = Commands.handle(original);
+            Bot.CHAT.add(new String[]{"bot", why + " I handled it myself: " + (r == null ? "nothing to do." : r)});
+        });
+    }
+
+    private static void submit(String userText, String original) {
         WORKER.submit(() -> {
             BUSY.set(true);
             try {
@@ -205,14 +220,14 @@ final class ClaudeBrain {
                 }
                 loop();
             } catch (UnauthorizedException e) {
-                reply("Claude rejected the API key. Paste a new one with the KEY button.");
+                fallback("Claude rejected the API key (KEY button to change it).", original);
             } catch (RateLimitException e) {
-                reply("Claude is rate limited right now – try again in a moment.");
+                fallback("Claude is rate limited right now.", original);
             } catch (AnthropicServiceException e) {
-                reply("Claude had a problem (" + e.statusCode() + "). Try again.");
+                fallback("Claude had a problem (" + e.statusCode() + ").", original);
                 PeregrineClient.LOG.warn("Claude request failed: {}", e.getMessage());
             } catch (Throwable e) {
-                reply("Couldn't reach Claude: " + e.getClass().getSimpleName() + ". Check the internet connection.");
+                fallback("Couldn't reach Claude (" + e.getClass().getSimpleName() + ").", original);
                 PeregrineClient.LOG.warn("Claude request failed", e);
             } finally {
                 BUSY.set(false);

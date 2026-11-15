@@ -58,8 +58,13 @@ public final class Bot {
         return task != null;
     }
 
+    private static boolean guarding;
+    private static int guardTicks;
+
     public static String status() {
-        return task != null ? task.status() : lastStatus;
+        if (task == null) return lastStatus;
+        if (guarding) return Guard.activity(Minecraft.getInstance()) + " · then: " + task.status();
+        return task.status();
     }
 
     public static void say(String text) {
@@ -223,7 +228,14 @@ public final class Bot {
         }
         try {
             if (watchdog(mc, p)) return;
-            if (Guard.tick(mc)) return; // fighting, eating or resting first
+            guarding = Guard.tick(mc);
+            if (guarding) {
+                if (++guardTicks == 20 * 120) // two minutes only staying alive: say why the job isn't moving
+                    say("I've spent two minutes just staying alive (" + Math.round(p.getHealth() / 2) + " hearts, food " + p.getFoodData().getFoodLevel()
+                            + "/20) – the job waits. Give me food, or say stop.");
+                return; // fighting, eating or resting first
+            }
+            guardTicks = 0;
             if (task != null && task.tick(mc)) {
                 Task done = task;
                 task = null;

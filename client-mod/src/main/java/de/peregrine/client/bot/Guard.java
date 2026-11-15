@@ -58,6 +58,19 @@ final class Guard {
     private static final Set<String> ARCHERS = Set.of("skeleton", "stray", "bogged", "pillager", "witch", "blaze", "ghast", "drowned");
     private static final Set<String> PREY = Set.of("cow", "pig", "sheep", "chicken", "rabbit", "mooshroom");
 
+    /** What the self-protection is busy with (for the status line), judged from its state. */
+    static String activity(Minecraft mc) {
+        LocalPlayer p = mc.player;
+        int hearts = p == null ? 0 : Math.round(p.getHealth() / 2);
+        if (p != null && p.isInLava()) return "Getting out of lava";
+        if (p != null && p.isUnderWater() && p.getAirSupply() < 140) return "Swimming up for air";
+        if (eatTicks > 0) return "Eating";
+        if (fleeTicks > 0) return "Running from a creeper";
+        if (prey != null || loot != null) return "Hunting for food (" + hearts + " hearts)";
+        if (resting) return "Resting – " + hearts + " hearts";
+        return "Staying safe from mobs (" + hearts + " hearts)";
+    }
+
     static void reset() {
         keepElytra = false;
         eatTicks = fleeTicks = critTicks = strafeTicks = huntTicks = 0;

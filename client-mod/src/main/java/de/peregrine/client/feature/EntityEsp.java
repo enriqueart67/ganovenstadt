@@ -33,6 +33,10 @@ import java.util.Set;
  * <p>Allowed in singleplayer, LAN worlds you host and servers where you are operator.</p>
  */
 public final class EntityEsp extends Module {
+    /** Picked entity types ("minecraft:cow") and players ("player:steve"), chosen in the picker. */
+    public final de.peregrine.client.setting.ListSetting picks = add(new de.peregrine.client.setting.ListSetting("picks", "Picked mobs and players", List.of()));
+    public final ModeSetting show = add(new ModeSetting("show", "Show", "Categories + picks", "Categories + picks", "Only picks"));
+    public final de.peregrine.client.setting.ColorSetting pickColor = add(new de.peregrine.client.setting.ColorSetting("pickcolor", "Pick color", 0xFFD46CFF));
     public final BoolSetting hostile = add(new BoolSetting("hostile", "Monsters", true));
     public final BoolSetting passive = add(new BoolSetting("passive", "Animals", false));
     public final BoolSetting players = add(new BoolSetting("players", "Players", true));
@@ -55,7 +59,20 @@ public final class EntityEsp extends Module {
         watched = ids;
     }
 
+    @Override
+    public net.minecraft.client.gui.screens.Screen editor(net.minecraft.client.gui.screens.Screen parent) {
+        return new de.peregrine.client.gui.EntityPickerScreen(parent, this);
+    }
+
+    /** Key of an entity in the pick list: "player:name" for players, the type id for everything else. */
+    public static String pickKey(Entity e) {
+        if (e instanceof Player pl) return "player:" + pl.getName().getString().toLowerCase(java.util.Locale.ROOT);
+        return net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString();
+    }
+
     private int colour(Entity e) {
+        if (!picks.get().isEmpty() && picks.contains(pickKey(e))) return 0xFF000000 | (pickColor.argb() & 0xFFFFFF);
+        if (show.is("Only picks")) return 0;
         if (e instanceof Player) return players.on() ? PLAYER : 0;
         if (e instanceof ItemEntity) return items.on() ? ITEM : 0;
         if (e instanceof Enemy) return hostile.on() ? HOSTILE : 0;
