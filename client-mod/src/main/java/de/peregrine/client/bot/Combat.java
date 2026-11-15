@@ -59,6 +59,7 @@ public final class Combat {
         private Navigator nav;
         private String mode = "looking", targetName = "";
         private int ticks, lost, wtap, strafeT, crystalCd, navAge, maceStage;
+        private int restoreSlot = -1, catchIn = -1, lungeCd, pearlCd;
         private boolean strafeLeft, hadTarget;
         private final Random rnd = new Random();
 
@@ -118,6 +119,10 @@ public final class Combat {
                         + (Bot.count(mc, "end_crystal") > 0 ? " Crystals ready." : "") + (Bot.count(mc, "mace") > 0 ? " Mace ready." : ""));
             }
             double d = p.distanceTo(target);
+            if (restoreSlot >= 0) { // back to the weapon after a lunge
+                p.getInventory().setSelectedSlot(restoreSlot);
+                restoreSlot = -1;
+            }
 
             // ---- defence first
             Guard.gear(mc); // totem back in the off hand immediately after a pop, best armor on
@@ -126,6 +131,9 @@ public final class Combat {
                 mode = "healing";
                 return false;
             }
+
+            // ---- special moves (pearls, wind charges, lunge)
+            if (techniques(mc, p, d)) return false;
 
             // ---- getting there
             if (d > 10) {
@@ -150,6 +158,177 @@ public final class Combat {
             }
             melee(mc, p, d);
             return false;
+        }
+
+        // ------------------------------------------------------------------ hotbar swaps
+        /** Hotbar slot of the best item matching the score (> 0), or -1. Items still in the main inventory are pulled in. */
+        private int hotbar(Minecraft mc, java.util.function.ToDoubleFunction<ItemStack> score) {
+            var inv = mc.player.getInventory();
+            int best = -1, bestMain = -1;
+            double bs = 0, bm = 0;
+            for (int i = 0; i < 36; i++) {
+                double v = score.applyAsDouble(inv.getItem(i));
+                if (v <= 0) continue;
+                if (i < 9 && v > bs) {
+                    bs = v;
+                    best = i;
+                } else if (i >= 9 && v > bm) {
+                    bm = v;
+                    bestMain = i;
+                }
+            }
+            if (best < 0 && bestMain >= 0) {
+                // free a hotbar slot that is not the weapon in hand: the last one
+                int spare = inv.getSelectedSlot() == 8 ? 7 : 8;
+                Inv.toHotbar(mc, bestMain, spare);
+            }
+            return best;
+        }
+
+        private static boolean enchanted(ItemStack s, String ench) {
+            try {
+                return s.getEnchantments().toString().contains("minecraft:" + ench);
+            } catch (Throwable e) {
+                return false;
+            }
+        }
+
+        /** Swap to a hotbar slot, use the item with the given look, swap straight back (one tick, like a player's hotkey). */
+        private boolean quickUse(Minecraft mc, LocalPlayer p, String item, float yaw, float pitch) {
+            int slot = hotbar(mc, s -> id(s).equals(item) ? 1 : 0);
+            if (slot < 0) return false;
+            var inv = p.getInventory();
+            if (p.getCooldowns().isOnCooldown(inv.getItem(slot))) return false;
+            int prev = inv.getSelectedSlot();
+            float oy = p.getYRot(), op = p.getXRot();
+            p.setYRot(yaw);
+            p.setXRot(pitch);
+            inv.setSelectedSlot(slot);
+            mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+            Bot.swing(p);
+            inv.setSelectedSlot(prev);
+            p.setYRot(oy);
+            p.setXRot(op);
+            return true;
+        }
+
+        private static float yawTo(Vec3 from, Vec3 to) {
+            return (float) Math.toDegrees(Math.atan2(-(to.x - from.x), to.z - from.z));
+        }
+
+        /** Pitch for an ender pearl to land at horizontal distance d (and height difference dy): ballistic arc. */
+        private static float pearlPitch(double d, double dy) {
+            double v = 1.5, g = 0.03;
+            double x = Math.max(1, d);
+            double disc = v * v * v * v - g * (g * x * x + 2 * dy * v * v);
+            if (disc < 0) return -45f;
+            double theta = Math.atan((v * v - Math.sqrt(disc)) / (g * x)); // the flat (fast) arc
+            return (float) -Math.toDegrees(theta);
+        }
+
+        /** Advanced moves that come before the main technique. Returns true when one was used this tick. */
+        private boolean techniques(Minecraft mc, LocalPlayer p, double d) {
+            Vec3 eye = p.getEyePosition();
+            if (lungeCd > 0) lungeCd--;
+            if (pearlCd > 0) pearlCd--;
+            // pearl catch: the wind charge right after the engage pearl – fly after it with momentum
+            if (catchIn >= 0 && catchIn-- == 0) {
+                if (quickUse(mc, p, "wind_charge", yawTo(p.position(), target.position()), 90f)) {
+                    mode = "pearl catch";
+                    return true;
+                }
+            }
+            float hp = p.getHealth() + p.getAbsorptionAmount();
+            // escape pearl: low, no totem, enemy close – away and up, then heal
+            if (hp < 7 && !Guard.hasTotem(p) && d < 6 && pearlCd == 0 && has(mc, "ender_pearl")) {
+                float away = yawTo(target.position(), p.position());
+                if (quickUse(mc, p, "ender_pearl", away, -28f)) {
+                    pearlCd = 40;
+                    mode = "escape pearl";
+                    Bot.note("Pearling out.");
+                    return true;
+                }
+            }
+            // wind charge into their face when it gets tight (knocks them away)
+            if (hp < 9 && d < 3.2 && has(mc, "wind_charge") && target.onGround()) {
+                Vec3 feet = target.position();
+                float pitch = (float) -Math.toDegrees(Math.atan2(feet.y - eye.y, Math.hypot(feet.x - eye.x, feet.z - eye.z)));
+                if (quickUse(mc, p, "wind_charge", yawTo(eye, feet), pitch)) {
+                    mode = "wind push";
+                    return true;
+                }
+            }
+            // no fall damage: wind charge at the ground just before landing from high up
+            if (maceStage == 0 && p.fallDistance > 6 && p.getDeltaMovement().y < -0.6 && has(mc, "wind_charge")) {
+                BlockPos below = p.blockPosition();
+                for (int i = 1; i <= 3; i++) {
+                    if (Bot.solid(mc, below.below(i))) {
+                        if (quickUse(mc, p, "wind_charge", p.getYRot(), 90f)) {
+                            mode = "fall cancel";
+                            return true;
+                        }
+                        break;
+                    }
+                }
+            }
+            // engage pearl (+ pearl catch) when they are far away and visible
+            if (d > 14 && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target)) {
+                Vec3 t = target.position();
+                double hd = Math.hypot(t.x - eye.x, t.z - eye.z) - 2.0;
+                float pitch = pearlPitch(hd, t.y - eye.y);
+                if (quickUse(mc, p, "ender_pearl", yawTo(eye, t), pitch)) {
+                    pearlCd = 30;
+                    mode = "engage pearl";
+                    if (has(mc, "wind_charge") && p.onGround()) catchIn = 2;
+                    return true;
+                }
+            }
+            // lunge swap: spear with Lunge, jab to dash in, back to the weapon
+            if (lungeCd == 0 && d > 3.6 && d < 8.5 && p.onGround()) {
+                int spear = hotbar(mc, s -> id(s).endsWith("_spear") && enchanted(s, "lunge") ? 1 : 0);
+                if (spear >= 0) {
+                    var inv = p.getInventory();
+                    restoreSlot = inv.getSelectedSlot();
+                    inv.setSelectedSlot(spear);
+                    Bot.look(p, target.getEyePosition());
+                    try {
+                        var m = Minecraft.class.getDeclaredMethod("startAttack");
+                        m.setAccessible(true);
+                        m.invoke(mc);
+                    } catch (ReflectiveOperationException e) {
+                        mc.gameMode.attack(p, target);
+                    }
+                    Bot.swing(p);
+                    lungeCd = 25;
+                    mode = "lunge";
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Attribute swap: the swing is charged with the weapon in hand, and in the same tick the hotbar switches to
+         * the item whose attributes should hit (axe against a shield, mace while falling or Breach against armor),
+         * attacks, and switches straight back – the server uses the charge of the first and the stats of the second.
+         */
+        private void attackWithSwap(Minecraft mc, LocalPlayer p, LivingEntity t) {
+            var inv = p.getInventory();
+            int hand = inv.getSelectedSlot();
+            int swap = -1;
+            if (t.isBlocking()) swap = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0);
+            if (swap < 0 && p.fallDistance > 1.5) swap = hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
+            if (swap < 0 && t.getArmorValue() >= 12) swap = hotbar(mc, s -> id(s).equals("mace") && enchanted(s, "breach") ? 1 : 0);
+            if (swap >= 0 && swap != hand) {
+                inv.setSelectedSlot(swap);
+                mc.gameMode.attack(p, t);
+                Bot.swing(p);
+                inv.setSelectedSlot(hand);
+                mode = mode + " · swap";
+            } else {
+                mc.gameMode.attack(p, t);
+                Bot.swing(p);
+            }
         }
 
         // ------------------------------------------------------------------ sword / axe
@@ -193,8 +372,7 @@ public final class Combat {
             mc.options.keyJump.setDown(false);
             boolean falling = !p.onGround() && p.getDeltaMovement().y < -0.08;
             if (ready && d <= 3.0 && (!wantCrit || falling || p.isInWater())) {
-                mc.gameMode.attack(p, target);
-                Bot.swing(p);
+                attackWithSwap(mc, p, target);
                 if (!wantCrit) wtap = 3;
             }
         }

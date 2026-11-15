@@ -131,6 +131,19 @@
   - Eingebunden ist es in `paint_atmosphere` über `paint_peak`: formatfüllend mit 5 % Überstand für die Parallaxe und Abdunklung (Alpha 70). Auf allen Seiten außer Home wird zusätzlich abgedunkelt (Alpha 120), damit Text lesbar bleibt.
   - Der gezeichnete Berg (`paint_mountains`) bleibt im Code, wird aber nicht mehr genutzt.
   - Herkunft und Rechte des Bildes sind unbekannt (vom Nutzer hochgeladen).
+- **PvP-Techniken Stufe 2 (`bot/Combat.java`, `techniques` + `attackWithSwap`):**
+  - Hotbar-Wechsel wie per Taste: `quickUse` wählt das Item, setzt die Blickrichtung, benutzt das Item und wechselt im selben Tick zurück. Das UseItem-Paket trägt die Rotation. Items aus dem Hauptinventar holt er zuerst in Slot 9 bzw. 8.
+  - **Attribute Swap:** Der Schlag wird mit der Waffe in der Hand geladen; im selben Tick wechselt er auf Axt (Schild hoch), Mace (Fall > 1,5) oder Breach-Mace (Rüstung ≥ 12), schlägt und wechselt zurück. Der Server rechnet mit der Ladung der ersten und den Werten der zweiten Waffe, weil der Ladezähler erst im nächsten Spieler-Tick zurückgesetzt wird.
+  - **Windladung:**
+    - Fallschaden verhindern: bei Fall > 6 Blöcke und Boden innerhalb von 3 Blöcken.
+    - Den Gegner wegschießen: auf seine Füße bei < 4,5 Herzen und < 3,2 Blöcken.
+    - Mace-Sprung wie bisher.
+  - **Perlen:**
+    - Flucht: < 3,5 Herzen, kein Totem, Gegner < 6 Blöcke – vom Gegner weg mit −28° Neigung.
+    - Angriff: 14–60 Blöcke und freie Sicht; die Neigung kommt aus der Wurfbahn mit v = 1,5 und g = 0,03, flacher Bogen.
+    - Pearl Catch: Zwei Ticks nach der Angriffs-Perle folgt eine Windladung an die eigenen Füße in Richtung Gegner.
+  - **Lunge Swap:** Speer mit Lunge (Verzauberung per `getEnchantments().toString()` erkannt) bei 3,6–8,5 Blöcken. Er löst den normalen Angriff per Reflection auf `Minecraft.startAttack` aus (Stoß mit Vorwärtsschub der Verzauberung) und kehrt im nächsten Tick zur Waffe zurück.
+  - Nicht im Spiel getestet: Die Demo-Welt hat keine dieser Items und keinen zweiten Spieler.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---
