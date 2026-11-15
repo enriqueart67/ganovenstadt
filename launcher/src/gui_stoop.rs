@@ -125,6 +125,7 @@ pub(super) fn paint_atmosphere(p: &egui::Painter, r: Rect, pal: &Pal, t: f32, pa
     let breathe = 0.5 + 0.5 * (t * 0.45).sin();
     ellipse_glow(p, pos2(r.center().x + par.x * 18.0, r.top() + r.height() * 0.52 + par.y * 10.0), r.width() * 0.42, r.height() * 0.46, pal.accent, 18.0 + 8.0 * breathe);
     ellipse_glow(p, pos2(r.left() + r.width() * 0.12 + par.x * 8.0, r.top() + r.height() * 0.08), r.width() * 0.35, r.height() * 0.30, pal.accent2, 7.0);
+    paint_mountains(p, r, pal, par);
     // Luftstroeme: duenne Linien, die schraeg nach unten links fallen
     let dir = vec2(-0.32, 1.0).normalized();
     for i in 0..34u32 {
@@ -141,7 +142,115 @@ pub(super) fn paint_atmosphere(p: &egui::Painter, r: Rect, pal: &Pal, t: f32, pa
     }
     // Rand abdunkeln – Blick wie durch ein Cockpitfenster
     theme::vertical_gradient(p, Rect::from_min_max(r.min, pos2(r.right(), r.top() + 90.0)), &[(0.0, alpha(pal.bg, 230)), (1.0, alpha(pal.bg, 0))]);
-    theme::vertical_gradient(p, Rect::from_min_max(pos2(r.left(), r.bottom() - 120.0), r.max), &[(0.0, alpha(pal.bg, 0)), (1.0, alpha(pal.bg, 240))]);
+    theme::vertical_gradient(p, Rect::from_min_max(pos2(r.left(), r.bottom() - 70.0), r.max), &[(0.0, alpha(pal.bg, 0)), (1.0, alpha(pal.bg, 170))]);
+}
+
+// ------------------------------------------------------------------ Berg
+fn ridge_noise(x: f32, seed: u32) -> f32 {
+    let mut v = 0.0;
+    let mut amp = 1.0;
+    let mut f = 1.0;
+    for o in 0..5 {
+        let xi = (x * f).floor();
+        let xf = x * f - xi;
+        let a = rnd(xi as i32 as u32 ^ (seed + o * 977));
+        let b = rnd((xi as i32 + 1) as u32 ^ (seed + o * 977));
+        let t = xf * xf * (3.0 - 2.0 * xf);
+        v += (a + (b - a) * t - 0.5) * amp;
+        amp *= 0.5;
+        f *= 2.1;
+    }
+    v
+}
+
+/// Farbmischung direkt in Bildschirmfarben (lerp_color mischt linear und wird dadurch viel heller).
+fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+    let l = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgba_unmultiplied(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()), l(a.a(), b.a()))
+}
+
+/// Fuellt die Flaeche unter einer Kammlinie mit einem Verlauf (oben `top`, unten `bottom`).
+fn fill_range(p: &egui::Painter, pts: &[Pos2], base: f32, top: Color32, bottom: Color32) {
+    let mut mesh = Mesh::default();
+    for w in pts.windows(2) {
+        let i = mesh.vertices.len() as u32;
+        mesh.colored_vertex(w[0], top);
+        mesh.colored_vertex(w[1], top);
+        mesh.colored_vertex(pos2(w[1].x, base), bottom);
+        mesh.colored_vertex(pos2(w[0].x, base), bottom);
+        mesh.add_triangle(i, i + 1, i + 2);
+        mesh.add_triangle(i, i + 2, i + 3);
+    }
+    p.add(Shape::mesh(mesh));
+}
+
+/// Der Berg im Hintergrund: ein markanter Gipfel (Matterhorn-artig, asymmetrisch) mit Schnee im Eislicht,
+/// dahinter eine dunstige Kette, davor dunkle Vorberge. Leichte Parallaxe mit der Maus.
+fn paint_mountains(p: &egui::Painter, r: Rect, pal: &Pal, par: Vec2) {
+    let w = r.width();
+    let h = r.height();
+    let base = r.bottom();
+    let n = 160;
+    let xs = |i: usize, shift: f32| r.left() - 40.0 + (w + 80.0) * i as f32 / n as f32 + shift;
+    // hintere Kette: niedrig, gleichmaessig, im Dunst
+    let back: Vec<Pos2> = (0..=n).map(|i| {
+        let x = xs(i, par.x * 6.0);
+        let u = (x - r.left()) / w;
+        let y = base - h * (0.30 + 0.08 * (u * 3.1 + 0.4).sin() + 0.10 * ridge_noise(u * 3.0, 11));
+        pos2(x, y)
+    }).collect();
+    fill_range(p, &back, base, mix(pal.bg, pal.accent2, 0.06), mix(pal.bg, pal.accent2, 0.015));
+    // der Gipfel
+    let peak_x = 0.64;
+    let main: Vec<Pos2> = (0..=n).map(|i| {
+        let x = xs(i, par.x * 12.0);
+        let u = (x - r.left()) / w;
+        let d = u - peak_x;
+        // steile Nordwand rechts, laengerer Grat links
+        let slope = if d < 0.0 { (1.0 + d / 0.30).max(0.0) } else { (1.0 - d / 0.17).max(0.0) };
+        let peak = slope.powf(1.35) * 0.56;
+        let shoulder = (1.0 - ((u - 0.40) / 0.22).abs()).max(0.0).powf(1.6) * 0.20;
+        // rocky ridge: coarse and fine noise, stronger near the summit
+        let rock = 0.045 * ridge_noise(u * 9.0, 23) + 0.018 * ridge_noise(u * 41.0, 29);
+        let y = base - h * (0.16 + peak.max(shoulder) + rock * (0.5 + peak * 2.2));
+        pos2(x, y)
+    }).collect();
+    fill_range(p, &main, base, mix(pal.bg, pal.accent2, 0.11), mix(pal.bg, Color32::BLACK, 0.2));
+    // Schnee oberhalb der Schneegrenze, mit zerfranster Unterkante
+    let snow_line = base - h * 0.52;
+    let mut mesh = Mesh::default();
+    for wdw in main.windows(2) {
+        let (a, b) = (wdw[0], wdw[1]);
+        if a.y > snow_line && b.y > snow_line {
+            continue;
+        }
+        let jag = |x: f32| snow_line + 10.0 * ridge_noise(x / 37.0, 5) + 18.0 * ((x - r.left()) / w * 40.0).sin().abs();
+        let (la, lb) = (jag(a.x).max(a.y), jag(b.x).max(b.y));
+        let i = mesh.vertices.len() as u32;
+        let top = mix(pal.accent2, Color32::WHITE, 0.2);
+        mesh.colored_vertex(a, alpha(top, 90));
+        mesh.colored_vertex(b, alpha(top, 90));
+        mesh.colored_vertex(pos2(b.x, lb), alpha(pal.accent, 4));
+        mesh.colored_vertex(pos2(a.x, la), alpha(pal.accent, 4));
+        mesh.add_triangle(i, i + 1, i + 2);
+        mesh.add_triangle(i, i + 2, i + 3);
+    }
+    p.add(Shape::mesh(mesh));
+    // Kantenlicht auf dem Grat
+    let rim: Vec<Pos2> = main.iter().copied().filter(|q| q.y < base - h * 0.30).collect();
+    if rim.len() > 1 {
+        p.add(Shape::line(rim, Stroke::new(1.0_f32, alpha(pal.accent, 40))));
+    }
+    // Dunst vor dem Fuss des Berges
+    theme::vertical_gradient(p, Rect::from_min_max(pos2(r.left(), base - h * 0.30), pos2(r.right(), base - h * 0.12)), &[(0.0, alpha(pal.bg, 0)), (1.0, alpha(mix(pal.bg, pal.accent2, 0.03), 120))]);
+    // dunkle Vorberge
+    let front: Vec<Pos2> = (0..=n).map(|i| {
+        let x = xs(i, par.x * 22.0);
+        let u = (x - r.left()) / w;
+        let y = base - h * (0.12 + 0.05 * (u * 5.3 + 1.2).sin() + 0.05 * ridge_noise(u * 5.0, 41));
+        pos2(x, y)
+    }).collect();
+    fill_range(p, &front, base, mix(pal.bg, Color32::BLACK, 0.3), mix(pal.bg, Color32::BLACK, 0.5));
 }
 
 // ------------------------------------------------------------------ Figur

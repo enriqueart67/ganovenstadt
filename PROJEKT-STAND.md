@@ -121,6 +121,11 @@
 - **Menüs im Spiel rund und hochauflösend (`gui/Px.java`):**
   - Zeichnet in echten Bildschirmpixeln (`pose().scale(1/guiScale)`) mit Kantenglättung über Teilabdeckungs-Pixel: abgerundete Flächen und Rahmen, Kreise, Rauten, Pfeil und Haarlinien.
   - Umgestellt sind das Mod-Menü (Blatt mit weichem Schatten, Karten, Schalter, Regler-Knopf, Farbkreise, Knöpfe, Linien), `Ui.pill` und `Ui.diamond` sowie Assistent, Wegpunkte, Kleiderschrank, HUD-Editor und Titelmenü (Blätter, Knöpfe, Chips, Linien).
+- **Berg im Launcher-Hintergrund (`gui_stoop.rs::paint_mountains`, Teil von „Atmosphere“):**
+  - Ein Matterhorn-artiger Gipfel: asymmetrisch, mit steiler rechter Wand, Schulter links und felsigem Grat aus grobem und feinem Rauschen.
+  - Schnee oberhalb einer zerfransten Schneegrenze, Kantenlicht in Eisblau, eine dunstige hintere Kette, Bodendunst und dunkle Vorberge.
+  - Drei Ebenen mit unterschiedlicher Parallaxe. Die Flächen sind Meshes mit Farbverlauf.
+  - Wichtig: Farben hier mit `mix` in Bildschirmfarben mischen. `theme::lerp_color` mischt linear und macht dunkle Töne viel zu hell.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---
