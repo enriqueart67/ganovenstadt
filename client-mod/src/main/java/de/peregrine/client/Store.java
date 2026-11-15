@@ -41,10 +41,12 @@ public final class Store {
             JsonObject root = JsonParser.parseString(Files.readString(p)).getAsJsonObject();
             if (!root.has("modules")) return; // altes Format – Standardwerte nehmen
             JsonObject mods = root.getAsJsonObject("modules");
+            int format = root.has("format") ? root.get("format").getAsInt() : 2;
             for (Module m : Modules.ALL) {
                 if (!mods.has(m.id)) continue;
                 JsonObject o = mods.getAsJsonObject(m.id);
                 if (o.has("enabled")) m.enabled = o.get("enabled").getAsBoolean();
+                if (format < 3 && m == Modules.MAIN_MENU) m.enabled = false; // vanilla title screen is the default now
                 if (m instanceof HudModule h) {
                     h.placed = o.has("placed") && o.get("placed").getAsBoolean();
                     if (h.placed && o.has("x")) h.x = o.get("x").getAsDouble();
@@ -79,7 +81,7 @@ public final class Store {
                 mods.add(m.id, o);
             }
             JsonObject root = new JsonObject();
-            root.addProperty("format", 2);
+            root.addProperty("format", 3);
             root.add("modules", mods);
             Files.createDirectories(path().getParent());
             Files.writeString(path(), new GsonBuilder().setPrettyPrinting().create().toJson(root));

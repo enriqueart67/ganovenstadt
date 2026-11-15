@@ -58,4 +58,21 @@ public final class Type {
         while (t.length() > 1 && width(t + "…", f, scale) > maxWidth) t = t.substring(0, t.length() - 1);
         return t.stripTrailing() + "…";
     }
+
+    /** Letter-spaced caps label (like the launcher's mono labels). */
+    public static int spaced(GuiGraphicsExtractor g, String s, FontDescription f, float x, float y, float scale, int color, float sp) {
+        float cx = x;
+        for (int i = 0; i < s.length(); i++) {
+            String c = s.substring(i, i + 1);
+            left(g, c, f, cx, y, scale, color);
+            cx += width(c, f, scale) + sp;
+        }
+        return Math.round(cx - x - sp);
+    }
+
+    public static int spacedWidth(String s, FontDescription f, float scale, float sp) {
+        float w = 0;
+        for (int i = 0; i < s.length(); i++) w += width(s.substring(i, i + 1), f, scale) + sp;
+        return Math.round(w - sp);
+    }
 }

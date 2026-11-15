@@ -24,8 +24,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The in-game mod menu. Same visual language as the launcher: one sheet of "paper", hairlines instead
- * of boxes, text navigation, IBM Plex type, a single accent colour for everything that is switched on.
+ * The in-game mod menu, in the launcher's "Stoop" language: altitude-tape navigation with a gliding pointer,
+ * the falcon mark, letter-spaced mono labels, module cards with pill switches and one icy accent colour.
  */
 public final class ClickGui extends Screen {
     private static Category lastCategory; // remembered between openings
@@ -103,35 +103,44 @@ public final class ClickGui extends Screen {
         if (Math.abs(scrollTarget - scroll) < 0.5) scroll = scrollTarget;
 
         float a = anim();
-        int W = Math.min(600, width - 16), H = Math.min(350, height - 16);
+        int W = Math.min(700, width - 16), H = Math.min(390, height - 16);
         int x0 = (width - W) / 2, y0 = (height - H) / 2 + Math.round((1f - a) * 10);
-        g.fill(x0 + 3, y0 + 4, x0 + W + 3, y0 + H + 4, fade(t.shadow, a));
+        long now = System.currentTimeMillis();
+        // atmosphere: a slowly breathing icy light behind the sheet
+        float breathe = 0.5f + 0.5f * (float) Math.sin(now / 2200.0);
+        Ui.glow(g, width / 2, height / 2, W + 260, H + 200, ((int) ((0x26 + 0x14 * breathe) * a) << 24) | (t.accent & 0xFFFFFF));
+        g.fill(x0 + 3, y0 + 5, x0 + W + 3, y0 + H + 5, fade(t.shadow, a));
         g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
+        Ui.glow(g, x0 + W / 2, y0 + H / 2, W, H, ((int) (0x14 * a) << 24) | (t.accent & 0xFFFFFF));
         if (t.chart) Ui.chart(g, x0, y0, W, H, t.light);
+        g.fill(x0, y0, x0 + W, y0 + 1, fade(0x30000000 | (t.text & 0xFFFFFF), a));
 
-        // ---------- top bar: brand, text navigation, close
-        int bar = 24;
-        int nx = x0 + 14;
+        // ---------- left rail: mark, wordmark and the altitude tape navigation
+        int railW = 132, tape = x0 + 20;
+        Ui.falcon(g, x0 + 20, y0 + 17, 13, 0xFF000000 | (t.text & 0xFFFFFF));
+        Type.spaced(g, "PEREGRINE", Type.MONO, x0 + 32, y0 + 13, 0.72f, t.text, 1.6f);
+        g.fill(x0 + railW, y0 + 10, x0 + railW + 1, y0 + H - 10, t.line);
+        int tTop = y0 + 34, tBot = y0 + H - 34;
+        g.fill(tape, tTop, tape + 1, tBot, 0x40000000 | (t.text & 0xFFFFFF));
+        for (int ty = tTop, k = 0; ty <= tBot; ty += 6, k++) {
+            boolean lng = k % 5 == 0;
+            g.fill(tape - (lng ? 5 : 2), ty, tape, ty + 1, (lng ? 0x48000000 : 0x22000000) | (t.text & 0xFFFFFF));
+        }
         List<Category> cats = new ArrayList<>();
         cats.add(null);
         cats.addAll(List.of(Category.values()));
-        float ns = 0.8f;
-        int navW = 0;
-        for (Category c : cats) navW += Type.width(c == null ? "ALL" : up(c.label), Type.MONO, ns) + 12;
-        // the wordmark only when there is room for it next to the navigation
-        if (14 + Type.width("PEREGRINE", Type.BOLD, 1f) + 16 + navW + 24 <= W) {
-            Type.left(g, "PEREGRINE", Type.BOLD, nx, y0 + 8, 1f, t.text);
-            nx += Type.width("PEREGRINE", Type.BOLD, 1f) + 16;
-        }
+        int rowGap = Math.max(14, Math.min(22, (tBot - tTop - 16) / cats.size()));
+        int ny = tTop + 10;
+        Integer pointerY = null;
         for (Category c : cats) {
             String label = c == null ? "ALL" : up(c.label);
-            int w = Type.width(label, Type.MONO, ns);
-            boolean sel = c == category && open == null || (open != null && c == category);
-            boolean hov = Ui.in(mx, my, nx - 4, y0, w + 8, bar);
-            Type.left(g, label, Type.MONO, nx, y0 + 9, ns, sel || hov ? t.text : t.muted);
-            if (sel) g.fill(nx, y0 + bar - 2, nx + w, y0 + bar, t.accent);
+            boolean sel = c == category;
+            boolean hov = Ui.in(mx, my, x0, ny - rowGap / 2, railW, rowGap);
+            if (sel) pointerY = ny;
+            g.fill(tape, ny, tape + (hov ? 9 : 6), ny + 1, (sel ? 0xC0000000 : hov ? 0x90000000 : 0x50000000) | (t.text & 0xFFFFFF));
+            Type.spaced(g, label, Type.MONO, tape + 14 + (hov ? 2 : 0), ny - 2, 0.66f, sel ? t.text : hov ? t.text : t.muted, 1.3f);
             final Category target = c;
-            hits.add(new Hit(nx - 4, y0, w + 8, bar, () -> {
+            hits.add(new Hit(x0, ny - rowGap / 2, railW, rowGap, () -> {
                 if (target == Category.COSMETICS && minecraft.player != null) { // the wardrobe has its own screen with a preview
                     Ui.open(new WardrobeScreen(this));
                     return;
@@ -142,64 +151,90 @@ public final class ClickGui extends Screen {
                 scrollTarget = scroll = 0;
                 pageAt = System.currentTimeMillis();
             }));
-            nx += w + 12;
+            ny += rowGap;
         }
-        boolean xh = Ui.in(mx, my, x0 + W - 24, y0, 24, bar);
-        Type.center(g, "×", Type.UI, x0 + W - 12, y0 + 6, 1.3f, xh ? t.accent : t.muted);
-        hits.add(new Hit(x0 + W - 24, y0, 24, bar, this::onClose));
-        hair(g, x0, y0 + bar, W);
+        // pointer glides to the active category
+        if (pointerY != null) {
+            if (pointerAnim < 0) pointerAnim = pointerY;
+            pointerAnim += (pointerY - pointerAnim) * 0.3f;
+            int py = Math.round(pointerAnim);
+            Ui.glow(g, tape + 4, py, 40, 16, 0x50000000 | (t.accent & 0xFFFFFF));
+            int ac = 0xFF000000 | (t.accent & 0xFFFFFF);
+            g.fill(tape - 6, py, tape + 2, py + 1, ac);
+            for (int i = 0; i < 4; i++) g.fill(tape + 3 + i, py - i, tape + 4 + i, py + i + 1, ac); // ◀ chevron
+        }
+        // bottom of the rail: count of modules on
+        long on = Modules.ALL.stream().filter(m -> m.enabled).count();
+        Ui.diamond(g, tape, y0 + H - 18, 2, 0xFF000000 | (t.accent & 0xFFFFFF));
+        Type.left(g, on + " / " + Modules.ALL.size() + " ON", Type.MONO, tape + 8, y0 + H - 21, 0.62f, t.muted);
 
-        // ---------- footer: primary action + key hints
-        int foot = 24, fy = y0 + H - foot;
-        hair(g, x0, fy, W);
+        // close
+        boolean xh = Ui.in(mx, my, x0 + W - 24, y0, 24, 22);
+        Type.center(g, "×", Type.UI, x0 + W - 12, y0 + 5, 1.3f, xh ? t.accent : t.muted);
+        hits.add(new Hit(x0 + W - 24, y0, 24, 22, this::onClose));
+
+        // ---------- footer: primary + secondary action
+        int cx = x0 + railW + 18, cw = W - railW - 32;
+        int fy = y0 + H - 26;
+        g.fill(cx, fy, cx + cw, fy + 1, t.line);
         String edit = "EDIT HUD LAYOUT";
-        int ew = Type.width(edit, Type.MONO, 0.8f) + 18;
-        boolean eh = Ui.in(mx, my, x0 + 14, fy + 5, ew, 15);
-        g.fill(x0 + 14, fy + 5, x0 + 14 + ew, fy + 20, eh ? t.accent : t.text);
-        Type.left(g, edit, Type.MONO, x0 + 23, fy + 9, 0.8f, eh ? t.onAccent : (t.bg | 0xFF000000));
-        hits.add(new Hit(x0 + 14, fy + 5, ew, 15, () -> Ui.open(new HudEditor(this))));
+        int ew = Type.spacedWidth(edit, Type.MONO, 0.7f, 1.2f) + 20;
+        boolean eh = Ui.in(mx, my, cx, fy + 6, ew, 15);
+        g.fill(cx, fy + 6, cx + ew, fy + 21, eh ? (0xFF000000 | (t.accent & 0xFFFFFF)) : (0xFF000000 | (t.text & 0xFFFFFF)));
+        Type.spaced(g, edit, Type.MONO, cx + 10, fy + 10, 0.7f, 0xFF000000 | (t.bg & 0xFFFFFF), 1.2f);
+        hits.add(new Hit(cx, fy + 6, ew, 15, () -> Ui.open(new HudEditor(this))));
         if (minecraft.player != null) { // the assistant also opens from here, in case its key is taken
             String ai = "AI ASSISTANT";
-            int aw = Type.width(ai, Type.MONO, 0.8f) + 18, ax = x0 + 14 + ew + 8;
-            boolean ah = Ui.in(mx, my, ax, fy + 5, aw, 15);
-            g.fill(ax, fy + 5, ax + aw, fy + 20, ah ? t.accent : t.card);
-            Type.left(g, ai, Type.MONO, ax + 9, fy + 9, 0.8f, ah ? t.onAccent : t.text);
-            hits.add(new Hit(ax, fy + 5, aw, 15, () -> Ui.open(new AssistantScreen())));
+            int aw = Type.spacedWidth(ai, Type.MONO, 0.7f, 1.2f) + 20, ax = cx + ew + 8;
+            boolean ah = Ui.in(mx, my, ax, fy + 6, aw, 15);
+            int bc = ah ? (0xFF000000 | (t.accent & 0xFFFFFF)) : (0x50000000 | (t.text & 0xFFFFFF));
+            g.fill(ax, fy + 6, ax + aw, fy + 7, bc);
+            g.fill(ax, fy + 20, ax + aw, fy + 21, bc);
+            g.fill(ax, fy + 6, ax + 1, fy + 21, bc);
+            g.fill(ax + aw - 1, fy + 6, ax + aw, fy + 21, bc);
+            Type.spaced(g, ai, Type.MONO, ax + 10, fy + 10, 0.7f, ah ? t.accent : t.text, 1.2f);
+            hits.add(new Hit(ax, fy + 6, aw, 15, () -> Ui.open(new AssistantScreen())));
         }
-        long on = Modules.ALL.stream().filter(m -> m.enabled).count();
-        Type.right(g, on + " OF " + Modules.ALL.size() + " ON   ·   ESC TO CLOSE", Type.MONO, x0 + W - 14, fy + 9, 0.8f, t.muted);
+        int used = ew + 8 + (minecraft.player != null ? Type.spacedWidth("AI ASSISTANT", Type.MONO, 0.7f, 1.2f) + 20 : 0);
+        if (used + Type.width("ESC TO CLOSE", Type.MONO, 0.62f) + 16 < cw) Type.right(g, "ESC TO CLOSE", Type.MONO, cx + cw, fy + 10, 0.62f, t.muted2);
 
-        int cx = x0 + 14, cy = y0 + bar + 12, cw = W - 28, ch = fy - cy - 6;
+        int cy = y0 + 22, ch = fy - cy - 6;
         if (open == null) list(g, mx, my, cx, cy, cw, ch);
         else settings(g, mx, my, cx, cy, cw, ch);
     }
+
+    private float pointerAnim = -1;
+    private final java.util.Map<Object, Float> switchAnim = new java.util.HashMap<>();
 
     private static boolean inCat(Category c, Module m) {
         return c == null || m.category == c;
     }
 
-    /** Square switch in the launcher's style. */
+    /** Pill switch in the launcher's style, animated per owner. */
     private void toggle(GuiGraphicsExtractor g, int x, int y, boolean on, boolean hover) {
-        if (on) {
-            g.fill(x, y, x + 22, y + 11, t.accent);
-            g.fill(x + 13, y + 2, x + 20, y + 9, t.onAccent);
-        } else {
-            g.fill(x, y, x + 22, y + 11, hover ? t.offHover : t.off);
-            g.fill(x + 2, y + 2, x + 9, y + 9, t.muted);
-        }
+        toggle(g, x, y, on, hover, new Object[]{x, y});
+    }
+
+    private void toggle(GuiGraphicsExtractor g, int x, int y, boolean on, boolean hover, Object key) {
+        Object k = key instanceof Object[] arr ? java.util.Arrays.asList(arr) : key;
+        float v = switchAnim.getOrDefault(k, on ? 1f : 0f);
+        v += ((on ? 1f : 0f) - v) * 0.35f;
+        switchAnim.put(k, v);
+        Ui.pill(g, x, y, v, hover, t);
     }
 
     private void list(GuiGraphicsExtractor g, int mx, int my, int cx, int cy, int cw, int ch) {
         float p = page();
         // headline + search
         String title = category == null ? "All modules" : category.label;
-        Type.left(g, title, Type.DISPLAY, cx, cy - 2 + (1f - p) * 4, 2.1f, t.text);
+        Type.spaced(g, category == null ? "LIBRARY" : "CATEGORY", Type.MONO, cx, cy - 4 + (1f - p) * 4, 0.6f, t.muted, 1.6f);
+        Type.left(g, title, Type.DISPLAY, cx, cy + 5 + (1f - p) * 4, 2.1f, t.text);
         int sw = Math.min(150, cw / 3), sx = cx + cw - sw;
         boolean blink = (System.currentTimeMillis() / 500) % 2 == 0;
-        Type.left(g, "SEARCH", Type.MONO, sx, cy - 1, 0.7f, t.muted);
+        Type.spaced(g, "SEARCH", Type.MONO, sx, cy + 2, 0.6f, t.muted, 1.4f);
         String shown = search.isEmpty() ? "type to filter" : Type.fit(search, Type.UI, 1f, sw - 8) + (blink ? "|" : "");
-        Type.left(g, shown, Type.UI, sx, cy + 7, 1f, search.isEmpty() ? t.muted2 : t.text);
-        g.fill(sx, cy + 19, sx + sw, cy + 20, search.isEmpty() ? t.line : t.text);
+        Type.left(g, shown, Type.UI, sx, cy + 11, 1f, search.isEmpty() ? t.muted2 : t.text);
+        g.fill(sx, cy + 23, sx + sw, cy + 24, search.isEmpty() ? t.line : (0xFF000000 | (t.accent & 0xFFFFFF)));
 
         List<Module> list = new ArrayList<>();
         String q = search.toLowerCase(Locale.ROOT);
@@ -208,39 +243,52 @@ public final class ClickGui extends Screen {
             if (!q.isEmpty() && !m.name.toLowerCase(Locale.ROOT).contains(q) && !m.description.toLowerCase(Locale.ROOT).contains(q)) continue;
             list.add(m);
         }
-        int top = cy + 30, cols = cw >= 380 ? 2 : 1, gap = 22, rowH = 27;
-        int colW = (cw - gap * (cols - 1)) / cols;
+        // module cards, like the launcher's library
+        int top = cy + 36, gap = 6;
+        int cols = cw >= 470 ? 3 : cw >= 300 ? 2 : 1;
+        boolean compact = cols == 1;
+        int cardW = (cw - gap * (cols - 1)) / cols, cardH = compact ? 30 : 46;
         int rows = (list.size() + cols - 1) / cols;
         int viewH = cy + ch - top;
-        int maxScroll = Math.max(0, rows * rowH - viewH);
+        int maxScroll = Math.max(0, rows * (cardH + gap) - viewH);
         scrollTarget = Math.max(0, Math.min(scrollTarget, maxScroll));
-        hair(g, cx, top - 1, cw);
-        g.enableScissor(cx, top, cx + cw, cy + ch);
+        g.enableScissor(cx - 2, top, cx + cw + 2, cy + ch);
         for (int i = 0; i < list.size(); i++) {
             Module m = list.get(i);
-            // fill column by column so related modules stay together when reading down
-            int col = i / rows, row = i % rows;
-            int x = cx + col * (colW + gap), y = top + row * rowH - (int) scroll;
-            if (y + rowH < top || y > cy + ch) continue;
+            int col = i % cols, row = i / cols;
+            int x = cx + col * (cardW + gap), y = top + row * (cardH + gap) - (int) scroll;
+            if (y + cardH < top || y > cy + ch) continue;
             boolean vis = my >= top && my < cy + ch;
-            boolean hov = vis && Ui.in(mx, my, x, y, colW, rowH);
-            if (hov) g.fill(x, y, x + colW, y + rowH - 1, t.card);
-            int textW = colW - 34 - (m.settings.isEmpty() ? 0 : 42);
-            Type.left(g, Type.fit(m.name, Type.BOLD, 1f, textW), Type.BOLD, x + 4, y + 4, 1f, m.enabled ? t.text : t.muted);
-            Type.left(g, Type.fit(m.description, Type.UI, 0.8f, textW), Type.UI, x + 4, y + 15, 0.8f, m.enabled ? t.muted : t.muted2);
-            g.fill(x, y + rowH - 1, x + colW, y + rowH, t.line);
-            // row toggles the module
-            if (vis) hits.add(new Hit(x - 4, Math.max(y, top), colW + 8, Math.max(0, Math.min(y + rowH, cy + ch) - Math.max(y, top)), () -> {
+            boolean hov = vis && Ui.in(mx, my, x, y, cardW, cardH);
+            int lift = hov ? 1 : 0;
+            int yy = y - lift;
+            g.fill(x, yy, x + cardW, yy + cardH, hov ? t.cardHover : t.card);
+            int edge = hov ? (0x90000000 | (t.accent & 0xFFFFFF)) : (0x14000000 | (t.text & 0xFFFFFF));
+            g.fill(x, yy, x + cardW, yy + 1, edge);
+            g.fill(x, yy + cardH - 1, x + cardW, yy + cardH, edge);
+            g.fill(x, yy, x + 1, yy + cardH, edge);
+            g.fill(x + cardW - 1, yy, x + cardW, yy + cardH, edge);
+            if (m.enabled) g.fill(x, yy + 8, x + 2, yy + cardH - 8, 0xFF000000 | (t.accent & 0xFFFFFF));
+            int textW = cardW - 40;
+            if (compact) {
+                Type.left(g, Type.fit(m.name, Type.BOLD, 1f, textW - 50), Type.BOLD, x + 9, yy + 5, 1f, m.enabled ? t.text : t.muted);
+                Type.left(g, Type.fit(m.description, Type.UI, 0.7f, textW - 50), Type.UI, x + 9, yy + 17, 0.7f, t.muted2);
+                toggle(g, x + cardW - 28, yy + 10, m.enabled, hov, m);
+            } else {
+                Type.spaced(g, Type.fit(up(m.category.label), Type.MONO, 0.55f, textW), Type.MONO, x + 9, yy + 6, 0.55f, m.enabled ? t.accent : t.muted2, 1.2f);
+                Type.left(g, Type.fit(m.name, Type.BOLD, 1f, textW), Type.BOLD, x + 9, yy + 15, 1f, m.enabled ? t.text : t.muted);
+                Type.left(g, Type.fit(m.description, Type.UI, 0.72f, cardW - 18), Type.UI, x + 9, yy + 29, 0.72f, t.muted2);
+                toggle(g, x + cardW - 28, yy + 7, m.enabled, hov, m);
+            }
+            if (vis) hits.add(new Hit(x, Math.max(yy, top), cardW, Math.max(0, Math.min(yy + cardH, cy + ch) - Math.max(yy, top)), () -> {
                 m.toggle();
                 Store.save();
             }));
-            toggle(g, x + colW - 26, y + 8, m.enabled, hov);
             if (!m.settings.isEmpty()) {
-                int gx = x + colW - 24 - 44;
-                boolean gh = vis && Ui.in(mx, my, gx, y + 5, 40, 17);
-                Type.right(g, "SETUP", Type.MONO, gx + 38, y + 10, 0.7f, gh ? t.accent : t.muted);
-                if (gh) g.fill(gx + 38 - Type.width("SETUP", Type.MONO, 0.7f), y + 18, gx + 38, y + 19, t.accent);
-                if (vis && y + 5 >= top) hits.add(new Hit(gx, y + 5, 40, 17, () -> {
+                int gx = compact ? x + cardW - 76 : x + cardW - 44, gy = compact ? yy + 11 : yy + cardH - 13;
+                boolean gh = vis && Ui.in(mx, my, gx - 4, gy - 3, 42, 12);
+                Type.right(g, "SETUP", Type.MONO, gx + 34, gy, 0.6f, gh ? t.accent : t.muted);
+                if (vis && gy >= top) hits.add(new Hit(gx - 4, gy - 3, 42, 12, () -> {
                     open = m;
                     scrollTarget = scroll = 0;
                     pageAt = System.currentTimeMillis();
@@ -251,7 +299,7 @@ public final class ClickGui extends Screen {
         if (maxScroll > 0) {
             int barH = Math.max(16, viewH * viewH / (viewH + maxScroll));
             int barY = top + (int) ((viewH - barH) * (scroll / maxScroll));
-            g.fill(cx + cw + 5, barY, cx + cw + 7, barY + barH, t.muted2);
+            g.fill(cx + cw + 5, barY, cx + cw + 6, barY + barH, 0xFF000000 | (t.accent & 0xFFFFFF));
         }
         if (list.isEmpty()) Type.left(g, "Nothing matches “" + search + "”.", Type.UI, cx, top + 10, 1f, t.muted);
     }
@@ -401,7 +449,7 @@ public final class ClickGui extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double sx, double sy) {
-        scrollTarget = Math.max(0, scrollTarget - sy * 27);
+        scrollTarget = Math.max(0, scrollTarget - sy * 30);
         return true;
     }
 

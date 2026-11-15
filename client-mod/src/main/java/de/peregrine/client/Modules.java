@@ -636,7 +636,7 @@ public final class Modules {
 
     public static final class MainMenu extends Module {
         MainMenu() {
-            super("mainmenu", "Main menu", "Peregrine's own title screen instead of the vanilla one", Category.OTHER, true);
+            super("mainmenu", "Main menu", "Peregrine's own title screen instead of the vanilla one", Category.OTHER, false);
         }
 
         @Override

@@ -99,4 +99,60 @@ public final class Ui {
         } catch (Throwable ignored) {
         }
     }
+
+    private static final Identifier FALCON = Identifier.fromNamespaceAndPath("peregrine", "textures/gui/falcon.png");
+    private static final Identifier GLOW = Identifier.fromNamespaceAndPath("peregrine", "textures/gui/glow.png");
+
+    private static void tinted(GuiGraphicsExtractor g, Identifier id, int x, int y, int w, int h, int tex, int argb) {
+        try {
+            g.blit(RenderPipelines.GUI_TEXTURED, id, x, y, 0, 0, w, h, tex, tex, tex, tex, argb);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Peregrine's mark: the falcon in a stoop (same shape as in the launcher). */
+    public static void falcon(GuiGraphicsExtractor g, int cx, int cy, int size, int argb) {
+        tinted(g, FALCON, cx - size / 2, cy - size / 2, size, size, 128, argb);
+    }
+
+    /** Soft round light (radial gradient), e.g. 0x30 alpha in the accent colour. */
+    public static void glow(GuiGraphicsExtractor g, int cx, int cy, int w, int h, int argb) {
+        tinted(g, GLOW, cx - w / 2, cy - h / 2, w, h, 256, argb);
+    }
+
+    /** Status diamond built from pixel rows. */
+    public static void diamond(GuiGraphicsExtractor g, int cx, int cy, int r, int argb) {
+        for (int i = -r; i <= r; i++) {
+            int w = r - Math.abs(i);
+            g.fill(cx - w, cy + i, cx + w + 1, cy + i + 1, argb);
+        }
+    }
+
+    /** Pill switch like the launcher's: slides, glows when on. 20 × 10. */
+    public static void pill(GuiGraphicsExtractor g, int x, int y, float on, boolean hover, Theme t) {
+        int w = 20, h = 10;
+        int fillCol = mix(0x22000000 | (t.text & 0xFFFFFF), 0xFF000000 | (t.accent & 0xFFFFFF), on);
+        if (on > 0.3f) glow(g, x + w - 5, y + h / 2, 26, 18, ((int) (0x55 * on) << 24) | (t.accent & 0xFFFFFF));
+        // rounded body: cut the corners
+        g.fill(x + 1, y, x + w - 1, y + h, fillCol);
+        g.fill(x, y + 1, x + w, y + h - 1, fillCol);
+        if (hover) {
+            int hc = 0x66000000 | (t.text & 0xFFFFFF);
+            g.fill(x + 1, y - 1, x + w - 1, y, hc);
+            g.fill(x + 1, y + h, x + w - 1, y + h + 1, hc);
+            g.fill(x - 1, y + 1, x, y + h - 1, hc);
+            g.fill(x + w, y + 1, x + w + 1, y + h - 1, hc);
+        }
+        int kx = Math.round(x + 2 + (w - 10) * on);
+        int knob = on > 0.5f ? (0xFF000000 | (t.bg & 0xFFFFFF)) : t.muted;
+        g.fill(kx + 1, y + 2, kx + 5, y + h - 2, knob);
+        g.fill(kx, y + 3, kx + 6, y + h - 3, knob);
+    }
+
+    private static int mix(int a, int b, float f) {
+        f = Math.max(0f, Math.min(1f, f));
+        int aa = (a >>> 24) & 0xFF, ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+        int ba = (b >>> 24) & 0xFF, br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return ((int) (aa + (ba - aa) * f) << 24) | ((int) (ar + (br - ar) * f) << 16) | ((int) (ag + (bg - ag) * f) << 8) | (int) (ab + (bb - ab) * f);
+    }
 }

@@ -107,6 +107,13 @@
   - **Performance:** Anzeigen für FPS-Durchschnitt, Tiefst- und Höchstwert der letzten Sitzung (die Mod schreibt `<shared>/peregrine-session.json` über `SessionStats`, einmal pro Sekunde gemessen, nur in einer Welt), dazu System-RAM (Windows `GlobalMemoryStatusEx`, Linux `/proc/meminfo`) und CPU-Threads. Warnung, wenn mehr als ¾ des RAM vergeben sind.
   - **Schalter überall:** Pill-Form, gleitender Knopf, Eis-Schein im an-Zustand, Hover-Rand (`theme::toggle`, `pages_ui::switch_at`). Abschnitts-Markierungen sind Rauten.
   - **Nicht umgesetzt:** Forge/NeoForge. Der Launcher kann nur Vanilla, Fabric und Quilt installieren; Forge bräuchte einen eigenen Installer-Ablauf.
+- **Titelbildschirm wieder Vanilla:** Modul „Main menu“ ist standardmäßig aus. Gespeicherte Einstellungen im alten Format 2 werden einmalig auf aus gesetzt (`Store`, neues Format 3). Der eigene Titel ist im Mod-Menü weiter einschaltbar. Falls er an ist, legt `TitleMenu` eine fehlende Demo-Welt per `createFreshLevel` an.
+- **Mod-Menü im Launcher-Look (`gui/ClickGui.java`):**
+  - Links ein Höhenband mit Teilstrichen, Kategorien als gesperrte Mono-Labels und ein eisblauer ◀-Zeiger, der weich zur aktiven Kategorie gleitet. Darüber stehen Falken-Marke und Wortmarke, unten „x / 43 ON“.
+  - Rechts Module als Karten (3, 2 oder 1 Spalte je nach Platz; bei einer Spalte kompakt) mit Kategorie-Label, Akzentkante bei „an“, Hover-Rand und animierten Pill-Schaltern.
+  - Fußleiste: primärer Knopf EDIT HUD LAYOUT, umrandeter Knopf AI ASSISTANT. Ein atmender Lichtschein liegt hinter dem Menü.
+  - Neue Bausteine: `Ui.falcon`, `Ui.glow` (Texturen `textures/gui/falcon.png` und `glow.png` aus `tools/make_marks.py`), `Ui.diamond`, `Ui.pill`, `Type.spaced`.
+  - Die Modul-Einstellungsseite (Regler, Modi, Farben) ist unverändert, nutzt aber die neuen Schalter.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---
