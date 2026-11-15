@@ -208,13 +208,24 @@ public final class Combat {
             }
             nav = null;
 
-            // ---- pick a technique
-            if (has(mc, "end_crystal") && d < 7.5 && crystal(mc, p)) {
-                mode = "crystal";
+            // ---- pick what hurts most right now: crystals, a mace jump, or the sword
+            double cp = has(mc, "end_crystal") && d < 7.5 ? crystalPotential(mc, p) : 0;
+            double mp = maceStage == 0 && has(mc, "mace") && has(mc, "wind_charge") ? 14 : 0; // a smash from a wind-charge jump, rough
+            if (maceStage == 0 && cp >= 6 && cp >= mp * 0.8) { // crystal fight: sword hits them up, crystals follow
+                if (crystal(mc, p)) {
+                    if (!mode.startsWith("crystal")) mode = "crystal";
+                    return false;
+                }
+                melee(mc, p, d);
+                mode = "crystal · " + mode;
                 return false;
             }
             if (has(mc, "mace") && mace(mc, p, d)) {
                 mode = "mace";
+                return false;
+            }
+            if (cp > 0 && crystal(mc, p)) {
+                if (!mode.startsWith("crystal")) mode = "crystal";
                 return false;
             }
             melee(mc, p, d);
@@ -973,6 +984,30 @@ public final class Combat {
             for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(12), EndCrystal::isAlive))
                 total = Math.max(total, crystalDamage(p, c.position())); // they chain-explode one at a time, the worst one counts
             return safeForUs(total, hp);
+        }
+
+        /** The most a crystal could do to them right now (safe spots only): existing crystals, bases, or a base we could set. */
+        private double crystalPotential(Minecraft mc, LocalPlayer p) {
+            float hp = p.getHealth() + p.getAbsorptionAmount();
+            Vec3 eye = p.getEyePosition();
+            double best = 0;
+            for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), EndCrystal::isAlive))
+                if (eye.distanceTo(c.position()) <= 4.6 && safeForUs(crystalDamage(p, c.position()), hp)) best = Math.max(best, crystalDamage(target, c.position()));
+            BlockPos t = target.blockPosition();
+            boolean obi = has(mc, "obsidian");
+            for (BlockPos b : BlockPos.betweenClosed(t.offset(-3, -2, -3), t.offset(3, 1, 3))) {
+                String bid = Bot.id(mc.level.getBlockState(b));
+                boolean base = bid.equals("obsidian") || bid.equals("bedrock");
+                boolean canSet = obi && !base && Math.max(Math.abs(b.getX() - t.getX()), Math.abs(b.getZ() - t.getZ())) == 2 && b.getY() == t.getY()
+                        && mc.level.getBlockState(b).isAir() && Bot.solid(mc, b.below());
+                if (!base && !canSet) continue;
+                BlockPos a1 = canSet ? b.above() : b.above();
+                if (!mc.level.getBlockState(a1).isAir() || eye.distanceTo(Vec3.atCenterOf(b)) > 4.5) continue;
+                Vec3 c = Vec3.atBottomCenterOf(a1);
+                if (!safeForUs(crystalDamage(p, c), hp)) continue;
+                best = Math.max(best, crystalDamage(target, c));
+            }
+            return best;
         }
 
         private int sinceSwordHit = 100;
