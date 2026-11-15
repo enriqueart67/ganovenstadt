@@ -45,12 +45,27 @@ public final class Combat {
         return id(p.getMainHandItem()).equals(item);
     }
 
-    /** Explosion damage of an end crystal (power 6) at distance d, before armor – good enough to rank spots. */
+    /**
+     * Explosion damage of an end crystal (power 6) like vanilla: (impact² + impact) / 2 · 7 · 12 + 1 with
+     * impact = 1 − distance / 12, distance to the feet (vanilla) or the body centre, whichever is closer, so it never
+     * guesses low. Full exposure (no blocks in between), no armor, no resistance – and for players the difficulty
+     * scaling (Hard ×1.5). For our own safety that is the worst case on purpose.
+     */
     static double crystalDamage(LivingEntity e, Vec3 crystal) {
-        double d = e.position().add(0, e.getBbHeight() * 0.5, 0).distanceTo(crystal);
+        double d = Math.min(e.position().distanceTo(crystal), e.position().add(0, e.getBbHeight() * 0.5, 0).distanceTo(crystal));
         if (d >= 12) return 0;
         double impact = 1 - d / 12;
-        return (impact * impact + impact) / 2 * 7 * 12 + 1;
+        double dmg = (impact * impact + impact) / 2 * 7 * 12 + 1;
+        if (e instanceof Player) {
+            switch (e.level().getDifficulty()) {
+                case PEACEFUL -> dmg = 0;
+                case EASY -> dmg = Math.min(dmg / 2 + 1, dmg);
+                case HARD -> dmg *= 1.5;
+                default -> {
+                }
+            }
+        }
+        return dmg;
     }
 
     public static final class Duel implements Bot.Task {
@@ -111,6 +126,7 @@ public final class Combat {
         public boolean tick(Minecraft mc) {
             LocalPlayer p = mc.player;
             ticks++;
+            sinceSwordHit++;
             if (target == null || !target.isAlive() || target.isRemoved()) {
                 if (hadTarget && target != null && !target.isAlive()) {
                     Bot.say("Won – " + targetName + " is down.");
@@ -527,6 +543,7 @@ public final class Combat {
                 int best = hotbar(mc, s -> hitDamage(s, p, t, dist));
                 if (best >= 0 && hitDamage(inv.getItem(best), p, t, dist) > handDmg + 0.5) swap = best;
             }
+            if (t == target) sinceSwordHit = 0; // a hit knocks them up – the crystal may follow
             if (swap >= 0 && swap != hand) {
                 inv.setSelectedSlot(swap);
                 mc.gameMode.attack(p, t);
@@ -738,7 +755,15 @@ public final class Combat {
         // ------------------------------------------------------------------ crystal
         /** Crystal damage to us (before armor, so on the safe side) must leave at least 4 hearts – and never over 6 hearts. */
         private static boolean safeForUs(double us, float hp) {
-            return us < hp - 8 && us <= 12;
+            return us < hp - 8 && us <= 12; // worst case still leaves 4 hearts, and never more than 6 hearts at once
+        }
+
+        /** A crystal in reach of us that would go off when they hit it (or another blows up) must be safe too. */
+        private boolean crystalsAroundSafe(Minecraft mc, LocalPlayer p, float hp, Vec3 extra) {
+            double total = extra == null ? 0 : crystalDamage(p, extra);
+            for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(12), EndCrystal::isAlive))
+                total = Math.max(total, crystalDamage(p, c.position())); // they chain-explode one at a time, the worst one counts
+            return safeForUs(total, hp);
         }
 
         private int sinceSwordHit = 100;
@@ -746,11 +771,15 @@ public final class Combat {
         private boolean crystal(Minecraft mc, LocalPlayer p) {
             float hp = p.getHealth() + p.getAbsorptionAmount();
             Vec3 eye = p.getEyePosition();
-            sinceSwordHit++;
             // 0) hit them up first: a sprint hit with the sword knocks them into the air, then the crystal goes off
             //    under them while they can't move away
             double dd = p.distanceTo(target);
-            if (target.onGround() && dd <= 3.0 && sinceSwordHit > 12 && p.getAttackStrengthScale(0f) >= 0.9f && p.hasLineOfSight(target)) {
+            boolean knockedUp = !target.onGround() || sinceSwordHit < 15; // in the air, or we just hit them
+            if (!knockedUp && (dd > 3.0 || p.getAttackStrengthScale(0f) < 0.9f || !p.hasLineOfSight(target))) {
+                mode = "crystal · waiting to hit them up";
+                return false; // first get close and hit them up (the sword fight moves in and hits)
+            }
+            if (!knockedUp) {
                 Bot.holdBest(mc, Guard::weaponScore);
                 Bot.look(p, target.getEyePosition().subtract(0, target.getBbHeight() * 0.3, 0));
                 mc.options.keySprint.setDown(true);
@@ -766,7 +795,7 @@ public final class Combat {
             for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), c -> c.isAlive())) {
                 if (eye.distanceTo(c.position().add(0, 1, 0)) > 4.6) continue;
                 double them = crystalDamage(target, c.position()), us = crystalDamage(p, c.position());
-                if (!safeForUs(us, hp)) continue; // never risk blowing ourselves up – totem or not
+                if (!safeForUs(us, hp) || !crystalsAroundSafe(mc, p, hp, null)) continue; // never risk blowing ourselves up – totem or not; neighbours go off too
                 double score = them - us * 0.6;
                 if (them > 2 && score > hitScore) {
                     hitScore = score;
@@ -795,7 +824,7 @@ public final class Combat {
                 if (eye.distanceTo(Vec3.atCenterOf(b).add(0, 0.5, 0)) > 4.5) continue;
                 Vec3 c = Vec3.atBottomCenterOf(a1);
                 double them = crystalDamage(target, c), us = crystalDamage(p, c);
-                if (!safeForUs(us, hp)) continue;
+                if (!safeForUs(us, hp) || !crystalsAroundSafe(mc, p, hp, c)) continue;
                 double score = them - us * 0.6;
                 if (them >= 4 && score > bestScore) {
                     bestScore = score;
