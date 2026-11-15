@@ -53,9 +53,19 @@ public final class BlockEsp extends Module {
     private final Map<Long, List<BlockPos>> found = new HashMap<>(); // section key -> matches
     private Set<Block> targets = Set.of();
     private List<String> targetsFor = List.of();
+    private Set<String> assist = Set.of(), assistFor = Set.of();
+
+    /** Blocks the assistant is farming right now: highlighted too, even when the module itself is off. */
+    public void setAssist(Set<String> blockPaths) {
+        if (!blockPaths.equals(assist)) assist = Set.copyOf(blockPaths);
+    }
+
+    private boolean active() {
+        return enabled || !assist.isEmpty();
+    }
     private int cursor;
     private ChunkPosKey lastCentre;
-    private boolean warned;
+    private boolean warned, wasEnabled;
     private List<BlockPos> near = new ArrayList<>();
     private long nearAt;
 
@@ -81,7 +91,9 @@ public final class BlockEsp extends Module {
 
     private void rebuildTargets() {
         Set<Block> s = new HashSet<>();
-        for (String id : blocks.get()) {
+        List<String> ids = new ArrayList<>(enabled ? blocks.get() : List.of());
+        for (String a : assist) ids.add(a.contains(":") ? a : "minecraft:" + a);
+        for (String id : ids) {
             Identifier rl = Identifier.tryParse(id);
             if (rl == null) continue;
             Block b = BuiltInRegistries.BLOCK.getValue(rl);
@@ -89,6 +101,8 @@ public final class BlockEsp extends Module {
         }
         targets = s;
         targetsFor = List.copyOf(blocks.get());
+        assistFor = assist;
+        wasEnabled = enabled;
         found.clear();
         cursor = 0;
     }
@@ -103,7 +117,7 @@ public final class BlockEsp extends Module {
     /** Rolling scan: a few sections per tick. */
     @Override
     public void tick(Minecraft mc) {
-        if (!enabled || mc.level == null || mc.player == null) {
+        if (!active() || mc.level == null || mc.player == null) {
             if (!found.isEmpty()) found.clear();
             return;
         }
@@ -115,7 +129,7 @@ public final class BlockEsp extends Module {
             found.clear();
             return;
         }
-        if (!targetsFor.equals(blocks.get())) rebuildTargets();
+        if (!targetsFor.equals(blocks.get()) || !assistFor.equals(assist) || wasEnabled != enabled) rebuildTargets();
         if (targets.isEmpty()) return;
         int r = (int) Math.ceil(range.d() / 16.0);
         int pcx = mc.player.blockPosition().getX() >> 4, pcz = mc.player.blockPosition().getZ() >> 4;
@@ -170,7 +184,7 @@ public final class BlockEsp extends Module {
 
     /** Overlay: the nearest matches as outline + soft glow, optionally with name and distance. */
     public void render(GuiGraphicsExtractor g, Minecraft mc) {
-        if (!enabled || found.isEmpty() || mc.player == null || !allowed(mc)) return;
+        if (!active() || found.isEmpty() || mc.player == null || !allowed(mc)) return;
         Projector pr = Projector.of(mc, g);
         if (pr == null) return;
         Vec3 cam = pr.camera();

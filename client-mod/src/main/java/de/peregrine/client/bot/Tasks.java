@@ -52,7 +52,7 @@ public final class Tasks {
         private final Set<BlockPos> skip = new HashSet<>();
         private Direction dir;
         private String phase = "starting";
-        private int steps, y;
+        private int steps, y, findTicks = 40;
         private BlockState sample;
         /** Part of a bigger plan: no "done" message, and a missing tool ends the step instead of the whole job. */
         public boolean quiet;
@@ -84,6 +84,7 @@ public final class Tasks {
             }
             if (have(mc) - start >= wanted) {
                 phase = "done";
+                de.peregrine.client.Modules.BLOCK_ESP.setAssist(java.util.Set.of());
                 if (!quiet) Bot.say("Done! " + wanted + " " + ore.name() + " are in your inventory.");
                 return true;
             }
@@ -151,8 +152,15 @@ public final class Tasks {
                 }
                 return false;
             }
-            // 3) look around for ores
+            // 3) look around for ores: close by every tick, further out (ESP engine, 48 blocks) every 2 seconds
+            boolean realOre = ore != STONE; // stone is everywhere – no need to search or highlight it
+            if (realOre) de.peregrine.client.Modules.BLOCK_ESP.setAssist(ore.blocks());
             BlockPos found = scan(mc, p.blockPosition(), 5);
+            if (found == null && realOre && ++findTicks >= 40) {
+                findTicks = 0;
+                found = de.peregrine.client.feature.OreFinder.nearest(mc, ore.blocks(), p.blockPosition(), 48, skip);
+                if (found != null && !quiet) Bot.note("Spotted " + ore.name() + " " + Math.round(Math.sqrt(found.distSqr(p.blockPosition()))) + " blocks away.");
+            }
             if (found != null) {
                 target = found;
                 nav = null;

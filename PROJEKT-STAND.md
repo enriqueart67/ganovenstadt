@@ -169,6 +169,22 @@
     - Pausiert bei offenem Menü. **Nur `hasSingleplayerServer()`**, im Multiplayer immer aus. Nutzt nur den normalen Angriff, keine Tarnung.
     - Getestet in 26.2: Kuh erkannt, Ring und HP angezeigt, mitgeschlagen.
   - Launcher: `client_mods::KEYS` (X, R) und `MODULES` ergänzt, Kategorienamen angepasst.
+- **Assistent mit ESP (`feature/OreFinder.java`):**
+  - Die ESP-Suche als Einmal-Abfrage: Chunk-Ringe von innen nach außen, Abschnitte per `maybeHas` (Palette) vorgeprüft, Abbruch, sobald nichts Näheres mehr möglich ist.
+  - `Tasks.Mine` fragt alle 2 s bis 48 Blöcke weit (wenn im Umkreis 5 nichts ist) und gräbt per A* direkt hin, statt blind Gänge zu graben. Für Stein ist das aus.
+  - Während eines Erz-Auftrags zeigt `BlockEsp.setAssist(...)` die gesuchten Erze, auch wenn das Modul aus ist. Bei Fertig oder Stop wird das zurückgesetzt.
+  - Getestet in 26.2:
+    - „hol 3 kohle“ von leer bis fertig in unter 1 Minute.
+    - „hol 2 eisen“: Eisenerz per ESP gefunden und markiert. Danach in der Höhle von einem Zombie getötet (Container ca. 5 FPS); seitdem zieht er sich unter 3 Herzen auch vor einem einzelnen Gegner zurück.
+- **Stun Slam und Elytra-Mace (`bot/Combat.java`):**
+  - `smash`: Gegen ein gehobenes Schild schlägt er im selben Tick erst mit der Axt (Schild aus), dann mit der Mace (Density bevorzugt). Das wird bei jedem Mace-Treffer im Fallen genutzt.
+  - `elytraMace` (Gegner 7–48 Blöcke entfernt, Mace + Raketen + Elytra vorhanden), Ablauf:
+    1. Elytra per Klick anlegen. `Guard.keepElytra` verhindert, dass `gear` sie gegen die Brustplatte tauscht.
+    2. Springen und in der Luft erneut Springen drücken, damit die Flügel öffnen.
+    3. Mit Raketen bei −55° steigen, bis er 20 Blöcke über dem Gegner ist.
+    4. Steiler Sturzflug (35–88°, damit der Fall-Abstand wächst), Mace in die Hand, Treffer bei ≤ 3,4 Blöcken und Sinkgeschwindigkeit < −0,4.
+    5. Nach der Landung kommt die Brustplatte wieder an. Abbruch nach 14 s, danach 3 s Pause.
+  - Nicht im Spiel getestet (keine Elytra, Raketen oder Mace in der Demo).
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

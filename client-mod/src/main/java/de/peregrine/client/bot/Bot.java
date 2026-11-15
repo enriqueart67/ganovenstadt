@@ -95,6 +95,8 @@ public final class Bot {
     public static void stop(String why) {
         if (task != null) lastStatus = why != null ? why : "Stopped";
         task = null;
+        de.peregrine.client.Modules.BLOCK_ESP.setAssist(java.util.Set.of()); // the assistant's highlights go away
+        Guard.reset();
         release(Minecraft.getInstance());
         if (why != null) say(why);
     }
@@ -119,6 +121,7 @@ public final class Bot {
             if (task != null && task.tick(mc)) {
                 Task done = task;
                 task = null;
+                de.peregrine.client.Modules.BLOCK_ESP.setAssist(java.util.Set.of());
                 lastStatus = done.status();
                 release(mc);
             }

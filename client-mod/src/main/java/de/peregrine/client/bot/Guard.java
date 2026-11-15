@@ -41,6 +41,8 @@ final class Guard {
     private Guard() {
     }
 
+    /** Set by the elytra mace: don't swap the elytra for a chestplate while flying. */
+    static boolean keepElytra;
     private static int eatTicks, fleeTicks, critTicks, strafeTicks, gearTicks, huntTicks;
     private static boolean resting, strafeLeft;
     private static BlockPos lastTorch;
@@ -50,6 +52,7 @@ final class Guard {
     private static final Set<String> PREY = Set.of("cow", "pig", "sheep", "chicken", "rabbit", "mooshroom");
 
     static void reset() {
+        keepElytra = false;
         eatTicks = fleeTicks = critTicks = strafeTicks = huntTicks = 0;
         resting = false;
         prey = null;
@@ -139,7 +142,7 @@ final class Guard {
             return true;
         }
         // 6) outnumbered and hurt: retreat
-        if (!duel && !enemies.isEmpty() && (enemies.size() >= 4 || (hp < 8 && enemies.size() >= 2))) {
+        if (!duel && !enemies.isEmpty() && (enemies.size() >= 4 || (hp < 8 && enemies.size() >= 2) || hp < 6)) {
             Vec3 centre = Vec3.ZERO;
             for (LivingEntity e : enemies) centre = centre.add(e.position());
             centre = centre.scale(1.0 / enemies.size());
@@ -390,6 +393,7 @@ final class Guard {
             var eq = it.get(DataComponents.EQUIPPABLE);
             if (eq == null) continue;
             EquipmentSlot slot = eq.slot();
+            if (slot == EquipmentSlot.CHEST && keepElytra) continue; // flying: the elytra stays on
             ItemStack worn = p.getItemBySlot(slot);
             if (worn.isEmpty() || armorTier(BuiltInRegistries.ITEM.getKey(worn.getItem()).getPath()) < tier) {
                 Inv.equip(mc, i, slot);

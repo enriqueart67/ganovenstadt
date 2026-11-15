@@ -60,6 +60,7 @@ public final class Combat {
         private String mode = "looking", targetName = "";
         private int ticks, lost, wtap, strafeT, crystalCd, navAge, maceStage;
         private int restoreSlot = -1, catchIn = -1, lungeCd, pearlCd;
+        private int flyStage, flyTicks, rocketCd, flyCd;
         private boolean strafeLeft, hadTarget;
         private final Random rnd = new Random();
 
@@ -134,6 +135,9 @@ public final class Combat {
 
             // ---- special moves (pearls, wind charges, lunge)
             if (techniques(mc, p, d)) return false;
+
+            // ---- from a distance: elytra mace (flies there itself)
+            if (elytraMace(mc, p, d)) return false;
 
             // ---- getting there
             if (d > 10) {
@@ -403,12 +407,124 @@ public final class Combat {
                 mc.options.keyUp.setDown(d > 1.0);
                 boolean falling = p.getDeltaMovement().y < -0.1;
                 if (falling && d <= 3.2 && holding(p, "mace")) {
-                    mc.gameMode.attack(p, target);
-                    Bot.swing(p);
+                    smash(mc, p);
                     maceStage = 0;
                 }
                 return true;
             }
+            return false;
+        }
+
+        /**
+         * The mace hit. Against a raised shield it is a stun slam: in the same tick an axe hit disables the shield
+         * and the mace hit follows straight after, with the full fall damage.
+         */
+        private void smash(Minecraft mc, LocalPlayer p) {
+            var inv = p.getInventory();
+            int hand = inv.getSelectedSlot();
+            int mace = hotbar(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) + (enchanted(s, "breach") ? 0.5 : 0) : 0);
+            int axe = target.isBlocking() ? hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0) : -1;
+            if (axe >= 0 && mace >= 0) {
+                inv.setSelectedSlot(axe);
+                mc.gameMode.attack(p, target); // shield down …
+                Bot.swing(p);
+                inv.setSelectedSlot(mace);
+                mc.gameMode.attack(p, target); // … and the slam lands
+                Bot.swing(p);
+                inv.setSelectedSlot(hand);
+                mode = "stun slam";
+                Bot.note("Stun slam!");
+                return;
+            }
+            if (mace >= 0) inv.setSelectedSlot(mace);
+            mc.gameMode.attack(p, target);
+            Bot.swing(p);
+            if (mace >= 0) inv.setSelectedSlot(hand);
+        }
+
+        private boolean wearingElytra(LocalPlayer p) {
+            return id(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST)).equals("elytra");
+        }
+
+        /**
+         * Elytra mace: elytra on, take off, rockets up until high above the target, then a steep dive and the mace
+         * smash on the way down (stun slam against a shield). Afterwards the chestplate goes back on.
+         */
+        private boolean elytraMace(Minecraft mc, LocalPlayer p, double d) {
+            if (flyCd > 0) flyCd--;
+            boolean can = has(mc, "mace") && has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
+            if (flyStage == 0) {
+                if (!can || flyCd > 0 || d < 7 || d > 48 || p.getHealth() < 8) return false;
+                flyStage = 1;
+                flyTicks = 0;
+            }
+            flyTicks++;
+            Guard.keepElytra = true;
+            mode = "elytra mace";
+            if (flyTicks > 20 * 14 || !target.isAlive()) return endFlight(mc);
+            Vec3 t = target.position();
+            switch (flyStage) {
+                case 1 -> { // put the elytra on, jump
+                    if (!wearingElytra(p)) {
+                        var inv = p.getInventory();
+                        for (int i = 0; i < 36; i++)
+                            if (id(inv.getItem(i)).equals("elytra")) {
+                                Inv.equip(mc, i, net.minecraft.world.entity.EquipmentSlot.CHEST);
+                                break;
+                            }
+                        return true;
+                    }
+                    if (p.onGround()) {
+                        mc.options.keyJump.setDown(true);
+                        return true;
+                    }
+                    mc.options.keyJump.setDown(false); // let go, so the next press opens the wings
+                    flyStage = 2;
+                }
+                case 2 -> { // open the wings in the air
+                    if (p.isFallFlying()) {
+                        flyStage = 3;
+                        rocketCd = 0;
+                    } else {
+                        mc.options.keyJump.setDown(flyTicks % 2 == 0);
+                        if (p.onGround() && flyTicks > 20) return endFlight(mc);
+                    }
+                }
+                case 3 -> { // climb with rockets until well above them
+                    mc.options.keyJump.setDown(false);
+                    float yaw = (float) Math.toDegrees(Math.atan2(-(t.x - p.getX()), t.z - p.getZ()));
+                    p.setYRot(yaw);
+                    p.setXRot(-55f);
+                    if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", yaw, -55f)) rocketCd = 22;
+                    if (p.getY() > t.y + 20) flyStage = 4;
+                    if (!p.isFallFlying() && p.onGround()) return endFlight(mc);
+                }
+                case 4 -> { // dive steeply onto them and smash
+                    Vec3 aim = target.getEyePosition();
+                    double hd = Math.hypot(aim.x - p.getX(), aim.z - p.getZ());
+                    float yaw = (float) Math.toDegrees(Math.atan2(-(aim.x - p.getX()), aim.z - p.getZ()));
+                    float pitch = (float) Math.toDegrees(Math.atan2(p.getEyeY() - aim.y, Math.max(0.1, hd)));
+                    p.setYRot(yaw);
+                    p.setXRot(Math.max(35f, Math.min(88f, pitch))); // steep: fast fall keeps the fall distance growing
+                    hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
+                    if (p.distanceTo(target) <= 3.4 && p.getDeltaMovement().y < -0.4) {
+                        smash(mc, p);
+                        flyStage = 5;
+                    }
+                    if (p.onGround()) return endFlight(mc);
+                }
+                default -> { // landing
+                    if (p.onGround() || !p.isFallFlying()) return endFlight(mc);
+                }
+            }
+            return true;
+        }
+
+        private boolean endFlight(Minecraft mc) {
+            flyStage = 0;
+            flyCd = 60;
+            Guard.keepElytra = false; // Guard puts the best chestplate back on
+            mc.options.keyJump.setDown(false);
             return false;
         }
 
