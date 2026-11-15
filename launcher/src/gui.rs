@@ -16,6 +16,10 @@ mod client_ui;
 mod extra_ui;
 #[path = "gui_stoop.rs"]
 mod stoop_ui;
+#[path = "gui_launch.rs"]
+mod launch_ui;
+#[path = "gui_pages.rs"]
+mod pages_ui;
 use profiles_ui::ProfilesUi;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -66,6 +70,8 @@ pub struct App {
     cape_msg: Option<String>,
     extra: extra_ui::ExtraUi,
     stoop: stoop_ui::StoopState,
+    launch_anim: Option<launch_ui::LaunchAnim>,
+    pages: pages_ui::PagesState,
 }
 
 impl App {
@@ -105,6 +111,8 @@ impl App {
             cape_msg: None,
             extra: extra_ui::ExtraUi::default(),
             stoop: Default::default(),
+            launch_anim: None,
+            pages: Default::default(),
         };
         app.load_versions();
         app.refresh_login();
@@ -1157,6 +1165,7 @@ impl App {
     }
 
     // -------------------------------------------------------------- Einstellungen
+    #[allow(dead_code)]
     fn settings(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
         let mut open_prism = false;
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
@@ -1446,12 +1455,12 @@ impl eframe::App for App {
                 Page::Accounts => self.accounts_page(&mut cui, shifted, &pal, &account, &mut action),
                 Page::Performance => self.performance_page(&mut cui, shifted, &pal),
                 Page::Profiles => self.profiles_page(&mut cui, shifted, &pal),
-                Page::Client => self.client_page(&mut cui, shifted, &pal),
+                Page::Client => self.mods_page(&mut cui, shifted, &pal),
                 Page::Servers => self.servers_page(&mut cui, shifted, &pal),
                 Page::Shots => self.shots_page(&mut cui, shifted, &pal),
                 Page::Look => self.look_page(&mut cui, shifted, &pal),
                 Page::Console => self.console(&mut cui, shifted, &pal),
-                Page::Settings => self.settings(&mut cui, shifted, &pal),
+                Page::Settings => self.settings_page(&mut cui, shifted, &pal),
             }
             self.nav_rail(ui, rail, &pal, account_name.clone());
             self.stoop_title(ui, title, &pal, busy);
@@ -1465,7 +1474,9 @@ impl eframe::App for App {
             }
         });
 
-        if let Some(err) = error {
+        self.launch_overlay(ctx, &pal, t);
+        let sequence_shows_error = self.launch_anim.as_ref().is_some_and(|l| !l.hidden);
+        if let Some(err) = error.filter(|_| !sequence_shows_error) {
             let screen = ctx.screen_rect();
             egui::Area::new(Id::new("dim")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
                 ui.painter().rect_filled(screen, 0.0, alpha(Color32::BLACK, 140));
@@ -1493,7 +1504,10 @@ impl eframe::App for App {
         }
 
         match action {
-            Some(Action::Play) => self.play(),
+            Some(Action::Play) => {
+                self.begin_launch_sequence();
+                self.play();
+            }
             Some(Action::Login) => self.login(),
             Some(Action::OpenPrism) => self.open_prism(),
             Some(Action::Logout) => {
@@ -1610,6 +1624,9 @@ async fn setup_client_mods(
     profile_id: Option<&str>,
     shared: &std::sync::Arc<std::sync::Mutex<profiles_ui::ModsShared>>,
 ) {
+    if let Err(e) = client_mods::apply_options(game, &cm.options) {
+        h.log(format!("[Launcher] Could not apply the graphics settings: {e:#}"));
+    }
     if loader != "Vanilla" && cm.enabled && !cm.keys.is_empty() {
         match client_mods::apply_keys(game, &cm.keys) {
             Ok(true) => {}

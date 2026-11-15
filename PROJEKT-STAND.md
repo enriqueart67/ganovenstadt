@@ -85,6 +85,28 @@
   - **Seitenwechsel:** Die Seite blendet in 0,32 s ein und gleitet dabei 14 px nach oben (`page_fade`, Kind-Ui mit `set_opacity`).
   - **Mod:** liest `pattern` aus `theme.json`. Die Höhenlinien gibt es nur beim Hintergrund „Chart“. Ohne Launcher nutzt die Mod jetzt die Stoop-Farben.
   - Die alten Funktionen `title_bar`, `home` und `visual` in `gui.rs` sind ungenutzt (`#[allow(dead_code)]`). Das Flugkarten-Design gibt es weiter als Preset „Chart“ und als Hintergrund „Chart“.
+- **Komplett-Redesign Stufe 2 (alle Seiten, Start-Sequenz):**
+  - **Start-Sequenz (`launcher/src/gui_launch.rs`)**, ausgelöst von PLAY (`begin_launch_sequence`):
+    - Phase 1: Der PLAY-Ring glüht auf (`LaunchAnim::activation`), eine eisblaue Welle läuft vom Ring aus, und der Hintergrund dunkelt ab.
+    - Phase 2: Der Falke stürzt mit Lichtspuren, Nachbildern und Partikeln herein und bremst präzise ab.
+    - Phase 3: Startbildschirm mit Wortmarke (Buchstaben rücken zusammen), Version, einem Ring aus 5 Segmenten (je Phase eins) und einer Phasenleiste. Darunter steht die echte Statuszeile.
+    - Phase 4: Der Falke stürzt hinaus und alles blendet aus.
+    - **Echte Kopplung:** `Shared.game_stage` (`state.rs`) wird aus Log-Zeilen gesetzt: 1 = „[Launcher] Starting Minecraft“ bzw. „Starting <id> with …“, 2 = „[Timing] Minecraft window open“, 3 = „… fully loaded“, 8 = Fehler, 9 = Spiel beendet. Die Phase ergibt sich aus Status-Texten und Datei-Fortschritt (nur steigend).
+    - Ohne Zahlen füllt sich ein Segment nie, es wandert nur ein Lichtpunkt. „Loading libraries“ füllt sich mit `done/total`. Die Sequenz endet erst bei Stufe 3 (Titelbildschirm), nach 90 s Notausgang ohne lesbares Log.
+    - Fehler: Ansicht „Launch aborted“ mit Text und den Knöpfen BACK/CONSOLE (das alte Fehlerfenster wird dann nicht gezeigt). Schließt sich das Spiel vorher oder startet nichts (z. B. Anmeldung nötig), erscheint eine Meldung, dann blendet sie aus. „Continue in background“ blendet die Sequenz aus, der Ring zeigt weiter den Fortschritt. Die Titelleiste zeigt LAUNCHING.
+  - **Mods (`gui_pages.rs::mods_page`):**
+    - Reiter LIBRARY / SETUP (SETUP = alte Client-Seite: Client-Mods, Turbo, Umhänge, Tasten; `client_page(…, show_header)`).
+    - Die Bibliothek liest `<shared>/peregrine-client.json`. Die Mod schreibt dort jetzt Name, Beschreibung und Kategorie je Modul hinein und speichert beim Start einmal.
+    - Suche, Kategorie-Chips, Sortierung (Name/Kategorie/An zuerst), Karten- oder Listenansicht.
+    - Ein Klick schaltet `enabled` in der Datei. Das ist gesperrt, solange Minecraft läuft (die Mod würde es überschreiben).
+  - **Settings (`settings_page`):** Kategorien General, Graphics, Account, Launcher, Microsoft, Maintenance.
+    - Graphics schreibt vor jedem Start `renderDistance`, `simulationDistance`, `maxFps`, `enableVsync`, `fullscreen`, `guiScale`, `entityShadows`, `renderClouds` in `options.txt` (`ClientMods.options`, `client_mods::apply_options`, nur wenn `options.txt` schon existiert).
+    - Launcher: Theme, Hintergrund, Akzent, Animationen, UI-Größe.
+    - Die alte `settings`-Funktion ist ungenutzt.
+  - **Versions:** Reiter AVAILABLE und INSTALLED (Ordner `<game>/versions/<id>/<id>.json`). Installierte Versionen sind markiert, beim Laden gibt es eine Fortschrittszeile.
+  - **Performance:** Anzeigen für FPS-Durchschnitt, Tiefst- und Höchstwert der letzten Sitzung (die Mod schreibt `<shared>/peregrine-session.json` über `SessionStats`, einmal pro Sekunde gemessen, nur in einer Welt), dazu System-RAM (Windows `GlobalMemoryStatusEx`, Linux `/proc/meminfo`) und CPU-Threads. Warnung, wenn mehr als ¾ des RAM vergeben sind.
+  - **Schalter überall:** Pill-Form, gleitender Knopf, Eis-Schein im an-Zustand, Hover-Rand (`theme::toggle`, `pages_ui::switch_at`). Abschnitts-Markierungen sind Rauten.
+  - **Nicht umgesetzt:** Forge/NeoForge. Der Launcher kann nur Vanilla, Fabric und Quilt installieren; Forge bräuchte einen eigenen Installer-Ablauf.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

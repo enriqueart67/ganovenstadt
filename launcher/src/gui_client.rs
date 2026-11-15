@@ -6,10 +6,12 @@ use crate::client_mods::{self, MODULES};
 use crate::theme::{self, Pal};
 
 impl App {
-    pub(super) fn client_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
+    pub(super) fn client_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal, show_header: bool) {
         let mut import: Option<std::path::PathBuf> = None;
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
-            super::header(ui, pal, "Mods", "Built into the game – everything is configured in the in-game menu (Right Shift)");
+            if show_header {
+                super::header(ui, pal, "Mods", "Built into the game – everything is configured in the in-game menu (Right Shift)");
+            }
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
                 let cm = &mut self.cfg.client;
                 card(ui, pal, "Peregrine client mods", |ui| {

@@ -30,6 +30,7 @@ public final class PeregrineClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         Store.load();
+        Store.save(); // writes the module catalogue for the launcher's Mods page
         menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.menu", InputConstants.KEY_RSHIFT, CATEGORY));
         zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.zoom", InputConstants.KEY_C, CATEGORY));
         fullbrightKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.fullbright", InputConstants.KEY_G, CATEGORY));
@@ -117,6 +118,7 @@ public final class PeregrineClient implements ClientModInitializer {
         aiWasDown = aiDown;
         if (openAi && mc.player != null && !(Ui.current() instanceof de.peregrine.client.gui.AssistantScreen)) Ui.open(new de.peregrine.client.gui.AssistantScreen());
         de.peregrine.client.bot.Bot.tick(mc);
+        SessionStats.tick(mc);
         while (emoteKey.consumeClick()) if (Modules.EMOTES.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.EmoteWheel());
         while (menuKey.consumeClick()) Ui.open(new ClickGui());
         while (waypointKey.consumeClick()) if (Modules.WAYPOINTS.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.WaypointScreen());

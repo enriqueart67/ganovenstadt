@@ -19,6 +19,9 @@ pub struct Shared {
     pub prism_account: Option<String>,
     pub error: Option<String>,
     pub quit: bool,
+    /// Where the game is in its start: 0 nothing yet, 1 process started, 2 window open, 3 fully loaded,
+    /// 8 failed, 9 closed. Read from the real log lines – drives the launch screen.
+    pub game_stage: u8,
 }
 
 #[derive(Clone)]
@@ -59,6 +62,15 @@ impl Ui {
         }
         {
             let mut s = self.lock();
+            if t.starts_with("[Launcher] Starting Minecraft") || (t.starts_with("[Launcher] Starting ") && t.contains(" with ")) {
+                s.game_stage = s.game_stage.max(1);
+            } else if t.starts_with("[Timing] Minecraft window open") {
+                s.game_stage = s.game_stage.max(2);
+            } else if t.starts_with("[Timing] Minecraft fully loaded") {
+                s.game_stage = 3;
+            } else if t.starts_with("[Launcher] Game closed") || t.starts_with("[Launcher] The game did not start") {
+                s.game_stage = 9;
+            }
             s.log.push_back(t);
             while s.log.len() > 5000 {
                 s.log.pop_front();
@@ -86,6 +98,7 @@ impl Ui {
         self.log(format!("[Error] {e}"));
         let mut s = self.lock();
         s.status = "Error – see the console.".into();
+        s.game_stage = 8;
         s.error = Some(e);
         drop(s);
         self.repaint();

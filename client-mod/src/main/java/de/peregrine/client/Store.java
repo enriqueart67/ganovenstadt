@@ -64,6 +64,10 @@ public final class Store {
             for (Module m : Modules.ALL) {
                 JsonObject o = new JsonObject();
                 o.addProperty("enabled", m.enabled);
+                // catalogue for the launcher's Mods page (it can switch modules on and off between sessions)
+                o.addProperty("name", m.name);
+                o.addProperty("description", m.description);
+                o.addProperty("category", m.category.label);
                 if (m instanceof HudModule h) {
                     o.addProperty("placed", h.placed);
                     o.addProperty("x", h.x);

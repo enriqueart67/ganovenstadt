@@ -16,11 +16,14 @@ pub struct StoopState {
     pub last_page: Option<u8>,
     pub yaw_drag: f32,
     pub version_filter: String,
+    /// Mitte des PLAY-Rings (dort beginnt die Start-Sequenz).
+    pub ring_c: Option<Pos2>,
+    pub versions_installed: bool,
 }
 
 impl Default for StoopState {
     fn default() -> Self {
-        Self { page_at: Instant::now(), last_page: None, yaw_drag: 0.0, version_filter: String::new() }
+        Self { page_at: Instant::now(), last_page: None, yaw_drag: 0.0, version_filter: String::new(), ring_c: None, versions_installed: false }
     }
 }
 
@@ -52,6 +55,16 @@ pub(super) fn spaced(p: &egui::Painter, pos: Pos2, align: Align2, text: &str, f:
         x += cw + sp;
     }
     rect
+}
+
+pub(super) fn rnd_pub(i: u32) -> f32 {
+    rnd(i)
+}
+
+pub(super) fn glow_at(p: &egui::Painter, c: Pos2, rx: f32, ry: f32, color: Color32, max_a: f32) {
+    if max_a >= 1.0 {
+        ellipse_glow(p, c, rx, ry, color, max_a.min(255.0));
+    }
 }
 
 /// Elliptischer weicher Lichtschein.
@@ -324,8 +337,9 @@ impl App {
         spaced(p, pos2(r.left() + 50.0, r.center().y), Align2::LEFT_CENTER, &self.cfg.look.title.to_uppercase(), font(12.0, "monom"), pal.text, 5.0);
         // Statusanzeige in der Mitte
         let running = prism::game_running();
-        let (label, col) = if busy {
-            ("PREPARING", WARN)
+        let launching = self.launch_anim.is_some();
+        let (label, col) = if busy || (launching && !running) {
+            ("LAUNCHING", WARN)
         } else if running {
             ("IN FLIGHT", GOOD)
         } else {
@@ -334,7 +348,7 @@ impl App {
         let now = ui.input(|i| i.time) as f32;
         let pulse = (now * 0.8).fract();
         let c = pos2(r.center().x - 40.0, r.center().y);
-        diamond(p, c, 3.2, col, if busy || running { pulse } else { 0.0 });
+        diamond(p, c, 3.2, col, if busy || running || launching { pulse } else { 0.0 });
         spaced(p, pos2(c.x + 12.0, c.y), Align2::LEFT_CENTER, label, font(10.0, "monom"), pal.muted, 3.0);
         // Fenster-Knoepfe
         let mut x = r.right();
@@ -480,7 +494,13 @@ impl App {
         let hov = ui.ctx().animate_bool_with_time(Id::new("playhover"), resp.hovered() && enabled, 0.22);
         let press = ui.ctx().animate_bool_with_time(Id::new("playpress"), resp.is_pointer_button_down_on(), 0.08);
 
-        ellipse_glow(&p, ring_c, rx * 1.5, ry * 2.4, pal.accent, 22.0 + hov * 30.0);
+        self.stoop.ring_c = Some(ring_c);
+        // Aktivierung: direkt nach dem Klick leuchtet der Ring auf
+        let act = self.launch_anim.as_ref().map(|l| l.activation()).unwrap_or(0.0);
+        ellipse_glow(&p, ring_c, rx * 1.5, ry * 2.4, pal.accent, 22.0 + hov * 30.0 + act * 140.0);
+        if act > 0.0 {
+            p.add(Shape::convex_polygon(ellipse_pts(ring_c, rx, ry, 0.0, std::f32::consts::TAU, 64), alpha(pal.accent, (act * 90.0) as u8), Stroke::new(2.0_f32, alpha(Color32::WHITE, (act * 200.0) as u8))));
+        }
         // hintere Haelfte des Rings (hinter der Figur)
         let back = ellipse_pts(ring_c, rx, ry, std::f32::consts::PI, std::f32::consts::TAU, 48);
         p.add(Shape::line(back, Stroke::new(1.0_f32, alpha(pal.accent2, 70 + (hov * 80.0) as u8))));
@@ -714,10 +734,46 @@ impl App {
 
     // -------------------------------------------------------------- Versions
     pub(super) fn versions_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
-        let versions = self.h.lock().versions.clone();
+        let (versions, busy, status, done, total) = {
+            let s = self.h.lock();
+            (s.versions.clone(), s.busy, s.status.clone(), s.done, s.total)
+        };
+        // installed = folders in <game>/versions with their json
+        let installed: Vec<String> = std::fs::read_dir(std::path::Path::new(&self.cfg.game_dir).join("versions"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().join(format!("{}.json", e.file_name().to_string_lossy())).exists())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
             header(ui, pal, "Versions", "Every Minecraft release – pick one and press Play");
+            if busy {
+                let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width().min(640.0), 34.0), Sense::hover());
+                let p = ui.painter();
+                p.text(pos2(rr.left(), rr.top() + 8.0), Align2::LEFT_CENTER, status.to_uppercase(), font(10.0, "monom"), pal.text);
+                let bar = Rect::from_min_size(pos2(rr.left(), rr.top() + 22.0), vec2(rr.width(), 2.0));
+                p.rect_filled(bar, 0.0, alpha(pal.text, 20));
+                if total > 0 {
+                    p.rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * done as f32 / total as f32, 2.0)), 0.0, pal.accent);
+                    p.text(pos2(rr.right(), rr.top() + 8.0), Align2::RIGHT_CENTER, format!("{done} / {total}"), font(10.0, "mono"), pal.muted);
+                } else {
+                    let ph = (ui.input(|i| i.time) as f32 * 0.7) % 1.0;
+                    p.rect_filled(Rect::from_min_size(pos2(bar.left() + bar.width() * ph * 0.8, bar.top()), vec2(bar.width() * 0.2, 2.0)), 0.0, pal.accent);
+                }
+                ui.ctx().request_repaint();
+            }
             ui.horizontal(|ui| {
+                let mut avail = !self.stoop.versions_installed;
+                super::chip(ui, pal, "Available", &mut avail);
+                let mut inst = self.stoop.versions_installed;
+                super::chip(ui, pal, &format!("Installed  {}", installed.len()), &mut inst);
+                if inst != self.stoop.versions_installed {
+                    self.stoop.versions_installed = inst;
+                } else if avail == self.stoop.versions_installed {
+                    self.stoop.versions_installed = !avail;
+                }
+                ui.add_space(18.0);
                 super::chip(ui, pal, "Releases", &mut self.cfg.show_releases);
                 super::chip(ui, pal, "Snapshots", &mut self.cfg.show_snapshots);
                 super::chip(ui, pal, "Old", &mut self.cfg.show_old);
@@ -740,6 +796,7 @@ impl App {
                     "snapshot" => self.cfg.show_snapshots,
                     _ => self.cfg.show_old,
                 })
+                .filter(|v| !self.stoop.versions_installed || installed.iter().any(|i| i == &v.id))
                 .filter(|v| filter.is_empty() || v.id.to_lowercase().contains(&filter))
                 .cloned()
                 .collect();
@@ -767,7 +824,12 @@ impl App {
                                 p.line_segment([inner.left_top(), inner.left_bottom()], Stroke::new(2.0_f32, pal.accent));
                             }
                             p.text(pos2(inner.left() + 14.0 + hov * 3.0, inner.top() + 20.0), Align2::LEFT_CENTER, &v.id, font(19.0, "semibold"), pal.text);
-                            let tag = if latest.as_deref() == Some(v.id.as_str()) { "LATEST RELEASE".to_string() } else { v.kind.to_uppercase() };
+                            let is_inst = installed.iter().any(|i| i == &v.id);
+                            let tag = format!(
+                                "{}{}",
+                                if latest.as_deref() == Some(v.id.as_str()) { "LATEST RELEASE".to_string() } else { v.kind.to_uppercase() },
+                                if is_inst { "  ·  INSTALLED" } else { "" }
+                            );
                             p.text(pos2(inner.left() + 14.0 + hov * 3.0, inner.top() + 39.0), Align2::LEFT_CENTER, tag, font(9.0, "mono"), if latest.as_deref() == Some(v.id.as_str()) { pal.accent } else { pal.muted });
                             if client_mods::jar_for(&v.id).is_some() {
                                 diamond(p, pos2(inner.right() - 14.0, inner.center().y), 3.0, pal.accent, 0.0);
@@ -842,8 +904,41 @@ impl App {
     // -------------------------------------------------------------- Performance
     pub(super) fn performance_page(&mut self, ui: &mut egui::Ui, r: Rect, pal: &Pal) {
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(r.shrink2(vec2(24.0, 18.0))), |ui| {
-            header(ui, pal, "Performance", "Memory, speed mods and Java");
+            header(ui, pal, "Performance", "Memory, speed mods, Java – and how your last session ran");
             egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                // ---- system + last session as instrument readouts
+                let total_mb = super::pages_ui::total_ram_mb();
+                let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0);
+                let session: Option<serde_json::Value> = std::fs::read_to_string(client_mods::shared_dir().join("peregrine-session.json")).ok().and_then(|t| serde_json::from_str(&t).ok());
+                let g = |k: &str| session.as_ref().and_then(|s| s.get(k)).and_then(|v| v.as_i64());
+                let readouts: Vec<(&str, String, String)> = vec![
+                    ("AVG FPS", g("fps_avg").map(|v| v.to_string()).unwrap_or("–".into()), "last session".into()),
+                    ("LOW", g("fps_min").map(|v| v.to_string()).unwrap_or("–".into()), "lowest second".into()),
+                    ("PEAK", g("fps_max").map(|v| v.to_string()).unwrap_or("–".into()), "highest second".into()),
+                    ("SYSTEM RAM", if total_mb > 0 { format!("{:.0} GB", total_mb as f32 / 1024.0) } else { "–".into() }, std::env::consts::OS.to_string()),
+                    ("CPU", if cores > 0 { format!("{cores}") } else { "–".into() }, "threads".into()),
+                ];
+                let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width().min(820.0), 92.0), Sense::hover());
+                let p = ui.painter();
+                let cw = rr.width() / readouts.len() as f32;
+                for (i, (k, v, sub)) in readouts.iter().enumerate() {
+                    let x = rr.left() + i as f32 * cw;
+                    if i > 0 {
+                        p.line_segment([pos2(x, rr.top() + 8.0), pos2(x, rr.bottom() - 8.0)], Stroke::new(1.0_f32, alpha(pal.text, 16)));
+                    }
+                    spaced(p, pos2(x + 16.0, rr.top() + 14.0), Align2::LEFT_CENTER, k, font(9.0, "monom"), pal.muted, 2.0);
+                    p.text(pos2(x + 16.0, rr.top() + 48.0), Align2::LEFT_CENTER, v, font(30.0, "display"), if i < 3 && v != "–" { pal.accent } else { pal.text });
+                    p.text(pos2(x + 16.0, rr.top() + 76.0), Align2::LEFT_CENTER, sub.to_uppercase(), font(8.5, "mono"), alpha(pal.muted, 170));
+                }
+                if session.is_none() {
+                    ui.label(RichText::new("FPS numbers appear after your first session with the Peregrine client mods.").color(pal.muted).size(12.0));
+                } else if let (Some(m), Some(v)) = (g("minutes"), session.as_ref().and_then(|s| s.get("version")).and_then(|v| v.as_str())) {
+                    ui.label(RichText::new(format!("Last session: {m} min on Minecraft {v}.")).color(pal.muted).size(12.0));
+                }
+                if total_mb > 0 && self.cfg.ram_mb as u64 > total_mb * 3 / 4 {
+                    ui.label(RichText::new(format!("Careful: {:.1} GB for Minecraft is more than ¾ of your {:.0} GB – Windows and the launcher need some too.", self.cfg.ram_mb as f32 / 1024.0, total_mb as f32 / 1024.0)).color(WARN).size(12.5));
+                }
+                ui.add_space(12.0);
                 card(ui, pal, "Memory", |ui| {
                     // Speicher als Zellenleiste: jede Zelle 1 GB
                     let gb = self.cfg.ram_mb as f32 / 1024.0;

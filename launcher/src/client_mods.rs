@@ -87,11 +87,14 @@ pub struct ClientMods {
     pub turbo_off: Vec<String>,
     /// Im Launcher geänderte Tasten: Aktion (z. B. "key.peregrine.zoom") -> Minecraft-Tastenname.
     pub keys: std::collections::BTreeMap<String, String>,
+    /// Grafik-/Spiel-Optionen aus den Launcher-Einstellungen (options.txt-Schlüssel -> Wert), z. B. "renderDistance" -> "12".
+    #[serde(default)]
+    pub options: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for ClientMods {
     fn default() -> Self {
-        Self { enabled: true, turbo: true, turbo_off: Vec::new(), keys: Default::default() }
+        Self { enabled: true, turbo: true, turbo_off: Vec::new(), keys: Default::default(), options: Default::default() }
     }
 }
 
@@ -184,6 +187,38 @@ pub fn key_from_egui(name: &str) -> Option<String> {
         _ => return None,
     };
     Some(format!("key.keyboard.{mc}"))
+}
+
+/// Im Launcher gewählte Spiel-Optionen (Sichtweite, FPS-Limit …) in options.txt eintragen (nur wenn es sie schon gibt).
+pub fn apply_options(run_dir: &Path, opts: &std::collections::BTreeMap<String, String>) -> Result<()> {
+    if opts.is_empty() {
+        return Ok(());
+    }
+    let path = run_dir.join("options.txt");
+    // no options.txt yet (first start): leave it to Minecraft, the settings apply from the next start
+    let Ok(text) = std::fs::read_to_string(&path) else { return Ok(()) };
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    let mut changed = false;
+    for (k, v) in opts {
+        let prefix = format!("{k}:");
+        let want = format!("{prefix}{v}");
+        match lines.iter_mut().find(|l| l.starts_with(&prefix)) {
+            Some(l) if *l == want => {}
+            Some(l) => {
+                *l = want;
+                changed = true;
+            }
+            None => {
+                lines.push(want);
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        std::fs::create_dir_all(run_dir)?;
+        std::fs::write(&path, lines.join("\n") + "\n")?;
+    }
+    Ok(())
 }
 
 /// Im Launcher gewählte Tasten in options.txt des Spielordners eintragen (nur geänderte).

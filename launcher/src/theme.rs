@@ -390,21 +390,22 @@ pub fn radial_glow(p: &Painter, c: Pos2, radius: f32, color: Color32, max_alpha:
 
 /// Ein-/Aus-Schalter (flach: Spur + Knopf).
 pub fn toggle(ui: &mut egui::Ui, pal: &Pal, on: &mut bool) -> egui::Response {
-    let (rect, mut resp) = ui.allocate_exact_size(vec2(36.0, 18.0), egui::Sense::click());
+    let (rect, mut resp) = ui.allocate_exact_size(vec2(34.0, 18.0), egui::Sense::click());
     if resp.clicked() {
         *on = !*on;
         resp.mark_changed();
     }
-    let t = ui.ctx().animate_bool_with_time(resp.id, *on, 0.12);
+    let t = ui.ctx().animate_bool_with_time(resp.id, *on, 0.16);
+    let hov = ui.ctx().animate_bool_with_time(resp.id.with("h"), resp.hovered(), 0.12);
     let p = ui.painter();
-    let r = pal.r.min(9.0);
-    p.rect_filled(rect, r, lerp_color(pal.surface2, pal.accent, t));
-    if t < 1.0 {
-        p.rect_stroke(rect, r, Stroke::new(1.0_f32, alpha(pal.border, (255.0 * (1.0 - t)) as u8)));
+    let rr = rect.height() / 2.0;
+    p.rect_filled(rect, rr, lerp_color(alpha(pal.text, 14), pal.accent, t));
+    p.rect_stroke(rect, rr, Stroke::new(1.0_f32, alpha(pal.text, (40.0 * (1.0 - t) + hov * 90.0) as u8)));
+    let x = egui::lerp(rect.left() + rr..=rect.right() - rr, t);
+    if t > 0.3 {
+        radial_glow(p, pos2(x, rect.center().y), 13.0, pal.accent, 46.0 * t);
     }
-    let x = egui::lerp(rect.left() + 9.0..=rect.right() - 9.0, t);
-    let knob = Rect::from_center_size(pos2(x, rect.center().y), vec2(12.0, 12.0));
-    p.rect_filled(knob, (r - 2.0).max(0.0), if t > 0.5 { Color32::WHITE } else { pal.text });
+    p.circle_filled(pos2(x, rect.center().y), rr - 3.0 + hov * 0.6, if t > 0.5 { pal.bg } else { pal.muted });
     resp
 }
 
