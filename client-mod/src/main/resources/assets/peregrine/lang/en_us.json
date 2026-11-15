@@ -11,6 +11,5 @@
   "key.category.peregrine.main": "Peregrine Client",
   "key.peregrine.esp": "Block ESP (toggle)",
   "key.peregrine.aura": "Combat Aura (toggle, singleplayer)",
-  "key.peregrine.entityesp": "Entity ESP (toggle)",
-  "key.peregrine.trainer": "Combat Trainer (toggle)"
+  "key.peregrine.entityesp": "Entity ESP (toggle)"
 }

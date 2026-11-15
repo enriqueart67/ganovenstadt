@@ -22,15 +22,6 @@ in Fabric-/Quilt-Profile (Minecraft 26.1, 26.2, 26.3) und installiert bei Bedarf
 
 Alle Tasten lassen sich im Spiel unter *Optionen › Steuerung › Peregrine Client* ändern.
 
-## Combat Trainer (Taste N, nur Einzelspieler)
-
-Spawnt 1–4 Trainings-Dummys (Husk, Zombie, Skeleton, Vindicator oder Eisengolem) vor dir in deiner eigenen Welt.
-Verhalten: *Stand still*, *Strafe*, *Chase* oder *Chase and hit back*. Einstellbar: Leben, Tempo, Rückstoß,
-Schaden beim Zurückschlagen und die Zeit, nach der ein Dummy wieder voll geheilt wird.
-Das Panel zeigt Treffer, Treffsicherheit, CPS, Combo, Reichweite, Crits, Schaden, DPS und erlittene Treffer.
-Dazu gibt es einen Reichweiten-Ring um dich (grün, sobald ein Dummy in Reichweite ist) und Schadenszahlen.
-Die Dummys tragen das Tag `peregrine_dummy` und werden beim Ausschalten entfernt.
-
 ## Wo ESP und Assistent laufen
 
 - Einzelspieler und eigene LAN-Welt: immer.

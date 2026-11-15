@@ -30,7 +30,7 @@ pub fn jar_for(version: &str) -> Option<&'static [u8]> {
 }
 
 /// Module der Mod (fuer die Uebersicht im Launcher): (Kategorie, Name, Beschreibung).
-pub const MODULES: [(&str, &str, &str); 48] = [
+pub const MODULES: [(&str, &str, &str); 47] = [
     ("HUD", "FPS", "Frames per second"),
     ("HUD", "CPS", "Clicks per second (left | right)"),
     ("HUD", "Coordinates", "X, Y, Z and facing"),
@@ -77,7 +77,6 @@ pub const MODULES: [(&str, &str, &str); 48] = [
     ("Render", "Block ESP", "Highlights chosen blocks through walls (X)"),
     ("Render", "Entity ESP", "Monsters, animals, players and items through walls (J)"),
     ("Combat", "Combat Aura", "Fights hostile mobs for you – singleplayer only (R)"),
-    ("Combat", "Combat Trainer", "Training dummies with hit, reach and combo stats – singleplayer (N)"),
     ("Misc", "Emergency logout", "Screenshot + log out at half a heart while the bot plays"),
 ];
 
@@ -112,7 +111,7 @@ pub const TURBO: [(&str, &str, &str); 5] = [
     ("entityculling", "Entity Culling", "skips mobs and chests you cannot see"),
 ];
 /// Tasten der Client-Mod: (Aktion, Anzeigename, Standard-Taste).
-pub const KEYS: [(&str, &str, &str); 12] = [
+pub const KEYS: [(&str, &str, &str); 11] = [
     ("key.peregrine.menu", "Open mod menu", "key.keyboard.right.shift"),
     ("key.peregrine.zoom", "Zoom (hold)", "key.keyboard.c"),
     ("key.peregrine.fullbright", "Toggle fullbright", "key.keyboard.g"),
@@ -124,7 +123,6 @@ pub const KEYS: [(&str, &str, &str); 12] = [
     ("key.peregrine.esp", "Block ESP on/off", "key.keyboard.x"),
     ("key.peregrine.aura", "Combat Aura on/off (singleplayer)", "key.keyboard.r"),
     ("key.peregrine.entityesp", "Entity ESP on/off", "key.keyboard.j"),
-    ("key.peregrine.trainer", "Combat Trainer on/off", "key.keyboard.n"),
 ];
 
 /// Tasten, die man nicht „drücken“ kann, um sie zu erfassen (Umschalt, Strg, Alt, Maustasten).

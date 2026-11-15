@@ -25,7 +25,7 @@ public final class PeregrineClient implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("Peregrine");
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("peregrine", "main"));
 
-    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey, assistantKey, espKey, auraKey, entityEspKey, trainerKey;
+    private static KeyMapping menuKey, zoomKey, fullbrightKey, sprintKey, emoteKey, freelookKey, waypointKey, assistantKey, espKey, auraKey, entityEspKey;
 
     @Override
     public void onInitializeClient() {
@@ -42,7 +42,6 @@ public final class PeregrineClient implements ClientModInitializer {
         espKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.esp", InputConstants.KEY_X, CATEGORY));
         auraKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.aura", InputConstants.KEY_R, CATEGORY));
         entityEspKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.entityesp", InputConstants.KEY_J, CATEGORY));
-        trainerKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.trainer", InputConstants.KEY_N, CATEGORY));
         de.peregrine.client.feature.Access.init();
         net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
             if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
@@ -56,7 +55,6 @@ public final class PeregrineClient implements ClientModInitializer {
             Modules.BLOCK_ESP.render(g, mc);
             Modules.ENTITY_ESP.render(g, mc, dt.getGameTimeDeltaPartialTick(true));
             Modules.AURA.render(g, mc);
-            Modules.TRAINER.render(g, mc, dt.getGameTimeDeltaPartialTick(true));
             Waypoints.render(g, mc);
             for (HudModule h : Modules.huds()) if (h.enabled) h.render(g, mc, false);
         });
@@ -78,7 +76,6 @@ public final class PeregrineClient implements ClientModInitializer {
                 Modules.Combo.combo = (entity.getId() == Modules.Combo.lastTarget && now - Modules.Combo.lastHit < 2500) ? Modules.Combo.combo + 1 : 1;
                 Modules.Combo.lastTarget = entity.getId();
                 Modules.Combo.lastHit = now;
-                Modules.TRAINER.onHit(mc.player, entity);
             }
             return InteractionResult.PASS;
         });
@@ -135,7 +132,6 @@ public final class PeregrineClient implements ClientModInitializer {
         while (espKey.consumeClick()) toggle(mc, Modules.BLOCK_ESP);
         while (auraKey.consumeClick()) toggle(mc, Modules.AURA);
         while (entityEspKey.consumeClick()) toggle(mc, Modules.ENTITY_ESP);
-        while (trainerKey.consumeClick()) toggle(mc, Modules.TRAINER);
         while (waypointKey.consumeClick()) if (Modules.WAYPOINTS.enabled && mc.player != null) Ui.open(new de.peregrine.client.gui.WaypointScreen());
         Zoom.setHeld(zoomKey.isDown());
         FreelookState.update(mc, freelookKey.isDown());

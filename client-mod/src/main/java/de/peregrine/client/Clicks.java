@@ -10,10 +10,7 @@ public final class Clicks {
     public static synchronized void click(int button) {
         long now = System.currentTimeMillis();
         // Maustasten-Nummern unterscheiden sich je Version (26.3 nutzt SDL: links 1, rechts 3)
-        if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT) {
-            LEFT.addLast(now);
-            Modules.TRAINER.onSwing();
-        }
+        if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT) LEFT.addLast(now);
         else if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT) RIGHT.addLast(now);
     }
 
