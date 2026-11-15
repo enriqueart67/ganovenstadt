@@ -762,12 +762,13 @@ public final class Modules {
     public static final de.peregrine.client.feature.BlockEsp BLOCK_ESP = new de.peregrine.client.feature.BlockEsp();
     public static final de.peregrine.client.feature.CombatAura AURA = new de.peregrine.client.feature.CombatAura();
     public static final de.peregrine.client.feature.EntityEsp ENTITY_ESP = new de.peregrine.client.feature.EntityEsp();
+    public static final de.peregrine.client.feature.CombatTrainer TRAINER = new de.peregrine.client.feature.CombatTrainer();
     public static final de.peregrine.client.bot.EmergencyLogout EMERGENCY = new de.peregrine.client.bot.EmergencyLogout();
 
     public static final List<Module> ALL = List.of(
             FPS, CPS, COORDS, KEYSTROKES, ARMOR, POTIONS, CLOCK, PING, SERVER, SPEED, DAYS, MEMORY, REACH, COMBO,
             SATURATION, ARROWS, TOTEMS, BIOME, SESSION, PACKS, MINIMAP, FREELOOK, LOW_FIRE, BLOCK_OUTLINE, TIME, WAYPOINTS, CHAT_TIME, MENTION, AUTO_GG, MAIN_MENU,
-            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, WINGS, HEADWEAR, PET, EMOTES, STYLE, BLOCK_ESP, ENTITY_ESP, AURA, EMERGENCY);
+            CROSSHAIR, NO_HURT_CAM, ZOOM, FULLBRIGHT, NO_WEATHER, TOGGLE_SPRINT, TOGGLE_SNEAK, CAPE, WINGS, HEADWEAR, PET, EMOTES, STYLE, BLOCK_ESP, ENTITY_ESP, AURA, TRAINER, EMERGENCY);
 
     public static List<HudModule> huds() {
         List<HudModule> l = new ArrayList<>();

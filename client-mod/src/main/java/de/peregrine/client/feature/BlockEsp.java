@@ -82,7 +82,7 @@ public final class BlockEsp extends Module {
     }
 
     public boolean allowed(Minecraft mc) {
-        return mc.player != null && Bot.allowed(mc);
+        return Access.allowed(mc, Access.BLOCK_ESP);
     }
 
     private static long key(int cx, int sy, int cz) {
@@ -123,7 +123,7 @@ public final class BlockEsp extends Module {
         }
         if (!allowed(mc)) {
             if (!warned) {
-                mc.player.sendOverlayMessage(net.minecraft.network.chat.Component.literal("§6[Peregrine]§r Block ESP only works in singleplayer and on servers where you are operator."));
+                mc.player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(Access.deniedMessage("Block ESP")));
                 warned = true;
             }
             found.clear();

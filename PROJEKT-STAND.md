@@ -207,6 +207,18 @@
   - Jagd: Beute bis 48 Blöcke auch ohne Sicht (sichtbare zählen 1,4× günstiger); ist sie verdeckt, geht er per A* hin.
   - `EntityEsp.watch(ids)` hebt beobachtete Monster (< 16 Blöcke), die Beute und das Duell-Ziel hervor, auch bei ausgeschaltetem Modul. Bei Stop oder Fertig wird es geleert.
   - Getestet in 26.2: ESP mit Tieren, Monstern, Items und Tracern; „kill cow“ läuft mit Route zur verdeckten Kuh, das Ziel ist markiert.
+- **Combat Trainer und Server-Freigabe (`feature/CombatTrainer.java`, `feature/Access.java`):**
+  - **Combat Trainer** (Combat, Taste N, `key.peregrine.trainer`, nur Einzelspieler):
+    - Spawnt 1–4 Dummys auf dem integrierten Server: Husk, Zombie, Skeleton, Vindicator oder Eisengolem. Auf Peaceful wird automatisch der Golem genommen.
+    - Die KI-Ziele werden per Reflection geleert (`goalSelector`/`targetSelector`). Danach steuert das Modul die Dummys selbst: Stand still (läuft nach dem Rückstoß zurück), Strafe (unregelmäßiges Seitwärts-Pendeln), Chase (A* hin, dann umkreisen), Chase and hit back (`hurtServer` mit einstellbarem Schaden, 1 s Abklingzeit, nicht im Kreativmodus).
+    - Leben ist einstellbar (20–500). Nach X s ohne Treffer oder unter 25 % wird der Dummy voll geheilt. Rückstoß an/aus, kein Feuer.
+    - Die Dummys tragen das Tag `peregrine_dummy` und werden beim Ausschalten entfernt, Reste beim nächsten Einschalten ebenfalls. Ist ein Dummy mehr als 24 Blöcke weg, kommt er zurück vor den Spieler. Gespawnt wird erst 2 s nach dem Betreten der Welt, mit neuem Versuch nach 3 s.
+    - Statistik auf dem Client: Treffer (`AttackEntityCallback`), Fehlschläge (Linksklick in der Welt mit Dummy im Umkreis von 8 Blöcken, über `Clicks`), Treffsicherheit, CPS, Combo (bricht bei Fehlschlag), Reichweite Durchschnitt/Max (Auge bis nächster Punkt der Hitbox), Crits (geschätzt aus Fallen, Boden, Ladung), Schaden und DPS über 5 s (aus dem Leben der Dummys), erlittene Treffer.
+    - Anzeige: Panel rechts oben, Reichweiten-Ring um die Füße (`entityInteractionRange`, grün bei Dummy in Reichweite), Lebensbalken über den Dummys, aufsteigende Schadenszahlen (Crits gold mit „!“).
+    - `swing` des Mobs per Reflection (Signatur in 26.3 anders).
+  - **Server-Freigabe (`Access`):** Block ESP, Entity ESP und der Assistent laufen im Einzelspieler, im eigenen LAN, als Operator, oder wenn der Server die Plugin-Nachricht `peregrine:features` schickt (rohe UTF-8-Liste: `blockesp,entityesp,assistant` oder `all`; Fabric `PayloadTypeRegistry.clientboundPlay`). Die Freigabe gilt bis zum Trennen. `Bot.allowed` ruft jetzt `Access.allowed(mc, "assistant")`. Die Combat Aura bleibt nur im Einzelspieler. Eine Liste beliebiger Server zum Eintragen gibt es bewusst nicht.
+  - **Getestet in 26.2 (Demo-Welt):** Dummy erscheint, Stand still und Strafe, Rückstoß und Rückkehr, Treffer, Reichweite, Schaden, DPS, Treffsicherheit, Ring wird grün, Einstellungsseite im Mod-Menü, Taste N. **Nicht getestet:** Chase und Chase and hit back, mehrere Dummys, Peaceful-Golem, Crits, die Schadenszahlen im Bild (nicht im Screenshot erwischt), die Server-Freigabe (kein Server mit Plugin im Container), 26.1 und 26.3 im Spiel (bauen aber), Windows.
+  - Testumgebung: Im neuen Container fehlten `libxkbcommon-x11-0` (Launcher startet sonst nicht), JDK 25 (`openjdk-25-jdk-headless`), MinGW und xdotool. Maven Central antwortet beim ersten Gradle-Lauf manchmal mit 429, dann einfach wiederholen. In `config.json` muss der Loader `"Fabric"` heißen (groß).
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

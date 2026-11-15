@@ -14,7 +14,7 @@
 - Antworten **auf Deutsch**, Texte im Launcher und in der Mod **auf Englisch**, nichts soll „nach KI aussehen“.
 - Er testet unter **Windows**; im Container gibt es nur Linux + Xvfb (Software-Grafik, 1–10 FPS).
 - Schnell sichtbare Ergebnisse (Screenshots schicken), ehrlich sagen, was nicht getestet ist.
-- Grenzen, die bisher gelten: Bot/PvP/ESP nur **Einzelspieler, eigene LAN-Welt oder Server mit Operator-Recht** (`Bot.allowed`); Combat Aura **nur Einzelspieler**; keine fremden Microsoft-Client-IDs, kein Offline-Bypass.
+- Grenzen, die bisher gelten: Bot/PvP/ESP nur **Einzelspieler, eigene LAN-Welt, Server mit Operator-Recht oder Server, der es per Plugin-Nachricht `peregrine:features` erlaubt** (`feature/Access`); keine frei eintragbare Server-Liste; Combat Aura **nur Einzelspieler**; keine fremden Microsoft-Client-IDs, kein Offline-Bypass.
 
 ## Bauen
 - **Mod (alle drei Versionen + Kopie in den Launcher):**
@@ -38,7 +38,7 @@
 
 ## Stand (Kurzfassung – Details in PROJEKT-STAND.md)
 - **Launcher (Design „Stoop“):** fast schwarz/Eisblau, Höhenband-Navigation, Startseite mit 3D-Figur auf dem PLAY-Ring, Hintergrundbild „Peak“ (Berg des Nutzers, `launcher/assets/backgrounds/peak.jpg`), Seiten Home/Mods (Bibliothek mit echten Schaltern)/Versions/Accounts/Performance/Settings (+ Profiles, Servers, Screenshots, Appearance, Console), Start-Sequenz mit Lade-Ring an echte Ereignisse gekoppelt (`gui_launch.rs`). Anmeldung über unsichtbares Prism.
-- **Mod:** ~48 Module (HUD, Combat, Render, Movement, World, Cosmetics, Misc), Mod-Menü (Rechte Shift) im Launcher-Look mit Vektor-Zeichner `gui/Px` (rund, hochauflösend), Kosmetik (3D-Flügel, Hüte, Haustiere, Foto-Umhänge), Emotes, Wegpunkte, Minimap, **Block ESP (X)**, **Entity ESP (J)**, **Combat Aura (R, nur SP)**, **Emergency logout**, Titelbildschirm = Vanilla.
+- **Mod:** ~48 Module (HUD, Combat, Render, Movement, World, Cosmetics, Misc), Mod-Menü (Rechte Shift) im Launcher-Look mit Vektor-Zeichner `gui/Px` (rund, hochauflösend), Kosmetik (3D-Flügel, Hüte, Haustiere, Foto-Umhänge), Emotes, Wegpunkte, Minimap, **Block ESP (X)**, **Entity ESP (J)**, **Combat Aura (R, nur SP)**, **Combat Trainer (N, nur SP: Dummys + Statistik)**, **Emergency logout**, Titelbildschirm = Vanilla.
 - **KI-Assistent (K):** Befehle Deutsch/Englisch; Planer baut Werkzeuge/Rüstung/Fackeln selbst (craftet/schmilzt nur im SP), A*-Wege mit Gefahrenkarte aus Entity ESP, findet Erze per Block-ESP-Engine (`OreFinder`), Selbstschutz (`Guard`), eigene gespeicherte Befehle, PvP (`Combat`: Crystal, Mace, Schwert, Attribute Swap, Windladung, Perlen, Pearl Catch, Lunge, Stun Slam, Elytra-Mace), Notfall-Ausloggen mit Screenshot bei ½ Herz.
 
 ## Offen / ungetestet

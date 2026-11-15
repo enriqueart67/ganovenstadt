@@ -34,16 +34,11 @@ public final class Bot {
     private static String lastStatus = "Idle";
     public static final List<String[]> CHAT = new ArrayList<>(); // {"you"|"bot", text}
 
-    public static final String NOT_ALLOWED = "I only work in singleplayer, on LAN worlds you host and on servers where you are an operator (your own server). On other servers this would be cheating against other players – and get you banned.";
+    public static final String NOT_ALLOWED = "I only work in singleplayer, on LAN worlds you host, on servers where you are operator, or on servers that allow it (peregrine:features). Anywhere else this would be cheating against other players – and get you banned.";
 
     /** Singleplayer / own LAN world, or a server where you are an operator (= your own server). */
     public static boolean allowed(Minecraft mc) {
-        if (mc.hasSingleplayerServer()) return true;
-        try {
-            return mc.player != null && mc.player.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER);
-        } catch (Throwable e) {
-            return false;
-        }
+        return de.peregrine.client.feature.Access.allowed(mc, de.peregrine.client.feature.Access.ASSISTANT);
     }
 
     public static Task current() {

@@ -65,7 +65,7 @@ public final class EntityEsp extends Module {
 
     public void render(GuiGraphicsExtractor g, Minecraft mc, float pt) {
         boolean show = enabled || !watched.isEmpty();
-        if (!show || mc.player == null || mc.level == null || !Bot.allowed(mc)) return;
+        if (!show || mc.player == null || mc.level == null || !Access.allowed(mc, Access.ENTITY_ESP)) return;
         Projector pr = Projector.of(mc, g);
         if (pr == null) return;
         Vec3 cam = pr.camera();
