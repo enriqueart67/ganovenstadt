@@ -5,6 +5,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
 
 /** Farben und kleine Zeichen-Helfer fuer das Menue. */
 public final class Ui {
@@ -82,6 +84,19 @@ public final class Ui {
             Minecraft.class.getMethod("setScreen", Screen.class).invoke(mc, s);
         } catch (ReflectiveOperationException e) {
             PeregrineClient.LOG.warn("Konnte Menü nicht öffnen: {}", e.toString());
+        }
+    }
+
+    private static final Identifier CHART = Identifier.fromNamespaceAndPath("peregrine", "textures/gui/chart.png");
+
+    /** Contour lines of the "flight chart" design over a panel (sepia on paper, pale green at night). */
+    public static void chart(GuiGraphicsExtractor g, int x, int y, int w, int h, boolean light) {
+        try {
+            double s = Minecraft.getInstance().getWindow().getGuiScale();
+            int tw = (int) Math.min(1024, w * s), th = (int) Math.min(1024, h * s);
+            int col = light ? 0x38967848 : 0x2E7FA090;
+            g.blit(RenderPipelines.GUI_TEXTURED, CHART, x, y, 0, 0, w, h, tw, th, 1024, 1024, col);
+        } catch (Throwable ignored) {
         }
     }
 }

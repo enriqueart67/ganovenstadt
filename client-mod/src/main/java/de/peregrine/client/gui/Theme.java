@@ -54,7 +54,7 @@ public final class Theme {
     }
 
     public static Theme fallback() {
-        return new Theme(0x101013, 0x222229, 0x26262E, 0xF2F2F5, 0x8C8C99, 0xFF4F00, 0xFFFFFF, false);
+        return new Theme(0xECE9DE, 0xE1DDCF, 0xC7C2B0, 0x1B2933, 0x68706E, 0xA82468, 0xFFFFFF, true); // "Chart" design
     }
 
     /** Aktuelles Design laden (bei jedem Öffnen des Menüs, damit Änderungen im Launcher sofort gelten). */
@@ -66,8 +66,8 @@ public final class Theme {
             if (!Files.exists(p)) return fallback();
             JsonObject o = JsonParser.parseString(Files.readString(p)).getAsJsonObject();
             boolean light = o.has("light") && o.get("light").getAsBoolean();
-            return new Theme(rgb(o, "bg", 0x101013), rgb(o, "surface2", 0x222229), rgb(o, "border", 0x26262E),
-                    rgb(o, "text", 0xF2F2F5), rgb(o, "muted", 0x8C8C99), rgb(o, "accent", 0xFF4F00),
+            return new Theme(rgb(o, "bg", 0xECE9DE), rgb(o, "surface2", 0xE1DDCF), rgb(o, "border", 0xC7C2B0),
+                    rgb(o, "text", 0x1B2933), rgb(o, "muted", 0x68706E), rgb(o, "accent", 0xA82468),
                     rgb(o, "onAccent", 0xFFFFFF), light);
         } catch (Exception e) {
             return fallback();

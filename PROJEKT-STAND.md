@@ -34,6 +34,29 @@
   - **Sprache (`bot/Commands.java`):** freie Sätze auf Deutsch und Englisch. Mehrere Aufträge mit „und dann / dann / then / , hol …“. Gegenstände über Synonyme (dias, eisenhacke, steinaxt, eisenrüstung …) oder über jeden Item-Namen in der Spielsprache bzw. die ID. Eigene Befehle: „merke starter: …“ / „remember x: …“, „meine befehle“, „vergiss x“; gespeichert in `<peregrine.home>/peregrine-assistant.json`.
   - **Getestet in 26.2 (Demo, leeres Inventar):** „hol 2 eisenbarren“ hat komplett geklappt (Holz → Werkbank → Holzspitzhacke → Stein → Ofen → Steinspitzhacke → Eisen → schmelzen). Gezeigte Pläne für „hol 5 dias“, „mach mir eine eisenrüstung“, eigene Befehle und „und dann“. **Nicht getestet:** ganzer Diamanten-Lauf bis Y -58, Kampf (ein Skelett hat den alten Stand getötet, danach kam Guard dazu), Essen, Fackeln.
   - Titelmenü: Eine neue Demo-Welt wird jetzt direkt wie in Vanilla angelegt (`createFreshLevel`). Vorher reichte ein leerer `Demo_World`-Ordner, damit das Öffnen fehlschlug.
+- **Design 3 „Flugkarte“ (aktuelles Design, `theme::DESIGN = 3`, alte Looks werden einmalig umgestellt):**
+  - **Idee:** Peregrine = Wanderfalke, deshalb Luftfahrtkarten-Optik statt „Swiss Minimal“.
+  - **Farben:** Kartenpapier `#ECE9DE`, Navy-Tinte `#1B2933`, Karten-Magenta `#A82468` als Akzent, Karten-Cyan `#167092` für Gitter und Kompass. Dunkle Variante „Night flight“.
+  - **Schrift:** Airbus-Cockpitschrift **B612** und B612 Mono (OFL, `launcher/assets/fonts/B612*`, `OFL-B612.txt`). In der Mod ersetzen sie IBM Plex (`assets/peregrine/font/b612_*.ttf`, Lizenz unter `resources/licenses/OFL-B612.txt`).
+  - **Launcher-Hintergrund `Chart`** (`theme::paint_chart`): Höhenlinien per Marching Squares über fraktales Rauschen (pro Fenstergröße gecacht, jede 4. Linie kräftiger mit Höhenzahl), Koordinatengitter mit Grad-/Minuten-Beschriftung, gestrichelte magentafarbene Flugroute mit Kursangaben und den Wegpunkten FALKE/KSTRL (VOR-Sechsecke, `theme::waypoint`) sowie eine Kompassrose mit Missweisung.
+  - **PLAY-Leiste:** Landebahnschwelle (6 Streifen). Navigation, Abschnitte und das Versions-Zeichen nutzen Wegpunkt-Sechsecke.
+  - **Im Spiel:** Die Höhenlinien kommen aus einer Textur (`textures/gui/chart.png`, erzeugt mit `client-mod/tools/make_chart.py`). Sie werden über `Ui.chart` eingefärbt in Mod-Menü, Assistent, Wegpunkte, Kleiderschrank und Startbildschirm gezeichnet. Die Standardfarben der Mod (ohne Launcher) sind die Flugkarten-Palette.
+  - Das Instagram-Reel, das der Nutzer als Vorlage geschickt hat, konnte nicht geöffnet werden (Instagram im Container gesperrt).
+- **Roboter-Selbstschutz Stufe 2 (`bot/Guard.java`), in Reihenfolge:**
+  1. Aus Lava springen und laufen (statt aufzugeben).
+  2. Den Kopf freigraben, wenn er in einem Block steckt.
+  3. Bei wenig Luft auftauchen.
+  4. Vor Creepern fliehen, oder sie wegschlagen, wenn sie schon zu nah sind.
+  5. Bei Übermacht zurückweichen (4+ Monster, oder 2+ bei < 4 Herzen).
+  6. Notfall-Essen unter 4 Herzen, mit goldenen Äpfeln.
+  7. Kämpfen mit kritischen Treffern (springen, im Fallen schlagen) und Zickzack gegen Skelette und andere Fernkämpfer.
+  8. Essen.
+  9. Ohne Essen Kühe, Schweine, Schafe, Hühner oder Kaninchen jagen und die Drops einsammeln.
+  10. Ausruhen.
+  11. Alle 2 s die beste Rüstung anziehen und ein Totem in die zweite Hand legen (serverseitig, Einzelspieler).
+  12. Fackeln setzen.
+  - **Planer:** Vor jedem Erz-Auftrag baut er ein Schwert. Vor tiefen Erzen (Ziel-Y < 16) macht er 16 Fackeln. Kohle, die als Zutat gebraucht wird, brennt er als Holzkohle aus Stämmen.
+  - Nicht im Spiel getestet (Nutzer wollte keine weiteren Tests), nur für 26.1/26.2/26.3 gebaut.
 - **Testen:** Skripte der Sitzung lagen im Scratchpad (nicht im Repo). Ablauf: Xvfb starten, Launcher mit `HOME=<testordner>` und `use_prism:false` starten, „PLAY“ klicken, im Titel „Play demo world“ klicken, dann `xdotool` + `import`.
 
 ---

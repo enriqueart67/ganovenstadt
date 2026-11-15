@@ -464,7 +464,8 @@ impl App {
             let col = if active || resp.hovered() { pal.text } else { pal.muted };
             ui.painter().text(pos2(nx, r.center().y), Align2::LEFT_CENTER, label, font(11.5, "monom"), col);
             if active {
-                ui.painter().rect_filled(Rect::from_min_max(pos2(tr.left(), r.bottom() - 2.0), pos2(tr.right(), r.bottom())), 0.0, pal.accent);
+                theme::waypoint(ui.painter(), pos2(nx - 10.0, r.center().y), 3.6, pal.accent, true);
+                ui.painter().rect_filled(Rect::from_min_max(pos2(tr.left(), r.bottom() - 1.0), pos2(tr.right(), r.bottom())), 0.0, pal.accent);
             }
             if resp.clicked() {
                 if self.page == Page::Settings && page != Page::Settings && self.cfg.game_dir != self.saved.game_dir {
@@ -617,8 +618,8 @@ impl App {
             size -= 6.0;
         }
         let tr = p.text(pos2(left.left() - size * 0.04, y), Align2::LEFT_TOP, &big, font(size, "display"), pal.text);
-        // kleines Signal-Quadrat wie ein Instrumenten-Marker
-        p.rect_filled(Rect::from_min_size(pos2(tr.right() + 10.0, tr.top() + size * 0.22), vec2(10.0, 10.0)), 0.0, pal.accent);
+        // Wegpunkt-Symbol wie auf einer Luftfahrtkarte
+        theme::waypoint(&p, pos2(tr.right() + 16.0, tr.top() + size * 0.30), (size * 0.07).clamp(5.0, 9.0), pal.accent, false);
         y = tr.bottom() + 2.0;
         p.text(pos2(left.left(), y), Align2::LEFT_TOP, &sub, font(17.0, "regular"), pal.muted);
         y += 54.0;
@@ -673,7 +674,7 @@ impl App {
 
         // ---------- rechts: Daten
         let mut ry = right.top() + 4.0;
-        if look.background != "None" {
+        if look.background != "None" && look.background != "Chart" {
             let vis = Rect::from_min_size(pos2(right.left(), ry), vec2(right.width(), (right.height() * 0.42).min(200.0)));
             self.visual(ui, vis, t, pal);
             ry = vis.bottom() + 18.0;
@@ -795,7 +796,13 @@ impl App {
             let fill = theme::lerp_color(ink, pal.accent, hov);
             p.rect_filled(play, pal.r, fill);
             let fg = if hov > 0.5 { Color32::WHITE } else { paper };
-            p.text(pos2(play.left() + 28.0, play.center().y), Align2::LEFT_CENTER, "PLAY", font(34.0, "display"), fg);
+            // Landebahnschwelle: weisse Streifen links, dann der Schriftzug
+            for i in 0..6 {
+                let sx = play.left() + 20.0 + i as f32 * 8.0;
+                p.rect_filled(Rect::from_min_max(pos2(sx, play.top() + 14.0), pos2(sx + 4.0, play.bottom() - 14.0)), 0.0, alpha(fg, 210));
+            }
+            p.line_segment([pos2(play.left() + 76.0, play.center().y), pos2(play.left() + 92.0, play.center().y)], Stroke::new(2.0_f32, alpha(fg, 160)));
+            p.text(pos2(play.left() + 104.0, play.center().y), Align2::LEFT_CENTER, "PLAY", font(34.0, "display"), fg);
             let what = match &active {
                 Some(ap) => format!("{}  ·  {} {}", ap.name, ap.loader, ap.version).to_uppercase(),
                 None => format!("{}  ·  {}", self.cfg.version, self.cfg.loader).to_uppercase(),
@@ -1272,8 +1279,8 @@ fn card(ui: &mut egui::Ui, pal: &Pal, title: &str, body: impl FnOnce(&mut egui::
     ui.painter().rect_filled(r, 0.0, pal.border);
     ui.add_space(10.0);
     ui.horizontal(|ui| {
-        let (m, _) = ui.allocate_exact_size(vec2(6.0, 6.0), Sense::hover());
-        ui.painter().rect_filled(m, 0.0, pal.accent);
+        let (m, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
+        theme::waypoint(ui.painter(), m.center(), 4.0, pal.accent, false);
         ui.label(RichText::new(title.to_uppercase()).font(font(11.5, "monom")).color(pal.text));
     });
     ui.add_space(2.0);
@@ -1408,6 +1415,9 @@ impl eframe::App for App {
             let full = ui.max_rect();
             let title = Rect::from_min_size(full.min, vec2(full.width(), 48.0));
             let content = Rect::from_min_max(pos2(full.left() + 40.0, title.bottom() + 30.0), pos2(full.right() - 40.0, full.bottom() - 28.0));
+            if self.cfg.look.background == "Chart" {
+                theme::paint_chart(&ui.painter().with_clip_rect(full), Rect::from_min_max(pos2(full.left(), title.bottom()), full.max), &pal);
+            }
             match self.page {
                 Page::Home => self.home(ui, content, t, &pal, &account, &mut action),
                 Page::Profiles => self.profiles_page(ui, content, &pal),

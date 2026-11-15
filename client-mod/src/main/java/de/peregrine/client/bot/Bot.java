@@ -98,10 +98,6 @@ public final class Bot {
             stop("You died – sorry. I stopped. Respawn and ask me again.");
             return;
         }
-        if (p.isInLava()) {
-            stop("Stopped: lava! Get out quickly.");
-            return;
-        }
         try {
             if (Guard.tick(mc)) return; // fighting, eating or resting first
             if (task != null && task.tick(mc)) {
@@ -123,6 +119,8 @@ public final class Bot {
         mc.options.keySprint.setDown(false);
         mc.options.keyShift.setDown(false);
         mc.options.keyUse.setDown(false);
+        mc.options.keyLeft.setDown(false);
+        mc.options.keyRight.setDown(false);
         if (mc.gameMode != null) mc.gameMode.stopDestroyBlock();
     }
 

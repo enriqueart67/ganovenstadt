@@ -158,7 +158,14 @@ public final class Planner {
         return inv.getOrDefault(key, 0);
     }
 
-    static boolean hasPick(Map<String, Integer> inv, String tier) {
+    static boolean hasSword(Map<String, Integer> inv) {
+        for (String t : new String[]{"wooden", "stone", "iron", "golden", "diamond", "netherite"}) if (have(inv, t + "_sword") > 0) return true;
+        return false;
+    }
+
+    static final Smelt CHARCOAL = new Smelt("charcoal", "#log");
+
+        static boolean hasPick(Map<String, Integer> inv, String tier) {
         boolean reached = false;
         for (String t : PICK_TIERS) {
             if (t.equals(tier)) reached = true;
@@ -200,7 +207,8 @@ public final class Planner {
             return null;
         }
 
-        Smelt sm = SMELTS.get(key);
+        // coal needed as an ingredient (torches, fuel): burn logs into charcoal instead of searching for coal ore
+        Smelt sm = key.equals("#coal") && depth > 0 ? CHARCOAL : SMELTS.get(key);
         if (sm != null) {
             int times = deficit;
             String fuel;
@@ -234,6 +242,16 @@ public final class Planner {
             if (src.ore() != null) {
                 String e = ensure(inv, "pick:" + src.ore().pickaxe(), 1, steps, depth + 1);
                 if (e != null) return e;
+                // never go mining without a weapon …
+                if (!hasSword(inv)) {
+                    e = ensure(inv, hasPick(inv, "stone") ? "stone_sword" : "wooden_sword", 1, steps, depth + 1);
+                    if (e != null) return e;
+                }
+                // … and never deep down without light
+                if (src.ore().y() != Integer.MIN_VALUE && src.ore().y() < 16 && have(inv, "torch") < 8) {
+                    e = ensure(inv, "torch", 16, steps, depth + 1);
+                    if (e != null) return e;
+                }
             }
             int amount = depth == 0 ? deficit : Math.max(deficit, src.min());
             inv.merge(key, amount, Integer::sum);
@@ -446,7 +464,7 @@ public final class Planner {
             Bot.release(mc);
             if (++ticks % 200 != 0) return false; // vanilla furnace speed
             if (done >= step.amount()) return true;
-            Smelt sm = SMELTS.get(step.key());
+            Smelt sm = step.key().equals("#coal") ? CHARCOAL : SMELTS.get(step.key());
             boolean needFuel = fuelLeft < 1;
             String fuel = step.fuel();
             Bot.onServer(mc, sp -> {

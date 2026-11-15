@@ -141,6 +141,7 @@ public final class TitleMenu extends Screen {
         int pw = Math.max(176, Math.min(260, Math.round(width * 0.38f)));
         int px = Math.round((a - 1f) * 24);
         g.fill(px, 0, px + pw, height, paper);
+        Ui.chart(g, px, 0, pw, height, t.light);
         g.fill(px + pw, 0, px + pw + 1, height, t.line);
         // soft edge towards the panorama
         for (int i = 0; i < 10; i++) g.fill(px + pw + 1 + i, 0, px + pw + 2 + i, height, fade(0x38000000, (10 - i) / 10f));
@@ -168,6 +169,8 @@ public final class TitleMenu extends Screen {
             int y = my0 + i * rowH;
             boolean hov = it.enabled() && Ui.in(mx, my, px, y, pw, rowH);
             float ts = rowH >= 22 ? 1.5f : 1.25f;
+            int noteW = it.note().isEmpty() ? 0 : Type.width(it.note(), Type.MONO, 0.65f) + 10;
+            while (ts > 0.9f && Type.width(it.label(), Type.BOLD, ts) + noteW + 6 > right - x) ts -= 0.05f; // never run into the note
             int ink = !it.enabled() ? t.muted2 : hov ? t.accent : t.text;
             Type.left(g, it.label(), Type.BOLD, x + (hov ? 4 : 0), y + (rowH - 9 * ts) / 2f + 1, ts, ink);
             if (hov) Type.right(g, "→", Type.UI, right, y + (rowH - 13) / 2f, 1.4f, t.accent);

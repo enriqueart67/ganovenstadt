@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 pub type Rgb = [u8; 3];
 
-/// Aktuelle Design-Generation (2 = Peregrine-Design „Papier/Nacht“).
-pub const DESIGN: u32 = 2;
+/// Aktuelle Design-Generation (3 = Peregrine-Design „Flugkarte“: Kartenpapier, Hoehenlinien, Airbus-Schrift B612).
+pub const DESIGN: u32 = 3;
 
 pub const GOOD: Color32 = Color32::from_rgb(52, 199, 120);
 pub const BAD: Color32 = Color32::from_rgb(235, 72, 72);
@@ -20,11 +20,13 @@ pub fn c(rgb: Rgb) -> Color32 {
 }
 
 // ------------------------------------------------------------------ Einstellbares Aussehen
-pub const PRESETS: [&str; 6] = ["Paper", "Night", "Graphite", "OLED", "Midnight", "Light"];
-pub const BACKGROUNDS: [&str; 5] = ["None", "Landscape", "Gradient", "Solid", "Image"];
+pub const PRESETS: [&str; 8] = ["Chart", "Night flight", "Paper", "Night", "Graphite", "OLED", "Midnight", "Light"];
+pub const BACKGROUNDS: [&str; 6] = ["Chart", "None", "Landscape", "Gradient", "Solid", "Image"];
 pub const SCENES: [&str; 3] = ["Evening", "Day", "Night"];
-pub const FONTS: [&str; 3] = ["Plex", "Poppins", "Standard"];
-pub const ACCENTS: [(&str, Rgb); 9] = [
+pub const FONTS: [&str; 4] = ["B612", "Plex", "Poppins", "Standard"];
+pub const ACCENTS: [(&str, Rgb); 11] = [
+    ("Chart magenta", [168, 36, 104]),
+    ("Chart cyan", [22, 112, 146]),
     ("Signal orange", [255, 79, 0]),
     ("Blue", [79, 140, 255]),
     ("Teal", [45, 200, 180]),
@@ -80,14 +82,14 @@ impl Default for Look {
             text: [0; 3],
             muted: [0; 3],
             accent: ACCENTS[0].1,
-            accent2: [56, 189, 248],
+            accent2: [22, 112, 146],
             gradients: false,
             glow: false,
             animations: true,
             rounding: 2.0,
             ui_scale: 1.0,
-            font: "Plex".into(),
-            background: "None".into(),
+            font: "B612".into(),
+            background: "Chart".into(),
             scene: "Night".into(),
             image_path: String::new(),
             dim: 0.25,
@@ -98,7 +100,7 @@ impl Default for Look {
             show_tagline: true,
             show_logo: false,
         };
-        l.apply_preset("Paper");
+        l.apply_preset("Chart");
         l
     }
 }
@@ -120,6 +122,9 @@ impl Look {
     pub fn apply_preset(&mut self, name: &str) {
         let (bg, s, s2, b, t, m): (Rgb, Rgb, Rgb, Rgb, Rgb, Rgb) = match name {
             // Peregrine-Design: warmes Papier bzw. tiefe Nacht, Flaechen = Hintergrund (nur Haarlinien)
+            // Flugkarte: leicht gruenliches Kartenpapier mit Navy-Tinte bzw. Nachtflug-Cockpit
+            "Chart" => ([236, 233, 222], [236, 233, 222], [225, 221, 207], [199, 194, 176], [27, 41, 51], [104, 112, 110]),
+            "Night flight" => ([13, 19, 22], [13, 19, 22], [22, 31, 35], [40, 52, 56], [226, 222, 207], [127, 140, 138]),
             "Paper" => ([243, 241, 236], [243, 241, 236], [231, 228, 221], [210, 206, 197], [17, 17, 16], [112, 108, 100]),
             "Night" => ([14, 14, 13], [14, 14, 13], [29, 28, 26], [46, 45, 42], [237, 235, 230], [140, 136, 128]),
             "OLED" => ([0, 0, 0], [10, 10, 11], [20, 20, 22], [32, 32, 36], [240, 240, 242], [130, 130, 138]),
@@ -207,6 +212,10 @@ pub fn setup_fonts(ctx: &egui::Context, which: &str) {
     add("plex-bold", include_bytes!("../assets/fonts/IBMPlexSansCondensed-Bold.ttf"));
     add("plexmono-regular", include_bytes!("../assets/fonts/IBMPlexMono-Regular.ttf"));
     add("plexmono-medium", include_bytes!("../assets/fonts/IBMPlexMono-Medium.ttf"));
+    add("b612-regular", include_bytes!("../assets/fonts/B612-Regular.ttf"));
+    add("b612-bold", include_bytes!("../assets/fonts/B612-Bold.ttf"));
+    add("b612mono-regular", include_bytes!("../assets/fonts/B612Mono-Regular.ttf"));
+    add("b612mono-bold", include_bytes!("../assets/fonts/B612Mono-Bold.ttf"));
     add("poppins-regular", include_bytes!("../assets/fonts/Poppins-Regular.ttf"));
     add("poppins-medium", include_bytes!("../assets/fonts/Poppins-Medium.ttf"));
     add("poppins-semibold", include_bytes!("../assets/fonts/Poppins-SemiBold.ttf"));
@@ -219,12 +228,17 @@ pub fn setup_fonts(ctx: &egui::Context, which: &str) {
         v
     };
     let prefix = match which {
+        "B612" => Some("b612"),
         "Poppins" => Some("poppins"),
         "Standard" => None,
         _ => Some("plex"),
     };
     for key in ["regular", "medium", "semibold", "bold"] {
-        let f = prefix.map(|p| format!("{p}-{key}"));
+        let f = match (which, key) {
+            ("B612", "regular" | "medium") => Some("b612-regular".to_string()),
+            ("B612", _) => Some("b612-bold".to_string()),
+            _ => prefix.map(|p| format!("{p}-{key}")),
+        };
         if key == "regular" {
             fonts.families.insert(FontFamily::Proportional, fam(f.as_deref()));
         } else {
@@ -233,9 +247,10 @@ pub fn setup_fonts(ctx: &egui::Context, which: &str) {
     }
     let display = prefix.map(|p| format!("{p}-bold"));
     fonts.families.insert(FontFamily::Name("display".into()), fam(display.as_deref()));
-    fonts.families.insert(FontFamily::Name("mono".into()), fam(Some("plexmono-regular")));
-    fonts.families.insert(FontFamily::Name("monom".into()), fam(Some("plexmono-medium")));
-    fonts.families.get_mut(&FontFamily::Monospace).unwrap().insert(0, "plexmono-regular".into());
+    let (mono, monom) = if which == "B612" { ("b612mono-regular", "b612mono-bold") } else { ("plexmono-regular", "plexmono-medium") };
+    fonts.families.insert(FontFamily::Name("mono".into()), fam(Some(mono)));
+    fonts.families.insert(FontFamily::Name("monom".into()), fam(Some(monom)));
+    fonts.families.get_mut(&FontFamily::Monospace).unwrap().insert(0, mono.into());
     ctx.set_fonts(fonts);
 }
 
@@ -548,4 +563,216 @@ pub fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
 /// Zeichnet das Icon (bringt sein eigenes schwarzes Abzeichen mit).
 pub fn logo(p: &Painter, _pal: &Pal, rect: Rect, tex: &egui::TextureHandle) {
     p.image(tex.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+}
+
+// ------------------------------------------------------------------ Flugkarte (Design 3)
+/// Wegpunkt-Symbol wie auf Luftfahrtkarten (VOR-Sechseck mit Punkt).
+pub fn waypoint(p: &Painter, c: Pos2, r: f32, color: Color32, filled: bool) {
+    let pts: Vec<Pos2> = (0..6).map(|i| {
+        let a = std::f32::consts::PI / 3.0 * i as f32;
+        pos2(c.x + r * a.cos(), c.y + r * a.sin())
+    }).collect();
+    if filled {
+        p.add(Shape::convex_polygon(pts, color, Stroke::NONE));
+    } else {
+        p.add(Shape::closed_line(pts, Stroke::new(1.3_f32, color)));
+        p.circle_filled(c, (r * 0.28).max(1.2), color);
+    }
+}
+
+fn vnoise(x: f32, y: f32, seed: u32) -> f32 {
+    let (xi, yi) = (x.floor() as i32, y.floor() as i32);
+    let (xf, yf) = (x - x.floor(), y - y.floor());
+    let h = |i: i32, j: i32| hash((i.wrapping_mul(73856093) ^ j.wrapping_mul(19349663)) as u32 ^ seed.wrapping_mul(83492791));
+    let s = |t: f32| t * t * (3.0 - 2.0 * t);
+    let (u, v) = (s(xf), s(yf));
+    let a = h(xi, yi) + (h(xi + 1, yi) - h(xi, yi)) * u;
+    let b = h(xi, yi + 1) + (h(xi + 1, yi + 1) - h(xi, yi + 1)) * u;
+    a + (b - a) * v
+}
+
+/// Gelaende-Hoehe 0..1 (fraktales Rauschen) fuer die Hoehenlinien.
+fn terrain(x: f32, y: f32) -> f32 {
+    let mut v = 0.0;
+    let mut amp = 0.55;
+    let mut f = 1.0;
+    for o in 0..4 {
+        v += vnoise(x * f, y * f, 11 + o) * amp;
+        amp *= 0.5;
+        f *= 2.03;
+    }
+    v
+}
+
+struct ChartCache {
+    size: (u32, u32),
+    lines: Vec<(Pos2, Pos2, bool)>, // relativ zur linken oberen Ecke; true = Zaehllinie (staerker)
+    labels: Vec<(Pos2, String)>,
+}
+
+static CHART: std::sync::Mutex<Option<ChartCache>> = std::sync::Mutex::new(None);
+
+/// Hoehenlinien per Marching Squares – einmal pro Fenstergroesse berechnet.
+fn contours(w: f32, h: f32) -> ChartCache {
+    let cell = 12.0_f32;
+    let (nx, ny) = ((w / cell) as usize + 2, (h / cell) as usize + 2);
+    let scale = 1.0 / 260.0;
+    let mut grid = vec![0.0_f32; nx * ny];
+    for j in 0..ny {
+        for i in 0..nx {
+            grid[j * nx + i] = terrain(i as f32 * cell * scale + 3.1, j as f32 * cell * scale + 7.7);
+        }
+    }
+    let levels = 16;
+    let mut lines = Vec::new();
+    let mut labels = Vec::new();
+    for l in 1..levels {
+        let iso = l as f32 / levels as f32 * 0.95 + 0.05;
+        let index = l % 4 == 0;
+        let mut labelled = false;
+        for j in 0..ny - 1 {
+            for i in 0..nx - 1 {
+                let v = [grid[j * nx + i], grid[j * nx + i + 1], grid[(j + 1) * nx + i + 1], grid[(j + 1) * nx + i]];
+                let mut code = 0;
+                for (k, val) in v.iter().enumerate() {
+                    if *val > iso {
+                        code |= 1 << k;
+                    }
+                }
+                if code == 0 || code == 15 {
+                    continue;
+                }
+                let (x0, y0) = (i as f32 * cell, j as f32 * cell);
+                let t = |a: f32, b: f32| ((iso - a) / (b - a)).clamp(0.0, 1.0);
+                let top = pos2(x0 + cell * t(v[0], v[1]), y0);
+                let right = pos2(x0 + cell, y0 + cell * t(v[1], v[2]));
+                let bottom = pos2(x0 + cell * (1.0 - t(v[2], v[3])), y0 + cell);
+                let left = pos2(x0, y0 + cell * (1.0 - t(v[3], v[0])));
+                let segs: &[(Pos2, Pos2)] = &match code {
+                    1 | 14 => [(left, top), (left, top)],
+                    2 | 13 => [(top, right), (top, right)],
+                    3 | 12 => [(left, right), (left, right)],
+                    4 | 11 => [(right, bottom), (right, bottom)],
+                    5 => [(left, top), (right, bottom)],
+                    6 | 9 => [(top, bottom), (top, bottom)],
+                    7 | 8 => [(left, bottom), (left, bottom)],
+                    10 => [(top, right), (left, bottom)],
+                    _ => continue,
+                };
+                for (a, b) in segs.iter() {
+                    lines.push((*a, *b, index));
+                }
+                if index && !labelled && i > 6 && j > 6 && (i + j * 7 + l * 13) % 97 == 0 {
+                    labels.push((pos2(x0, y0), format!("{}", 400 + l * 150)));
+                    labelled = true;
+                }
+            }
+        }
+    }
+    lines.dedup();
+    ChartCache { size: (w as u32, h as u32), lines, labels }
+}
+
+/// Hintergrund „Flugkarte“: Hoehenlinien, Koordinatengitter mit Grad-Beschriftung, eine Flugroute mit
+/// Wegpunkten und eine Kompassrose. Alles sehr zurueckhaltend, damit Text darueber gut lesbar bleibt.
+pub fn paint_chart(p: &Painter, r: Rect, pal: &Pal) {
+    let light = pal.light;
+    let contour = if light { Color32::from_rgb(150, 118, 72) } else { Color32::from_rgb(110, 140, 128) };
+    let grid = pal.accent2;
+    {
+        let mut cache = CHART.lock().unwrap();
+        let size = (r.width() as u32, r.height() as u32);
+        if cache.as_ref().map_or(true, |c| c.size != size) {
+            *cache = Some(contours(r.width(), r.height()));
+        }
+        let c = cache.as_ref().unwrap();
+        let thin = Stroke::new(1.0_f32, alpha(contour, if light { 34 } else { 26 }));
+        let thick = Stroke::new(1.2_f32, alpha(contour, if light { 62 } else { 46 }));
+        let shapes: Vec<Shape> = c.lines.iter().map(|(a, b, idx)| Shape::line_segment([r.min + a.to_vec2(), r.min + b.to_vec2()], if *idx { thick } else { thin })).collect();
+        p.extend(shapes);
+        for (at, txt) in &c.labels {
+            p.text(r.min + at.to_vec2(), egui::Align2::CENTER_CENTER, txt, font(9.0, "mono"), alpha(contour, if light { 110 } else { 80 }));
+        }
+    }
+    // Koordinatengitter (Breiten-/Laengengrade) mit Randbeschriftung
+    let step = 168.0;
+    let gs = Stroke::new(1.0_f32, alpha(grid, if light { 26 } else { 30 }));
+    let mut x = r.left() + 96.0;
+    let mut lon = 8.0_f32;
+    while x < r.right() {
+        p.line_segment([pos2(x, r.top()), pos2(x, r.bottom())], gs);
+        p.text(pos2(x + 4.0, r.bottom() - 6.0), egui::Align2::LEFT_BOTTOM, format!("{:03.0}°{:02.0}′E", lon.floor(), (lon.fract() * 60.0).round()), font(9.0, "mono"), alpha(grid, 90));
+        x += step;
+        lon += 0.5;
+    }
+    let mut y = r.top() + 120.0;
+    let mut lat = 47.5_f32;
+    while y < r.bottom() {
+        p.line_segment([pos2(r.left(), y), pos2(r.right(), y)], gs);
+        p.text(pos2(r.right() - 6.0, y - 3.0), egui::Align2::RIGHT_BOTTOM, format!("{:02.0}°{:02.0}′N", lat.floor(), (lat.fract() * 60.0).round()), font(9.0, "mono"), alpha(grid, 90));
+        // kleine Minuten-Striche am linken Rand
+        for k in 1..6 {
+            let ty = y + step * k as f32 / 6.0;
+            p.line_segment([pos2(r.left(), ty), pos2(r.left() + 5.0, ty)], gs);
+        }
+        y += step;
+        lat -= 0.5;
+    }
+    // Flugroute: gestrichelt, Magenta, mit drei Wegpunkten
+    let route = [
+        pos2(r.left() + r.width() * 0.06, r.bottom() - r.height() * 0.18),
+        pos2(r.left() + r.width() * 0.38, r.top() + r.height() * 0.58),
+        pos2(r.left() + r.width() * 0.71, r.top() + r.height() * 0.30),
+        pos2(r.right() - r.width() * 0.03, r.top() + r.height() * 0.12),
+    ];
+    let rc = alpha(pal.accent, if light { 70 } else { 90 });
+    for w in route.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = (b - a).length();
+        let dir = (b - a) / len;
+        let mut d = 0.0;
+        while d < len {
+            let e = (d + 9.0).min(len);
+            p.line_segment([a + dir * d, a + dir * e], Stroke::new(1.4_f32, rc));
+            d += 15.0;
+        }
+        // Kurs in Grad auf halber Strecke
+        let mid = a + (b - a) * 0.5;
+        let hdg = ((dir.x.atan2(-dir.y).to_degrees() + 360.0) % 360.0).round();
+        p.text(mid + vec2(8.0, -10.0), egui::Align2::LEFT_BOTTOM, format!("{hdg:03.0}°"), font(9.5, "mono"), rc);
+    }
+    for (i, (pt, ident)) in route.iter().zip(["PRGN", "FALKE", "KSTRL", "HOBBY"]).enumerate() {
+        if i == 0 || i == 3 {
+            continue;
+        }
+        waypoint(p, *pt, 6.0, rc, false);
+        p.text(*pt + vec2(10.0, 8.0), egui::Align2::LEFT_TOP, ident, font(9.5, "monom"), rc);
+    }
+    // Kompassrose unten rechts
+    let c = pos2(r.right() - 150.0, r.bottom() - 215.0);
+    let rad = 92.0;
+    let cs = alpha(grid, if light { 60 } else { 70 });
+    p.circle_stroke(c, rad, Stroke::new(1.0_f32, cs));
+    p.circle_stroke(c, rad * 0.62, Stroke::new(1.0_f32, alpha(grid, 30)));
+    for deg in (0..360).step_by(5) {
+        let a = (deg as f32).to_radians();
+        let dir = vec2(a.sin(), -a.cos());
+        let len = if deg % 30 == 0 { 12.0 } else if deg % 10 == 0 { 7.0 } else { 4.0 };
+        p.line_segment([c + dir * rad, c + dir * (rad - len)], Stroke::new(1.0_f32, cs));
+        if deg % 30 == 0 {
+            let label = match deg {
+                0 => "N".to_string(),
+                90 => "E".to_string(),
+                180 => "S".to_string(),
+                270 => "W".to_string(),
+                d => format!("{}", d / 10),
+            };
+            p.text(c + dir * (rad - 22.0), egui::Align2::CENTER_CENTER, label, font(9.5, "monom"), cs);
+        }
+    }
+    // Nordpfeil und Missweisung
+    p.line_segment([c, c + vec2(0.0, -rad * 0.55)], Stroke::new(1.2_f32, cs));
+    let var = 3.0_f32.to_radians();
+    p.line_segment([c, c + vec2(var.sin(), -var.cos()) * rad * 0.5], Stroke::new(1.0_f32, alpha(pal.accent, 70)));
+    p.text(c + vec2(0.0, rad * 0.30), egui::Align2::CENTER_CENTER, "VAR 3°E", font(8.5, "mono"), cs);
 }

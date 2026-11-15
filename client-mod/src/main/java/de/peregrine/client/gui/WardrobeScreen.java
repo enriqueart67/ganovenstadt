@@ -197,6 +197,7 @@ public final class WardrobeScreen extends Screen {
         int x0 = (width - W) / 2, y0 = (height - H) / 2 + Math.round((1f - a) * 10);
         g.fill(x0 + 3, y0 + 4, x0 + W + 3, y0 + H + 4, t.shadow);
         g.fill(x0, y0, x0 + W, y0 + H, t.bg | 0xFF000000);
+        Ui.chart(g, x0, y0, W, H, t.light);
 
         // ---------- top bar: back, title, tabs, close
         int bar = 24;
