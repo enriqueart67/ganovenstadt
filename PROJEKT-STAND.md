@@ -392,3 +392,16 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
 - Weitere Module: Freelook, Chat-Zeitstempel, wenig Feuer, Waypoints, Blockumrandung.
 - „Alles aktualisieren“ für Modrinth-Inhalte; Forge/NeoForge; Skin-Kopf als Konto-Bild.
 - Signierte Releases über GitHub Actions (Release-Workflow).
+
+## PvP-Bot Runde 2 (Branch `claude/beautiful-hawking-m1ufrc`)
+
+- **Pausen-Fehler behoben:** `Guard` erkannte Duelle nicht (`Bot.current()` ist immer ein `Commands.Chain`, nie direkt `Combat.Duel`). Dadurch aß er mitten im Kampf normales Essen, jagte Tiere oder wich vor Monstern aus. Neu: `Chain.duel()` / `Repeat.duel()`.
+- **Essen in Bewegung:** Während Apfel, Essen oder Trank (1,6 s) bleibt er nicht mehr stehen. `Duel.whileBusy` weicht zurück, schaut den Gegner an und strafet.
+- **Echter Explosionsschaden (`bot/Blast.java`):** Abstand von den Füßen, Sichtanteil mit demselben Strahlengitter wie Vanilla, Schwierigkeit, Rüstung + Härte (aus den getragenen Teilen geschätzt, falls das Attribut fehlt), Protection/Blast Protection, Resistance. Vorher wurde immer der schlimmste Fall ohne Rüstung angenommen. Deshalb fand er gegen Netherite kaum Stellen.
+- **Crystal:** kein Warten mehr auf „erst hochschlagen“. Jeden Tick wird ein Kristall zerschlagen oder gesetzt. Es reicht 1 Block Luft über der Basis (wie Vanilla). Mindestschaden 2 Herzen (weniger, wenn es tötet). Eigener Schaden höchstens 5 Herzen (6 mit Totem), es bleiben immer 2 Herzen übrig. Die Kandidaten werden erst grob (ohne Strahlen) sortiert, genau gerechnet werden nur die besten 10.
+- **Respawn Anchor (neu, außerhalb des Nethers):** setzen → mit Glowstone laden → mit anderem Item zünden (Stärke 5). Gleiche Sicherheitsregel, und er tritt zurück, wenn er selbst zu nah steht.
+- **Schwert:** Treffer nur bei echter Reichweite (Auge → Hitbox, wie der Server prüft, nicht mehr Mittelpunkt-Abstand 3,0) und nur, wenn die Unverwundbarkeit des Gegners vorbei ist (`hurtTime`). Abstandsspiel: Beim Aufladen hält er sich am Rand der Gegner-Reichweite und tritt so heran, dass der Schlag beim Ankommen geladen ist. Er zielt mit Vorhalt auf Brusthöhe.
+- **Hängen in der Nähe:** Bei fehlender Sichtlinie, einem Gegner auf einem Absatz oder 1 s ohne Annäherung läuft er per A* (`chaseAround`), statt gegen die Wand zu drücken. Graben (`breakIn`) nur noch, wenn der Gegner an allen 4 Seiten eingemauert ist.
+- **Mace/Elytra-Mace:** Landepunkt 1,1 Blöcke neben dem Gegner statt genau darüber. Von oben ist das Zeitfenster in Reichweite bei schnellem Fall kürzer als ein Tick, deshalb gab es Fehlschläge. Seitlich bleibt der Gegner mehrere Ticks in Reichweite.
+- **Kein Reach-Hack:** Vanilla-Server würden Angriffe bis ~6 Blöcke annehmen. Der Bot bleibt bewusst bei der normalen Reichweite.
+- **Getestet:** nur Kompilieren für 26.1/26.2/26.3. Nichts im Spiel, nichts gegen echte Spieler. Das Kampf-Log (`peregrine-combat.log`) schreibt jetzt auch Schwerttreffer, Kristall- und Anchor-Schätzungen.

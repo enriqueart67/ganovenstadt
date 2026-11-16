@@ -273,6 +273,10 @@ public final class Actions {
             return current != null && current.inFight();
         }
 
+        Combat.Duel duel() {
+            return current == null ? null : current.duel();
+        }
+
         private int failedRounds;
 
         /** A step inside failed: go on with the next step, or the next round. Three failed rounds in a row end it. */

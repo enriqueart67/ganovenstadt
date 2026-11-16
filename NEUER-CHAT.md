@@ -5,10 +5,10 @@
 ---
 
 ## Projekt
-- **Repo:** `enriqueart67/ganovenstadt`, Arbeits-Branch **`claude/laughing-babbage-h788yo`** (darauf committen und pushen, keinen PR ohne Nachfrage).
+- **Repo:** `enriqueart67/ganovenstadt`, Arbeits-Branch **`claude/beautiful-hawking-m1ufrc`** (vorher `claude/laughing-babbage-h788yo`; darauf committen und pushen, keinen PR ohne Nachfrage).
 - **Peregrine Client** = eigener Minecraft-Launcher (Rust, `launcher/`) + Fabric-Client-Mod (Java, `client-mod/`) für **Minecraft 26.1, 26.2 und 26.3**.
 - **Ausführliche Doku aller Teile:** `PROJEKT-STAND.md` (Deutsch, Abschnitt „0.“ und folgende Stichpunkte – zuerst lesen).
-- **Download der fertigen Windows-.exe:** https://github.com/enriqueart67/ganovenstadt/raw/claude/laughing-babbage-h788yo/downloads/Peregrine_Client.exe
+- **Download der fertigen Windows-.exe:** https://github.com/enriqueart67/ganovenstadt/raw/claude/beautiful-hawking-m1ufrc/downloads/Peregrine_Client.exe
 
 ## Was der Nutzer will (Stil)
 - Antworten **auf Deutsch**, Texte im Launcher und in der Mod **auf Englisch**, nichts soll „nach KI aussehen“.

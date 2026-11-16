@@ -93,7 +93,7 @@ final class Guard {
     static boolean tick(Minecraft mc) {
         LocalPlayer p = mc.player;
         if (++gearTicks % 10 == 0) gear(mc); // fast, so a popped totem is replaced right away
-        boolean duel = Bot.current() instanceof Combat.Duel;
+        boolean duel = Bot.current() instanceof Combat.Duel || Bot.current() instanceof Commands.Chain ch && ch.duel() != null;
 
         // 1) lava: get out instead of giving up
         why = "getting out of lava";
@@ -129,6 +129,8 @@ final class Guard {
             mc.options.keyUse.setDown(eatTicks > 0);
             if (eatTicks > 0 && !p.isUsingItem() && eatTicks < 28) eatTicks = 0;
             if (eatTicks == 0) mc.options.keyUse.setDown(false);
+            if (Bot.current() instanceof Combat.Duel fight) fight.whileBusy(mc); // in a fight: keep moving while eating
+            else if (Bot.current() instanceof Commands.Chain c && c.duel() != null) c.duel().whileBusy(mc);
             return true;
         }
 
@@ -140,7 +142,8 @@ final class Guard {
         java.util.Set<Integer> watch = new java.util.HashSet<>();
         for (LivingEntity e : threats) if (e.distanceTo(p) < 16) watch.add(e.getId());
         if (prey != null && prey.isAlive()) watch.add(prey.getId());
-        if (Bot.current() instanceof Combat.Duel fight && fight.target() != null) watch.add(fight.target().getId());
+        Combat.Duel duelTask = Bot.current() instanceof Combat.Duel f ? f : Bot.current() instanceof Commands.Chain ch2 ? ch2.duel() : null;
+        if (duelTask != null && duelTask.target() != null) watch.add(duelTask.target().getId());
         de.peregrine.client.Modules.ENTITY_ESP.watch(watch);
 
         // look around

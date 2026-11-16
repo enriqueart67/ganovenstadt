@@ -104,6 +104,14 @@ public final class Commands {
             return cur instanceof Combat.Duel || cur instanceof Chain c && c.inFight() || cur instanceof Actions.Repeat r && r.inFight();
         }
 
+        /** The duel running right now somewhere inside this chain, or null. */
+        public Combat.Duel duel() {
+            if (cur instanceof Combat.Duel d) return d;
+            if (cur instanceof Chain c) return c.duel();
+            if (cur instanceof Actions.Repeat r) return r.duel();
+            return null;
+        }
+
         /** The current job failed: move on to the next one. False when there is none. */
         public boolean skip() {
             if (cur instanceof Actions.Repeat r && r.skip()) return true;

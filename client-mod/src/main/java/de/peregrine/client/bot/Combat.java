@@ -45,27 +45,14 @@ public final class Combat {
         return id(p.getMainHandItem()).equals(item);
     }
 
-    /**
-     * Explosion damage of an end crystal (power 6) like vanilla: (impact² + impact) / 2 · 7 · 12 + 1 with
-     * impact = 1 − distance / 12, distance to the feet (vanilla) or the body centre, whichever is closer, so it never
-     * guesses low. Full exposure (no blocks in between), no armor, no resistance – and for players the difficulty
-     * scaling (Hard ×1.5). For our own safety that is the worst case on purpose.
-     */
+    /** Damage an end crystal at {@code crystal} does to {@code e}: exposure, difficulty, armor and enchantments (see {@link Blast}). */
     static double crystalDamage(LivingEntity e, Vec3 crystal) {
-        double d = Math.min(e.position().distanceTo(crystal), e.position().add(0, e.getBbHeight() * 0.5, 0).distanceTo(crystal));
-        if (d >= 12) return 0;
-        double impact = 1 - d / 12;
-        double dmg = (impact * impact + impact) / 2 * 7 * 12 + 1;
-        if (e instanceof Player) {
-            switch (e.level().getDifficulty()) {
-                case PEACEFUL -> dmg = 0;
-                case EASY -> dmg = Math.min(dmg / 2 + 1, dmg);
-                case HARD -> dmg *= 1.5;
-                default -> {
-                }
-            }
-        }
-        return dmg;
+        return Blast.damage(e, crystal, Blast.CRYSTAL);
+    }
+
+    /** Upper bound without the ray checks – cheap, to skip spots that can't be worth it before doing the real sum. */
+    static double crystalQuick(LivingEntity e, Vec3 crystal) {
+        return Blast.damage(e, e.position(), crystal, Blast.CRYSTAL, false);
     }
 
     public static final class Duel implements Bot.Task {
@@ -248,8 +235,7 @@ public final class Combat {
 
             // ---- pick what hurts most right now: crystals, a mace jump, or the sword
             double cp = has(mc, "end_crystal") && d < 7.5 ? crystalPotential(mc, p) : 0;
-            double mp = maceStage == 0 && has(mc, "mace") && has(mc, "wind_charge") ? 14 : 0; // a smash from a wind-charge jump, rough
-            if (maceStage == 0 && cp >= 4) { // crystals in the bag and a spot that hurts: crystal fight (sword hits them up, crystals follow)
+            if (maceStage == 0 && cp >= minDamage()) { // crystals in the bag and a spot that hurts: crystal fight (sword hits them up, crystals follow)
                 if (crystal(mc, p)) {
                     if (!mode.startsWith("crystal")) mode = "crystal";
                     return false;
@@ -258,6 +244,7 @@ public final class Combat {
                 mode = "crystal · " + mode;
                 return false;
             }
+            if (maceStage == 0 && d < 6.5 && (anchorPos != null || has(mc, "respawn_anchor")) && anchor(mc, p)) return false;
             if (has(mc, "mace") && mace(mc, p, d)) {
                 mode = "mace";
                 return false;
@@ -283,6 +270,7 @@ public final class Combat {
             Vec3 eye = p.getEyePosition();
             Vec3 to = target.getEyePosition();
             if (p.hasLineOfSight(target)) return false;
+            if (!enclosed(mc)) return false; // only behind a tree or a corner: walk around (see chaseAround), don't dig
             var hit = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, to, net.minecraft.world.level.ClipContext.Block.COLLIDER,
                     net.minecraft.world.level.ClipContext.Fluid.NONE, p));
             if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) {
@@ -306,6 +294,38 @@ public final class Combat {
             mc.options.keyRight.setDown(false);
             Bot.mine(mc, b);
             return true;
+        }
+
+        /** Walled in on all four sides at body height (a box, a hole): the only way to them is through a block. */
+        private boolean enclosed(Minecraft mc) {
+            BlockPos f = target.blockPosition();
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                BlockPos n = f.relative(dir);
+                if (Bot.passable(mc, n) && Bot.passable(mc, n.above())) return false;
+            }
+            return true;
+        }
+
+        /**
+         * Called by {@link Guard} while an apple, food or a potion is being used (that takes 1.6 s and blocks hits):
+         * instead of standing still next to them it backs off facing them and strafes, so they can't land free hits.
+         */
+        void whileBusy(Minecraft mc) {
+            LocalPlayer p = mc.player;
+            if (target == null || !target.isAlive()) return;
+            double d = p.distanceTo(target);
+            Bot.look(p, target.getEyePosition());
+            if (--strafeT <= 0) {
+                strafeLeft = !strafeLeft;
+                strafeT = 6 + rnd.nextInt(8);
+            }
+            mc.options.keyUp.setDown(false);
+            mc.options.keySprint.setDown(false);
+            mc.options.keyDown.setDown(d < 6);
+            mc.options.keyLeft.setDown(strafeLeft);
+            mc.options.keyRight.setDown(!strafeLeft);
+            mc.options.keyJump.setDown(p.horizontalCollision && p.onGround());
+            mode = "eating on the move";
         }
 
         private int shieldTicks, shieldSlot = -1;
@@ -715,20 +735,76 @@ public final class Combat {
         }
 
         // ------------------------------------------------------------------ sword / axe
+        /** Where to look: chest height, a tick and a half ahead of where they are going (strafing targets). */
+        private Vec3 aimPoint() {
+            Vec3 v = target.getDeltaMovement();
+            return target.position().add(v.x * 1.5, target.getBbHeight() * 0.7, v.z * 1.5);
+        }
+
+        /** Ticks until the swing is charged enough for a full hit (0 = now). */
+        private static int ticksToCharge(LocalPlayer p) {
+            float s = p.getAttackStrengthScale(0f);
+            if (s >= 0.93f) return 0;
+            return (int) Math.ceil((0.93f - s) * p.getCurrentItemAttackStrengthDelay());
+        }
+
+        private Navigator chase;
+        private int chaseTicks, chaseStall;
+        private double chaseBest = Double.MAX_VALUE;
+
+        /**
+         * Close by but can't walk straight there – no line of sight, they stand on a ledge, or running at them gets no
+         * closer for a second (a hole, a fence, a tree in between): walk the A* route instead of pressing forward into a
+         * wall. Back to the normal fight as soon as they are in reach.
+         */
+        private boolean chaseAround(Minecraft mc, LocalPlayer p, double reach, double range) {
+            if (reach <= range + 0.4) {
+                chase = null;
+                chaseStall = 0;
+                chaseBest = reach;
+                return false;
+            }
+            if (reach < chaseBest - 0.25) {
+                chaseBest = reach;
+                chaseStall = 0;
+            } else chaseStall++;
+            boolean ledge = target.getY() - p.getY() > 1.2 && target.onGround() && p.onGround();
+            boolean blocked = !p.hasLineOfSight(target) || ledge || chaseStall > 20;
+            if (chase == null && !blocked) return false;
+            if (chase == null || ++chaseTicks > 40 || chase.goal().distSqr(target.blockPosition()) > 4) {
+                chase = new Navigator(target.blockPosition(), 2.0, null);
+                chaseTicks = 0;
+                chaseStall = 0;
+                chaseBest = reach;
+            }
+            mode = "finding a way to them";
+            if (chase.tick(mc)) chase = null;
+            return true;
+        }
+
+        /**
+         * Sword fight: hits only at real reach (eye to their hitbox, like the game checks) and only when the swing is
+         * charged and their hurt-invulnerability is over, so no swing is wasted. Between hits it keeps at the edge of
+         * their reach and steps in so that it arrives exactly when the next hit is ready – they walk into the hit
+         * instead of trading. Sprint hit + w-tap for knockback, critical hits when they are in the air or nearly dead.
+         */
         private void melee(Minecraft mc, LocalPlayer p, double d) {
             boolean shield = target.isBlocking() && Bot.count(mc, "wooden_axe", "stone_axe", "iron_axe", "golden_axe", "diamond_axe", "netherite_axe") > 0;
             if (shield) Bot.holdBest(mc, s -> id(s).endsWith("_axe") ? 10 : 0); // an axe hit disables the shield
             else Bot.holdBest(mc, Guard::weaponScore);
             mode = shield ? "axe vs shield" : "sword";
-            Vec3 aim = target.getEyePosition().subtract(0, target.getBbHeight() * 0.25, 0);
-            Bot.look(p, aim);
-            boolean ready = p.getAttackStrengthScale(0f) >= 0.93f;
+            double reach = reachTo(p, target), range = p.entityInteractionRange() - 0.08;
+            boolean spear = hotbar(mc, s -> id(s).endsWith("_spear") ? 1 : 0) >= 0; // swapped in for hits past sword reach
+            if (chaseAround(mc, p, reach, spear ? range + 1.2 : range)) return;
+            Bot.look(p, aimPoint());
+            int charge = ticksToCharge(p);
+            boolean ready = charge == 0;
             // strafe in an uneven rhythm so the opponent can't time it
             if (--strafeT <= 0) {
                 strafeLeft = !strafeLeft;
                 strafeT = 7 + rnd.nextInt(10);
             }
-            mc.options.keyLeft.setDown(strafeLeft); // with forward held below this is a diagonal run (W+A / W+D)
+            mc.options.keyLeft.setDown(strafeLeft); // with forward held this is a diagonal run (W+A / W+D)
             mc.options.keyRight.setDown(!strafeLeft);
             if (wtap > 0) { // sprint reset: let go of forward for a moment after a hit
                 wtap--;
@@ -736,27 +812,33 @@ public final class Combat {
                 mc.options.keyDown.setDown(wtap > 1);
                 return;
             }
-            mc.options.keyDown.setDown(false);
-            if (d > 3.1) { // chase – diagonally, so they can't line up a clean hit
+            if (reach > range + 1.0) { // chase – diagonally, so they can't line up a clean hit
+                mc.options.keyDown.setDown(false);
                 mc.options.keyUp.setDown(true);
                 mc.options.keySprint.setDown(true);
                 mc.options.keyJump.setDown(p.horizontalCollision && p.onGround());
                 return;
             }
-            // in range: stay at the edge of reach (diagonal steps in), hit when the swing is fully charged
-            mc.options.keyUp.setDown(d > 2.4);
-            mc.options.keySprint.setDown(true);
+            // spacing: with the swing still charging, hold just outside their reach; step in when the hit will be ready
+            // on arrival (sprinting covers ~0.28 blocks a tick)
+            boolean stepIn = reach - 0.28 * charge > range - 0.5;
+            boolean tooClose = charge > 3 && reach < 2.0;
+            mc.options.keyUp.setDown(stepIn && !tooClose);
+            mc.options.keyDown.setDown(tooClose);
+            mc.options.keySprint.setDown(!tooClose);
             boolean targetAirborne = !target.onGround();
-            boolean wantCrit = targetAirborne || target.getHealth() < 6; // crits finish, sprint hits push away
-            if (ready && wantCrit && p.onGround() && !p.isInWater()) {
+            boolean wantCrit = targetAirborne || target.getHealth() + target.getAbsorptionAmount() < 6; // crits finish, sprint hits push away
+            if (ready && wantCrit && p.onGround() && !p.isInWater() && reach <= range + 0.4) {
                 mc.options.keyJump.setDown(true);
                 return;
             }
-            mc.options.keyJump.setDown(false);
+            mc.options.keyJump.setDown(p.horizontalCollision && p.onGround() && stepIn);
             boolean falling = !p.onGround() && p.getDeltaMovement().y < -0.08;
-            boolean spear = hotbar(mc, s -> id(s).endsWith("_spear") ? 1 : 0) >= 0;
-            if (ready && (d <= 3.0 || (spear && d <= 4.3)) && (!wantCrit || falling || p.isInWater())) {
+            boolean iframes = target.hurtTime > 1; // a hit now would mostly be swallowed by their invulnerability
+            double hitRange = spear ? range + 1.2 : range;
+            if (ready && reach <= hitRange && !iframes && (!wantCrit || falling || p.isInWater() || !p.onGround() && reach > range - 0.3)) {
                 attackWithSwap(mc, p, target);
+                CombatLog.log("hit  reach " + CombatLog.f(reach) + (falling ? "  crit" : "") + "  their hp " + CombatLog.f(target.getHealth()));
                 if (!wantCrit) wtap = 3;
             }
         }
@@ -792,7 +874,16 @@ public final class Combat {
             Vec3 pred = target.position().add(tv.x * Math.min(t, 20), 0, tv.z * Math.min(t, 20));
             Vec3 v = p.getDeltaMovement();
             double carry = (1 - Math.pow(0.91, t)) / 0.09; // how far the current speed still carries
-            double ex = pred.x - (p.getX() + v.x * carry), ez = pred.z - (p.getZ() + v.z * carry);
+            // come down just beside them, not on top: straight above, a fast fall skips the short moment where they
+            // are in reach (and landing on their head ends the fall); 1.1 blocks to the side keeps them in reach for
+            // several ticks of the fall
+            Vec3 side = p.position().subtract(pred).multiply(1, 0, 1);
+            if (side.lengthSqr() < 1e-3) {
+                double ry = Math.toRadians(p.getYRot());
+                side = new Vec3(Math.sin(ry), 0, -Math.cos(ry));
+            }
+            Vec3 land = pred.add(side.normalize().scale(1.1));
+            double ex = land.x - (p.getX() + v.x * carry), ez = land.z - (p.getZ() + v.z * carry);
             float yaw = yawTo(p.position(), pred);
             p.setYRot(yaw);
             Vec3 aimAt = new Vec3(pred.x, target.getEyeY() - 0.4, pred.z);
@@ -1104,17 +1195,38 @@ public final class Combat {
         }
 
         // ------------------------------------------------------------------ crystal
-        /** Crystal damage to us (before armor, so on the safe side) must leave at least 4 hearts – and never over 6 hearts. */
-        private static boolean safeForUs(double us, float hp) {
-            return us < hp - 8 && us <= 12; // worst case still leaves 4 hearts, and never more than 6 hearts at once
+        /**
+         * Damage to us (real numbers: armor, blast protection, exposure) must leave at least 2 hearts, and one blast
+         * never takes more than 5 hearts. With a totem in the off hand a little more is fine.
+         */
+        private static boolean safeForUs(double us, float hp, boolean totem) {
+            return us < hp - 4 && us <= (totem ? 12 : 10);
+        }
+
+        private boolean safeForUs(double us, float hp) {
+            return safeForUs(us, hp, Guard.hasTotem(Minecraft.getInstance().player));
         }
 
         /** A crystal in reach of us that would go off when they hit it (or another blows up) must be safe too. */
         private boolean crystalsAroundSafe(Minecraft mc, LocalPlayer p, float hp, Vec3 extra) {
             double total = extra == null ? 0 : crystalDamage(p, extra);
             for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(12), EndCrystal::isAlive))
-                total = Math.max(total, crystalDamage(p, c.position())); // they chain-explode one at a time, the worst one counts
+                if (crystalQuick(p, c.position()) > 0) total = Math.max(total, crystalDamage(p, c.position())); // they chain-explode one at a time, the worst one counts
             return safeForUs(total, hp);
+        }
+
+        /** Smallest blast worth the time: 2 hearts – down to half a heart when it finishes them. */
+        private double minDamage() {
+            double left = target.getHealth() + target.getAbsorptionAmount();
+            return Math.min(4, Math.max(1, left));
+        }
+
+        /** Where a crystal can go on this base: the block above is air and nothing stands in the 2 blocks above it. */
+        private static boolean crystalFits(Minecraft mc, BlockPos base) {
+            BlockPos a1 = base.above();
+            if (!mc.level.getBlockState(a1).isAir()) return false;
+            AABB room = new AABB(a1.getX(), a1.getY(), a1.getZ(), a1.getX() + 1, a1.getY() + 2, a1.getZ() + 1);
+            return mc.level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, room, e -> !(e instanceof EndCrystal) || e.isAlive()).isEmpty();
         }
 
         /** The most a crystal could do to them right now (safe spots only): existing crystals, bases, or a base we could set. */
@@ -1123,112 +1235,120 @@ public final class Combat {
             Vec3 eye = p.getEyePosition();
             double best = 0;
             for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), EndCrystal::isAlive))
-                if (eye.distanceTo(c.position()) <= 4.6 && safeForUs(crystalDamage(p, c.position()), hp)) best = Math.max(best, crystalDamage(target, c.position()));
+                if (eye.distanceTo(c.position()) <= 4.6 && crystalQuick(target, c.position()) > best && safeForUs(crystalDamage(p, c.position()), hp))
+                    best = Math.max(best, crystalDamage(target, c.position()));
             BlockPos t = target.blockPosition();
             boolean obi = has(mc, "obsidian");
+            java.util.List<Spot> spots = new java.util.ArrayList<>();
             for (BlockPos b : BlockPos.betweenClosed(t.offset(-3, -2, -3), t.offset(3, 1, 3))) {
                 String bid = Bot.id(mc.level.getBlockState(b));
                 boolean base = bid.equals("obsidian") || bid.equals("bedrock");
                 int ring = Math.max(Math.abs(b.getX() - t.getX()), Math.abs(b.getZ() - t.getZ()));
-                boolean canSet = obi && !base && ring >= 2 && ring <= 3 && b.getY() >= t.getY() - 1 && b.getY() <= t.getY()
+                boolean canSet = obi && !base && ring >= 1 && ring <= 3 && b.getY() >= t.getY() - 1 && b.getY() <= t.getY()
                         && mc.level.getBlockState(b).isAir() && Bot.solid(mc, b.below());
                 if (!base && !canSet) continue;
-                BlockPos a1 = canSet ? b.above() : b.above();
-                if (!mc.level.getBlockState(a1).isAir() || eye.distanceTo(Vec3.atCenterOf(b)) > 4.5) continue;
-                Vec3 c = Vec3.atBottomCenterOf(a1);
-                if (!safeForUs(crystalDamage(p, c), hp)) continue;
-                best = Math.max(best, crystalDamage(target, c));
+                if (!mc.level.getBlockState(b.above()).isAir() || eye.distanceTo(Vec3.atCenterOf(b)) > 4.5) continue;
+                Vec3 c = Vec3.atBottomCenterOf(b.above());
+                double q = crystalQuick(target, c);
+                if (q > best) spots.add(new Spot(b.immutable(), c, q));
+            }
+            spots.sort((a, b) -> Double.compare(b.quick(), a.quick()));
+            int exact = 0;
+            for (Spot sp : spots) { // best first; the exact value is never above the quick one, so stop early
+                if (sp.quick() <= best || ++exact > 10) break;
+                double them = crystalDamage(target, sp.c());
+                if (them > best && safeForUs(crystalDamage(p, sp.c()), hp)) best = them;
             }
             return best;
+        }
+
+        /** A candidate blast spot with its cheap upper-bound damage to the target. */
+        private record Spot(BlockPos base, Vec3 c, double quick) {
         }
 
         private int sinceSwordHit = 100;
         private final java.util.Map<Integer, Integer> recentlyHit = new java.util.HashMap<>();
 
+        /**
+         * Crystal fight without waiting: every tick either breaks the best crystal or places one. Spots are rated on
+         * the real damage (their armor and blast protection, how much of them the blast can see), so it finds spots
+         * that pay against netherite instead of skipping them on a worst-case guess. Breaking comes before placing.
+         */
         private boolean crystal(Minecraft mc, LocalPlayer p) {
             float hp = p.getHealth() + p.getAbsorptionAmount();
             Vec3 eye = p.getEyePosition();
-            // 0) hit them up first: a sprint hit with the sword knocks them into the air, then the crystal goes off
-            //    under them while they can't move away
-            double dd = p.distanceTo(target);
-            boolean knockedUp = !target.onGround() || sinceSwordHit < 15; // in the air, or we just hit them
-            if (!knockedUp && (dd > 3.0 || p.getAttackStrengthScale(0f) < 0.9f || !p.hasLineOfSight(target))) {
-                mode = "crystal · waiting to hit them up";
-                return false; // first get close and hit them up (the sword fight moves in and hits)
-            }
-            if (!knockedUp) {
-                Bot.holdBest(mc, Guard::weaponScore);
-                Bot.look(p, target.getEyePosition().subtract(0, target.getBbHeight() * 0.3, 0));
-                mc.options.keySprint.setDown(true);
-                mc.options.keyUp.setDown(true);
-                attackWithSwap(mc, p, target);
-                sinceSwordHit = 0;
-                mode = "crystal · hit up";
-                return true;
-            }
-            // minimum damage for a crystal to be worth it: 3 hearts – down to 0.75 hearts when they are nearly dead
-            double minDmg = target.getHealth() + target.getAbsorptionAmount() <= 8 ? 1.5 : 6;
+            double minDmg = minDamage();
             recentlyHit.entrySet().removeIf(e -> ticks - e.getValue() > 4);
-            // 1) break any crystal that hurts them more than us (breaking comes before placing)
+            // 1) break any crystal that hurts them more than us
             EndCrystal hit = null;
             double hitScore = 0;
             for (EndCrystal c : mc.level.getEntitiesOfClass(EndCrystal.class, new AABB(p.blockPosition()).inflate(6), c -> c.isAlive() && !recentlyHit.containsKey(c.getId()))) {
-                if (eye.distanceTo(c.position().add(0, 1, 0)) > 4.6) continue;
+                if (eye.distanceTo(c.getBoundingBox().getCenter()) > p.entityInteractionRange()) continue;
+                if (crystalQuick(target, c.position()) < minDmg) continue;
                 double them = crystalDamage(target, c.position()), us = crystalDamage(p, c.position());
-                if (!safeForUs(us, hp) || !crystalsAroundSafe(mc, p, hp, null)) continue; // never risk blowing ourselves up – totem or not; neighbours go off too
+                if (!safeForUs(us, hp)) continue; // never risk blowing ourselves up – totem or not
                 double score = them - us * 0.6;
                 if (them >= minDmg && score > hitScore) {
                     hitScore = score;
                     hit = c;
                 }
             }
-            if (hit != null) {
+            if (hit != null && crystalsAroundSafe(mc, p, hp, null)) { // neighbours go off too
                 if (p.hasEffect(net.minecraft.world.effect.MobEffects.WEAKNESS)) Bot.holdBest(mc, Guard::weaponScore); // a fist can't break it with weakness
                 Bot.look(p, hit.position().add(0, 0.8, 0));
                 recentlyHit.put(hit.getId(), ticks);
                 mc.gameMode.attack(p, hit);
                 Bot.swing(p);
+                mode = "crystal · break";
                 return true;
             }
-            if (crystalCd > 0) { // the next crystal comes next tick – meanwhile the sword fight goes on (no idle tick)
+            if (crystalCd > 0) { // the crystal we just set needs a tick to show up – meanwhile the sword fight goes on
                 crystalCd--;
                 return false;
             }
-            // 2) place a crystal on the best obsidian/bedrock block next to them
+            // 2) place a crystal on the best obsidian/bedrock block near them (face place included)
             BlockPos t = target.blockPosition(), best = null;
             double bestScore = 0;
+            java.util.List<Spot> spots = new java.util.ArrayList<>();
             for (BlockPos b : BlockPos.betweenClosed(t.offset(-3, -2, -3), t.offset(3, 1, 3))) {
                 String bid = Bot.id(mc.level.getBlockState(b));
                 if (!bid.equals("obsidian") && !bid.equals("bedrock")) continue;
-                BlockPos a1 = b.above(), a2 = b.above(2);
-                if (!mc.level.getBlockState(a1).isAir() || !mc.level.getBlockState(a2).isAir()) continue;
-                if (!mc.level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, new AABB(a1)).isEmpty()) continue;
                 if (eye.distanceTo(Vec3.atCenterOf(b).add(0, 0.5, 0)) > 4.5) continue;
-                Vec3 c = Vec3.atBottomCenterOf(a1);
-                if (target.getBoundingBox().intersects(new AABB(a1).expandTowards(0, 1, 0))) continue; // would sit inside them
+                Vec3 c = Vec3.atBottomCenterOf(b.above());
+                double q = crystalQuick(target, c);
+                if (q < minDmg || !crystalFits(mc, b)) continue;
                 var seen = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, Vec3.atCenterOf(b).add(0, 0.5, 0),
                         net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE, p));
                 if (seen.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK && !seen.getBlockPos().equals(b)
                         && eye.distanceTo(Vec3.atCenterOf(b)) > 3) continue; // behind a wall and not close: skip
-                double them = crystalDamage(target, c), us = crystalDamage(p, c);
-                if (!safeForUs(us, hp) || !crystalsAroundSafe(mc, p, hp, c)) continue;
+                spots.add(new Spot(b.immutable(), c, q));
+            }
+            spots.sort((a, b) -> Double.compare(b.quick(), a.quick()));
+            int exact = 0;
+            for (Spot sp : spots) {
+                if (sp.quick() <= bestScore || ++exact > 10) break;
+                double them = crystalDamage(target, sp.c());
+                if (them < minDmg || them <= bestScore) continue;
+                double us = crystalDamage(p, sp.c());
+                if (!safeForUs(us, hp)) continue;
                 double score = them - us * 0.6;
-                if (them >= minDmg && score > bestScore) {
+                if (score > bestScore) {
                     bestScore = score;
-                    best = b.immutable();
+                    best = sp.base();
                 }
             }
-            if (best != null) {
+            if (best != null && crystalsAroundSafe(mc, p, hp, Vec3.atBottomCenterOf(best.above()))) {
                 if (!Bot.holdBest(mc, s -> id(s).equals("end_crystal") ? 1 : 0)) return false;
                 if (!holding(p, "end_crystal")) return true;
                 Bot.look(p, Vec3.atCenterOf(best).add(0, 0.5, 0));
                 mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(best).add(0, 0.5, 0), Direction.UP, best, false));
                 Bot.swing(p);
                 crystalCd = 1;
+                mode = "crystal · place";
+                CombatLog.log("crystal  their est. " + CombatLog.f(crystalDamage(target, Vec3.atBottomCenterOf(best.above()))) + "  ours " + CombatLog.f(crystalDamage(p, Vec3.atBottomCenterOf(best.above()))));
                 return true;
             }
-            // 3) no spot: one obsidian base two blocks from them on our side – never right next to them (that would
-            //    only wall them in), and at most two bases every 10 s
+            // 3) no spot: one obsidian base next to them on our side, at most two bases every 10 s
             if (!has(mc, "obsidian")) return false;
             if (++obiWindow > 200) {
                 obiWindow = 0;
@@ -1236,29 +1356,143 @@ public final class Combat {
             }
             if (obiPlaced >= 2) return false;
             Vec3 toUs = p.position().subtract(target.position()).multiply(1, 0, 1);
-            java.util.List<BlockPos> spots = new java.util.ArrayList<>();
+            BlockPos spotBest = null;
+            double spotScore = 0;
             for (int dx = -2; dx <= 2; dx++)
-                for (int dz = -2; dz <= 2; dz++)
-                    if (Math.max(Math.abs(dx), Math.abs(dz)) == 2) spots.add(t.offset(dx, 0, dz));
-            spots.sort(java.util.Comparator.comparingDouble(b -> -(toUs.x * (b.getX() - t.getX()) + toUs.z * (b.getZ() - t.getZ()))));
-            for (BlockPos spot : spots) {
-                if (!mc.level.getBlockState(spot).isAir() || !mc.level.getBlockState(spot.above()).isAir()) continue;
-                if (!Bot.solid(mc, spot.below())) continue;
-                if (spot.equals(p.blockPosition()) || spot.equals(p.blockPosition().above())) continue;
-                if (eye.distanceTo(Vec3.atCenterOf(spot)) > 4.5) continue;
-                if (!mc.level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, new AABB(spot)).isEmpty()) continue;
-                if (!Bot.holdBest(mc, s -> id(s).equals("obsidian") ? 1 : 0)) return false;
-                if (!holding(p, "obsidian")) return true;
-                BlockPos floor = spot.below();
-                Bot.look(p, Vec3.atCenterOf(floor).add(0, 0.5, 0));
-                mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false));
+                for (int dz = -2; dz <= 2; dz++) {
+                    int ring = Math.max(Math.abs(dx), Math.abs(dz));
+                    if (ring == 0) continue;
+                    for (int dy = -1; dy <= 0; dy++) {
+                        BlockPos spot = t.offset(dx, dy, dz);
+                        if (!mc.level.getBlockState(spot).isAir() || !mc.level.getBlockState(spot.above()).isAir()) continue;
+                        if (!Bot.solid(mc, spot.below())) continue;
+                        if (new AABB(spot).intersects(p.getBoundingBox()) || new AABB(spot).intersects(target.getBoundingBox())) continue;
+                        if (eye.distanceTo(Vec3.atCenterOf(spot)) > 4.5) continue;
+                        if (!mc.level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, new AABB(spot)).isEmpty()) continue;
+                        Vec3 c = Vec3.atBottomCenterOf(spot.above());
+                        double them = crystalQuick(target, c);
+                        if (them < minDmg) continue;
+                        double score = them + 0.2 * (toUs.x * dx + toUs.z * dz) / Math.max(0.1, toUs.length()); // our side first
+                        if (score > spotScore && safeForUs(crystalQuick(p, c) * 0.8, hp)) {
+                            spotScore = score;
+                            spotBest = spot;
+                        }
+                    }
+                }
+            if (spotBest == null) return false;
+            if (!Bot.holdBest(mc, s -> id(s).equals("obsidian") ? 1 : 0)) return false;
+            if (!holding(p, "obsidian")) return true;
+            BlockPos floor = spotBest.below();
+            Bot.look(p, Vec3.atCenterOf(floor).add(0, 0.5, 0));
+            mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false));
+            Bot.swing(p);
+            crystalCd = 1;
+            obiPlaced++;
+            mode = "crystal · obsidian base";
+            return true;
+        }
+
+        // ------------------------------------------------------------------ respawn anchor
+        private BlockPos anchorPos;
+        private int anchorTicks, anchorCd;
+
+        /**
+         * Respawn anchor outside the Nether: place it next to them, charge it with glowstone, then use it with anything
+         * else in hand – it blows up (power 5). Same damage model and safety rule as the crystals.
+         */
+        private boolean anchor(Minecraft mc, LocalPlayer p) {
+            if (anchorCd > 0) anchorCd--;
+            if (mc.level.dimension() == net.minecraft.world.level.Level.NETHER) return false; // there it only sets the spawn
+            if (!has(mc, "glowstone")) return false;
+            float hp = p.getHealth() + p.getAbsorptionAmount();
+            Vec3 eye = p.getEyePosition();
+            if (anchorPos != null) {
+                var st = mc.level.getBlockState(anchorPos);
+                Vec3 c = Vec3.atCenterOf(anchorPos);
+                if (!Bot.id(st).equals("respawn_anchor") || ++anchorTicks > 40 || eye.distanceTo(c) > 4.5) {
+                    if (anchorTicks > 40 || !Bot.id(st).equals("respawn_anchor")) anchorPos = null;
+                    return false;
+                }
+                BlockHitResult face = new BlockHitResult(c.add(0, 0.5, 0), Direction.UP, anchorPos, false);
+                mc.options.keyShift.setDown(false); // sneaking would place the item instead
+                if (st.getValue(net.minecraft.world.level.block.RespawnAnchorBlock.CHARGE) == 0) {
+                    if (!Bot.holdBest(mc, s -> id(s).equals("glowstone") ? 1 : 0)) return false;
+                    if (!holding(p, "glowstone")) return true;
+                    Bot.look(p, c);
+                    mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, face);
+                    Bot.swing(p);
+                    mode = "anchor · charge";
+                    return true;
+                }
+                double them = Blast.damage(target, target.position(), c, Blast.ANCHOR, true, anchorPos);
+                double us = Blast.damage(p, p.position(), c, Blast.ANCHOR, true, anchorPos);
+                if (!safeForUs(us, hp)) { // too close to it ourselves: step back first
+                    Guard.backOff(mc, p, c);
+                    mode = "anchor · stepping back";
+                    return true;
+                }
+                if (them < minDamage()) return false; // they moved off: keep it for later
+                if (holding(p, "glowstone") || holding(p, "respawn_anchor")) { // anything else in hand sets it off
+                    var inv = p.getInventory();
+                    for (int i = 0; i < 9; i++) {
+                        String hid = id(inv.getItem(i));
+                        if (!hid.equals("glowstone") && !hid.equals("respawn_anchor")) {
+                            inv.setSelectedSlot(i);
+                            break;
+                        }
+                    }
+                    if (holding(p, "glowstone")) return false;
+                }
+                Bot.look(p, c);
+                mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, face);
                 Bot.swing(p);
-                crystalCd = 1;
-                obiPlaced++;
-                mode = "crystal · obsidian base";
+                CombatLog.log("anchor  their est. " + CombatLog.f(them) + "  ours " + CombatLog.f(us));
+                anchorPos = null;
+                anchorCd = 3;
+                mode = "anchor · boom";
                 return true;
             }
-            return false;
+            if (anchorCd > 0 || !has(mc, "respawn_anchor")) return false;
+            double minDmg = minDamage();
+            BlockPos t = target.blockPosition(), best = null;
+            double bestScore = 0;
+            java.util.List<Spot> cands = new java.util.ArrayList<>();
+            for (BlockPos b : BlockPos.betweenClosed(t.offset(-2, -1, -2), t.offset(2, 2, 2))) {
+                if (!mc.level.getBlockState(b).isAir() || !Bot.solid(mc, b.below())) continue;
+                AABB box = new AABB(b);
+                if (box.intersects(p.getBoundingBox()) || box.intersects(target.getBoundingBox())) continue;
+                if (!mc.level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, box).isEmpty()) continue;
+                Vec3 c = Vec3.atCenterOf(b);
+                if (eye.distanceTo(c) > 4.5) continue;
+                double quick = Blast.damage(target, target.position(), c, Blast.ANCHOR, false);
+                if (quick >= minDmg) cands.add(new Spot(b.immutable(), c, quick));
+            }
+            cands.sort((a, b) -> Double.compare(b.quick(), a.quick()));
+            int exact = 0;
+            for (Spot sp : cands) {
+                if (sp.quick() <= bestScore || ++exact > 8) break;
+                double them = Blast.damage(target, target.position(), sp.c(), Blast.ANCHOR, true, sp.base());
+                if (them < minDmg) continue;
+                double us = Blast.damage(p, p.position(), sp.c(), Blast.ANCHOR, true, sp.base());
+                if (!safeForUs(us, hp)) continue;
+                double score = them - us * 0.6;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = sp.base();
+                }
+            }
+            if (best == null) return false;
+            if (!Bot.holdBest(mc, s -> id(s).equals("respawn_anchor") ? 1 : 0)) return false;
+            if (!holding(p, "respawn_anchor")) return true;
+            BlockPos floor = best.below();
+            Bot.look(p, Vec3.atCenterOf(floor).add(0, 0.5, 0));
+            mc.options.keyShift.setDown(false);
+            mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false));
+            Bot.swing(p);
+            anchorPos = best;
+            anchorTicks = 0;
+            mode = "anchor · place";
+            return true;
         }
     }
 }
