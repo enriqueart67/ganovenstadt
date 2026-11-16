@@ -133,9 +133,11 @@ public final class Combat {
                 targetName = target.getName().getString();
                 CombatLog.start("target " + targetName + ", mace " + has(mc, "mace") + ", wind charges " + Bot.count(mc, "wind_charge")
                         + ", crystals " + Bot.count(mc, "end_crystal") + ", obsidian " + Bot.count(mc, "obsidian") + ", totems " + Bot.count(mc, "totem_of_undying")
-                        + ", golden apples " + Bot.count(mc, "golden_apple", "enchanted_golden_apple") + ", elytra " + has(mc, "elytra") + ", rockets " + Bot.count(mc, "firework_rocket"));
+                        + ", golden apples " + Bot.count(mc, "golden_apple", "enchanted_golden_apple") + ", elytra " + has(mc, "elytra") + ", rockets " + Bot.count(mc, "firework_rocket")
+                        + ", tnt carts " + Bot.count(mc, "tnt_minecart") + ", rails " + Bot.count(mc, RAILS) + ", flame bow " + (flameBow(mc) >= 0) + ", arrows " + Bot.count(mc, "arrow", "spectral_arrow", "tipped_arrow"));
                 Bot.say("Target: " + targetName + "." + (Bot.count(mc, "totem_of_undying") > 0 || Guard.hasTotem(p) ? " Totem in the off hand." : " No totem – careful.")
-                        + (Bot.count(mc, "end_crystal") > 0 ? " Crystals ready." : "") + (Bot.count(mc, "mace") > 0 ? " Mace ready." : ""));
+                        + (Bot.count(mc, "end_crystal") > 0 ? " Crystals ready." : "") + (Bot.count(mc, "mace") > 0 ? " Mace ready." : "")
+                        + (cartKit(mc) && flameBow(mc) >= 0 ? " Carts ready." : Bot.count(mc, "tnt_minecart") > 0 ? " Carts need rails, a Flame bow and arrows." : ""));
             }
             double d = p.distanceTo(target);
             if (restoreSlot >= 0) { // back to the weapon after a lunge
@@ -246,6 +248,7 @@ public final class Combat {
                 return false;
             }
             if (maceStage == 0 && d < 6.5 && (anchorPos != null || has(mc, "respawn_anchor")) && anchor(mc, p)) return false;
+            if (maceStage == 0 && d < 7 && (railPos != null || cartKit(mc)) && cart(mc, p)) return false;
             if (has(mc, "mace") && mace(mc, p, d)) {
                 mode = "mace";
                 return false;
@@ -1670,6 +1673,168 @@ public final class Combat {
             anchorTicks = 0;
             mode = "anchor · place";
             return true;
+        }
+
+        // ------------------------------------------------------------------ cart PvP (TNT minecart)
+        private BlockPos railPos;
+        private int cartStage, cartTicks, cartCd, cartsPlaced, drawTicks;
+        private static final String[] RAILS = {"rail", "powered_rail", "detector_rail"}; // no activator rail: it would set the cart off unseen
+
+        private static boolean isRail(String id) {
+            for (String r : RAILS) if (r.equals(id)) return true;
+            return false;
+        }
+
+        private int flameBow(Minecraft mc) {
+            return hotbar(mc, s -> id(s).equals("bow") && Blast.level(s, "flame") > 0 ? 1 + Blast.level(s, "power") * 0.1 : 0);
+        }
+
+        private static boolean hasArrows(Minecraft mc) {
+            return Bot.count(mc, "arrow", "spectral_arrow", "tipped_arrow") > 0;
+        }
+
+        /** Rails, TNT minecarts, a Flame bow and arrows – everything cart PvP needs. */
+        private boolean cartKit(Minecraft mc) {
+            return cartCd == 0 && has(mc, "tnt_minecart") && Bot.count(mc, RAILS) > 0 && hasArrows(mc)
+                    && Bot.count(mc, "bow") > 0 && mc.player.getInventory().getSelectedSlot() >= 0;
+        }
+
+        /** Our TNT minecarts on the rail (or just next to it). */
+        private java.util.List<net.minecraft.world.entity.Entity> cartsAt(Minecraft mc, BlockPos rail) {
+            return mc.level.getEntities((net.minecraft.world.entity.Entity) null, new AABB(rail).inflate(1.0),
+                    e -> e.isAlive() && BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath().equals("tnt_minecart"));
+        }
+
+        /**
+         * Cart PvP: a rail right under (or next to) them, one or two TNT minecarts on it, then a Flame arrow into the
+         * cart – a burning arrow sets a TNT minecart off on the spot (power 4, checked in the 26.2 code). The spot is
+         * rated with the same damage model as the crystals (their armor, blast protection, exposure) and must be safe
+         * for us; while the bow draws it steps back. Rails go into their feet block too – a rail has no collision.
+         */
+        private boolean cart(Minecraft mc, LocalPlayer p) {
+            if (cartCd > 0) cartCd--;
+            float hp = p.getHealth() + p.getAbsorptionAmount();
+            Vec3 eye = p.getEyePosition();
+            double minDmg = minDamage();
+            if (railPos == null) {
+                if (!cartKit(mc) || flameBow(mc) < 0) return false;
+                BlockPos t = target.blockPosition(), best = null;
+                double bestScore = 0;
+                for (BlockPos b : BlockPos.betweenClosed(t.offset(-1, -1, -1), t.offset(1, 0, 1))) {
+                    var st = mc.level.getBlockState(b);
+                    boolean rail = isRail(Bot.id(st));
+                    if (!rail && !st.isAir() || !Bot.solid(mc, b.below())) continue;
+                    if (new AABB(b).intersects(p.getBoundingBox())) continue; // not under ourselves
+                    if (eye.distanceTo(Vec3.atCenterOf(b)) > 4.4) continue;
+                    Vec3 c = Vec3.atBottomCenterOf(b).add(0, 0.35, 0);
+                    double them = Blast.damage(target, c, 4f);
+                    if (them < minDmg) continue;
+                    double us = Blast.damage(p, p.position(), c, 4.5f, true);
+                    if (!safeForUs(us, hp)) continue;
+                    double score = them - us * 0.6 + (rail ? 1 : 0);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        best = b.immutable();
+                    }
+                }
+                if (best == null) return false;
+                railPos = best;
+                cartStage = isRail(Bot.id(mc.level.getBlockState(best))) ? 1 : 0;
+                cartTicks = cartsPlaced = drawTicks = 0;
+                CombatLog.log("cart: rail spot " + best.toShortString() + "  their est. " + CombatLog.f(bestScore));
+            }
+            if (++cartTicks > 80 || !target.isAlive()) return endCart(mc, p, "timed out");
+            Vec3 c = Vec3.atBottomCenterOf(railPos).add(0, 0.35, 0);
+            if (eye.distanceTo(Vec3.atCenterOf(railPos)) > 5.5 && cartStage < 2) return endCart(mc, p, "too far");
+            mc.options.keyShift.setDown(false);
+            switch (cartStage) {
+                case 0 -> { // rail
+                    if (isRail(Bot.id(mc.level.getBlockState(railPos)))) {
+                        cartStage = 1;
+                        return true;
+                    }
+                    if (!Bot.holdBest(mc, s -> isRail(id(s)) ? (id(s).equals("rail") ? 2 : 1) : 0)) return endCart(mc, p, "no rails");
+                    if (!isRail(id(p.getMainHandItem()))) return true;
+                    BlockPos floor = railPos.below();
+                    Bot.look(p, Vec3.atCenterOf(floor).add(0, 0.5, 0));
+                    mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false));
+                    Bot.swing(p);
+                    mode = "cart · rail";
+                }
+                case 1 -> { // carts on the rail – two if there are, the second one hits through the first one's i-frames rarely, but doubles the chance
+                    if (Blast.damage(target, c, 4f) < minDmg) return endCart(mc, p, "they moved off the rail");
+                    int want = Math.min(2, Bot.count(mc, "tnt_minecart") + cartsPlaced);
+                    if (cartsPlaced >= want || cartsPlaced > 0 && !has(mc, "tnt_minecart")) {
+                        if (!cartsAt(mc, railPos).isEmpty()) {
+                            cartStage = 2;
+                            drawTicks = 0;
+                        } else if (cartTicks > 30) return endCart(mc, p, "carts didn't show up");
+                        return true;
+                    }
+                    if (!Bot.holdBest(mc, s -> id(s).equals("tnt_minecart") ? 1 : 0)) return endCart(mc, p, "no carts");
+                    if (!holding(p, "tnt_minecart")) return true;
+                    Bot.look(p, Vec3.atCenterOf(railPos));
+                    mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atBottomCenterOf(railPos).add(0, 0.1, 0), Direction.UP, railPos, false));
+                    Bot.swing(p);
+                    cartsPlaced++;
+                    mode = "cart · minecart " + cartsPlaced;
+                }
+                case 2 -> { // flame arrow into the cart
+                    var carts = cartsAt(mc, railPos);
+                    if (carts.isEmpty()) return endCart(mc, p, "boom");
+                    Vec3 aim = carts.get(0).getBoundingBox().getCenter();
+                    double us = Blast.damage(p, p.position(), aim, 4.5f, true);
+                    // aim straight at it every tick: the server shoots with the rotation of the last movement packet
+                    float yaw = yawTo(eye, aim);
+                    float pitch = (float) -Math.toDegrees(Math.atan2(aim.y - eye.y, Math.hypot(aim.x - eye.x, aim.z - eye.z)));
+                    p.setYRot(yaw);
+                    p.setXRot(pitch);
+                    p.setYHeadRot(yaw);
+                    // step back while drawing (moving slowly with a bow), so the blast hits them, not us
+                    mc.options.keyUp.setDown(false);
+                    mc.options.keySprint.setDown(false);
+                    mc.options.keyDown.setDown(eye.distanceTo(aim) < 3.2);
+                    int bow = flameBow(mc);
+                    if (bow < 0 || !hasArrows(mc)) return endCart(mc, p, "no flame bow or arrows");
+                    p.getInventory().setSelectedSlot(bow);
+                    if (!p.isUsingItem()) {
+                        mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+                        mc.options.keyUse.setDown(true);
+                        drawTicks = 0;
+                    } else drawTicks++;
+                    mode = "cart · drawing";
+                    if (drawTicks >= 4 && safeForUs(us, hp)) { // a short draw is plenty at this distance
+                        mc.options.keyUse.setDown(false);
+                        mc.gameMode.releaseUsingItem(p);
+                        CombatLog.log("cart: flame arrow  distance " + CombatLog.f(eye.distanceTo(aim)) + "  their est. " + CombatLog.f(Blast.damage(target, aim, 4f))
+                                + "  ours " + CombatLog.f(us));
+                        cartStage = 3;
+                        drawTicks = 0;
+                    }
+                }
+                default -> { // wait for the blast; missed: draw again
+                    mc.options.keyDown.setDown(false);
+                    if (cartsAt(mc, railPos).isEmpty()) return endCart(mc, p, "boom");
+                    if (++drawTicks > 12) {
+                        cartStage = 2;
+                        drawTicks = 0;
+                        CombatLog.log("cart: arrow missed, again");
+                    }
+                }
+            }
+            return true;
+        }
+
+        private boolean endCart(Minecraft mc, LocalPlayer p, String why) {
+            CombatLog.log("cart: " + why);
+            if (p.isUsingItem() && id(p.getMainHandItem()).equals("bow")) mc.gameMode.releaseUsingItem(p);
+            mc.options.keyUse.setDown(false);
+            mc.options.keyDown.setDown(false);
+            railPos = null;
+            cartStage = 0;
+            cartCd = why.equals("boom") ? 2 : 30;
+            if (why.equals("boom")) mode = "cart · boom";
+            return false;
         }
     }
 }
