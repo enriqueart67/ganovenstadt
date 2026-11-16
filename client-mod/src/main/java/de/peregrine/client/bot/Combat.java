@@ -114,6 +114,12 @@ public final class Combat {
             LocalPlayer p = mc.player;
             ticks++;
             sinceSwordHit++;
+            if (cartCd > 0) cartCd--; // counted here: cartKit() needs it at 0 before cart() is ever called again
+            if (!mode.equals(loggedMode) && ticks - loggedAt >= 4) { // what it is doing, for tuning
+                CombatLog.log("mode " + mode + (target != null ? "  dist " + CombatLog.f(p.distanceTo(target)) : ""));
+                loggedMode = mode;
+                loggedAt = ticks;
+            }
             if (target == null || !target.isAlive() || target.isRemoved()) {
                 if (hadTarget && target != null && !target.isAlive()) {
                     Bot.say("Won – " + targetName + " is down.");
@@ -221,6 +227,9 @@ public final class Combat {
                 }
             }
 
+            // ---- a cart attack under way (rail, carts, backing off, the shot) is finished first
+            if (railPos != null && cart(mc, p)) return false;
+
             // ---- special moves (pearls, wind charges, lunge)
             if (techniques(mc, p, d)) return false;
 
@@ -261,7 +270,7 @@ public final class Combat {
                 return false;
             }
             if (maceStage == 0 && d < 6.5 && (anchorPos != null || has(mc, "respawn_anchor")) && anchor(mc, p)) return false;
-            if (maceStage == 0 && d < 7 && (railPos != null || cartKit(mc)) && cart(mc, p)) return false;
+            if (maceStage == 0 && d < 7 && railPos == null && cartKit(mc) && cart(mc, p)) return false;
             if (has(mc, "mace") && mace(mc, p, d)) {
                 mode = "mace";
                 return false;
@@ -833,6 +842,8 @@ public final class Combat {
         }
 
         // combo: hits in a row on them without a hit back
+        private String loggedMode = "";
+        private int loggedAt;
         private int lastHitOnUs = -1000, comboHits, lastSwingTick = -1000, lastLandedTick = -1000, jumpReset, targetHurtSeen;
 
         /** We are on a run: our last hit landed within 1.5 s and they have not hit us since. */
@@ -1745,7 +1756,70 @@ public final class Combat {
 
         // ------------------------------------------------------------------ cart PvP (TNT minecart)
         private BlockPos railPos;
-        private int cartStage, cartTicks, cartCd, cartsPlaced, drawTicks;
+        private int cartStage, cartTicks, cartCd, cartsPlaced, drawTicks, retreatTicks, missCount, blockedTicks, cartsAtShot;
+
+        /** Explosion protection points on our armor (blast protection counts double, like the damage formula). */
+        private static int blastProt(LivingEntity e) {
+            int epf = 0;
+            for (var slot : new net.minecraft.world.entity.EquipmentSlot[]{net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.entity.EquipmentSlot.CHEST,
+                    net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.FEET}) {
+                ItemStack it = e.getItemBySlot(slot);
+                epf += Blast.level(it, "protection") + 2 * Blast.level(it, "blast_protection");
+            }
+            return epf;
+        }
+
+        /** Bow charge after t ticks of drawing (vanilla BowItem.getPowerForTime). */
+        private static float bowPower(int t) {
+            float f = t / 20f;
+            f = (f * f + f * 2) / 3;
+            return Math.min(1f, f);
+        }
+
+        /**
+         * Pitch for an arrow to hit a point d blocks away horizontally and dy blocks above the bow, found by simulating the
+         * vanilla arrow (moves, then speed × 0.99 and gravity 0.05 every tick; spawns 0.1 below the eyes) and bisecting the
+         * angle. Trained: a closed-form arc without drag aimed up to 0.3 blocks low – the arrows stuck in the ground in
+         * front of the cart.
+         */
+        private static float bowPitch(double d, double dy, double v) {
+            double lo = -60, hi = 60; // degrees of elevation (up = positive)
+            for (int it = 0; it < 24; it++) {
+                double mid = (lo + hi) / 2;
+                double y = arrowHeightAt(Math.toRadians(mid), v, d);
+                if (Double.isNaN(y) || y < dy) lo = mid; else hi = mid;
+            }
+            return (float) -((lo + hi) / 2);
+        }
+
+        /** Height of the arrow (relative to the bow) when it has flown d blocks horizontally, NaN if it never gets there. */
+        private static double arrowHeightAt(double elev, double v, double d) {
+            double x = 0, y = -0.1, vx = v * Math.cos(elev), vy = v * Math.sin(elev);
+            for (int t = 0; t < 80; t++) {
+                double nx = x + vx, ny = y + vy;
+                if (nx >= d) return y + (ny - y) * (d - x) / Math.max(1e-6, nx - x);
+                x = nx;
+                y = ny;
+                vx *= 0.99;
+                vy = vy * 0.99 - 0.05;
+            }
+            return Double.NaN;
+        }
+
+        /**
+         * A point on the cart the arrow can reach without hitting the target first: the cart is wider than a player
+         * (0.98 vs 0.6), so with them standing on it the edges still stick out. Centre if the line is clear, otherwise
+         * the clearest edge, low on the cart.
+         */
+        private Vec3 cartAimPoint(Vec3 eye, AABB cart) {
+            Vec3 c = cart.getCenter();
+            AABB them = target.getBoundingBox().inflate(0.35); // arrows hit hitboxes grown by 0.3
+            double y = cart.minY + (cart.maxY - cart.minY) * 0.55; // middle: room for error both ways, never the ground
+            Vec3[] pts = {new Vec3(c.x, y, c.z), new Vec3(cart.minX + 0.08, y, c.z), new Vec3(cart.maxX - 0.08, y, c.z),
+                    new Vec3(c.x, y, cart.minZ + 0.08), new Vec3(c.x, y, cart.maxZ - 0.08), new Vec3(c.x, cart.maxY - 0.05, c.z)};
+            for (Vec3 pt : pts) if (them.clip(eye, pt).isEmpty()) return pt;
+            return null; // no clear line: move first
+        }
         private static final String[] RAILS = {"rail", "powered_rail", "detector_rail"}; // no activator rail: it would set the cart off unseen
 
         private static boolean isRail(String id) {
@@ -1780,12 +1854,25 @@ public final class Combat {
          * for us; while the bow draws it steps back. Rails go into their feet block too – a rail has no collision.
          */
         private boolean cart(Minecraft mc, LocalPlayer p) {
-            if (cartCd > 0) cartCd--;
             float hp = p.getHealth() + p.getAbsorptionAmount();
             Vec3 eye = p.getEyePosition();
             double minDmg = minDamage();
             if (railPos == null) {
-                if (!cartKit(mc) || flameBow(mc) < 0) return false;
+                if (cartCd > 0 || flameBow(mc) < 0 || !hasArrows(mc)) return false;
+                // carts already lying around them (an earlier try that timed out): shoot those first – trained: left-over
+                // carts got shoved into each other by the target and went off together next to us
+                for (var e : mc.level.getEntities((net.minecraft.world.entity.Entity) null, target.getBoundingBox().inflate(3),
+                        e -> e.isAlive() && BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath().equals("tnt_minecart"))) {
+                    if (Blast.damage(target, e.getBoundingBox().getCenter(), 4f) < minDmg) continue;
+                    railPos = e.blockPosition();
+                    cartStage = 2;
+                    cartTicks = drawTicks = retreatTicks = missCount = 0;
+                    CombatLog.log("cart: shooting a cart that is already there");
+                    break;
+                }
+            }
+            if (railPos == null) {
+                if (!cartKit(mc)) return false;
                 BlockPos t = target.blockPosition(), best = null;
                 double bestScore = 0;
                 for (BlockPos b : BlockPos.betweenClosed(t.offset(-1, -1, -1), t.offset(1, 0, 1))) {
@@ -1793,13 +1880,29 @@ public final class Combat {
                     boolean rail = isRail(Bot.id(st));
                     if (!rail && !st.isAir() || !Bot.solid(mc, b.below())) continue;
                     if (new AABB(b).intersects(p.getBoundingBox())) continue; // not under ourselves
+                    // trained: a cart shoved over an edge blew up while we were still backing off (a TNT cart goes off
+                    // when it falls 3+ blocks or crashes into a wall while moving) – only spots with ground all around
+                    boolean flat = true;
+                    for (Direction dir : Direction.Plane.HORIZONTAL) {
+                        BlockPos n = b.relative(dir);
+                        if (!Bot.solid(mc, n.below()) && Bot.passable(mc, n)) flat = false;
+                    }
+                    if (!flat) continue;
                     if (eye.distanceTo(Vec3.atCenterOf(b)) > 4.4) continue;
                     Vec3 c = Vec3.atBottomCenterOf(b).add(0, 0.35, 0);
                     double them = Blast.damage(target, c, 4f);
                     if (them < minDmg) continue;
-                    double us = Blast.damage(p, p.position(), c, 4.5f, true);
-                    if (!safeForUs(us, hp)) continue;
-                    double score = them - us * 0.6 + (rail ? 1 : 0);
+                    // we shoot from a safe distance later, so only "can we get far enough" matters here: the spot must
+                    // not be on the side we back off to. Beside them on our side keeps the cart out of their hitbox,
+                    // so the arrow hits the cart and not them.
+                    Vec3 toUs = p.position().subtract(target.position()).multiply(1, 0, 1);
+                    double side = toUs.lengthSqr() < 1e-4 ? 0 : (toUs.normalize().x * (b.getX() - t.getX()) + toUs.normalize().z * (b.getZ() - t.getZ()));
+                    boolean feet = b.getX() == t.getX() && b.getZ() == t.getZ();
+                    boolean shoved = new AABB(b).intersects(target.getBoundingBox().inflate(0.05)); // they'd push the cart around
+                    if (shoved && target.getBbWidth() > 0.9) continue; // a wide target hides the whole cart: no clear shot (trained vs. iron golem)
+                    // trained: under their feet the arrow hits them, not the cart (arrows see every hitbox 0.3 bigger,
+                    // so a player on the cart covers it); one block beside them on our side is nearly as strong
+                    double score = them + (rail ? 1 : 0) + side * 1.5 - (feet ? 8 : 0) - (shoved && !feet ? 3 : 0);
                     if (score > bestScore) {
                         bestScore = score;
                         best = b.immutable();
@@ -1808,12 +1911,12 @@ public final class Combat {
                 if (best == null) return false;
                 railPos = best;
                 cartStage = isRail(Bot.id(mc.level.getBlockState(best))) ? 1 : 0;
-                cartTicks = cartsPlaced = drawTicks = 0;
+                cartTicks = cartsPlaced = drawTicks = retreatTicks = missCount = 0;
                 CombatLog.log("cart: rail spot " + best.toShortString() + "  their est. " + CombatLog.f(bestScore));
             }
-            if (++cartTicks > 80 || !target.isAlive()) return endCart(mc, p, "timed out");
+            if (++cartTicks > 160 || !target.isAlive()) return endCart(mc, p, "timed out");
             Vec3 c = Vec3.atBottomCenterOf(railPos).add(0, 0.35, 0);
-            if (eye.distanceTo(Vec3.atCenterOf(railPos)) > 5.5 && cartStage < 2) return endCart(mc, p, "too far");
+            if (eye.distanceTo(Vec3.atCenterOf(railPos)) > 5.5 && cartStage < 2 || eye.distanceTo(Vec3.atCenterOf(railPos)) > 30) return endCart(mc, p, "too far");
             mc.options.keyShift.setDown(false);
             switch (cartStage) {
                 case 0 -> { // rail
@@ -1831,7 +1934,9 @@ public final class Combat {
                 }
                 case 1 -> { // carts on the rail – two if there are, the second one hits through the first one's i-frames rarely, but doubles the chance
                     if (Blast.damage(target, c, 4f) < minDmg) return endCart(mc, p, "they moved off the rail");
-                    int want = Math.min(2, Bot.count(mc, "tnt_minecart") + cartsPlaced);
+                    // a second cart gets thrown by the first blast and goes off much harder (power 4 + up to 7.5 with
+                    // speed) – trained: two carts killed us at 7 blocks without armor. Only with real blast protection.
+                    int want = Math.min(blastProt(p) >= 8 ? 2 : 1, Bot.count(mc, "tnt_minecart") + cartsPlaced);
                     if (cartsPlaced >= want || cartsPlaced > 0 && !has(mc, "tnt_minecart")) {
                         if (!cartsAt(mc, railPos).isEmpty()) {
                             cartStage = 2;
@@ -1847,23 +1952,70 @@ public final class Combat {
                     cartsPlaced++;
                     mode = "cart · minecart " + cartsPlaced;
                 }
-                case 2 -> { // flame arrow into the cart
+                case 2 -> { // back off to a safe distance, then a full-draw flame arrow into the cart
                     var carts = cartsAt(mc, railPos);
                     if (carts.isEmpty()) return endCart(mc, p, "boom");
-                    Vec3 aim = carts.get(0).getBoundingBox().getCenter();
-                    double us = Blast.damage(p, p.position(), aim, 4.5f, true);
-                    // aim straight at it every tick: the server shoots with the rotation of the last movement packet
-                    float yaw = yawTo(eye, aim);
-                    float pitch = (float) -Math.toDegrees(Math.atan2(aim.y - eye.y, Math.hypot(aim.x - eye.x, aim.z - eye.z)));
-                    p.setYRot(yaw);
-                    p.setXRot(pitch);
-                    p.setYHeadRot(yaw);
-                    // step back while drawing (moving slowly with a bow), so the blast hits them, not us
-                    mc.options.keyUp.setDown(false);
-                    mc.options.keySprint.setDown(false);
-                    mc.options.keyDown.setDown(eye.distanceTo(aim) < 3.2);
+                    var cartBox = carts.get(0).getBoundingBox();
+                    // the arrow's speed feeds the blast (26.2: power = 4 + random · 1.5 · min(5, arrow speed)), so a
+                    // full draw can make it 8.5 instead of 4 – trained: that killed us at 7 blocks. Safety uses the worst
+                    // case for the draw we plan at this distance; a second cart thrown by the first adds more.
+                    double aimDist = eye.distanceTo(cartBox.getCenter());
+                    int need = aimDist < 5 ? 10 : aimDist < 9 ? 15 : 20;
+                    double arrowSpeed = 3.0 * bowPower(need);
+                    float worst = (float) (4 + 1.5 * Math.min(5, arrowSpeed)) + (carts.size() >= 2 ? 3f : 0f);
+                    int cluster = mc.level.getEntities((net.minecraft.world.entity.Entity) null, cartBox.inflate(2.5),
+                            e -> e.isAlive() && BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath().equals("tnt_minecart")).size();
+                    worst = Math.min(11.5f, worst + 3f * Math.max(0, cluster - Math.max(1, carts.size()))); // more carts nearby chain off too
+                    double us = Blast.damage(p, p.position(), cartBox.getCenter(), worst, true);
                     int bow = flameBow(mc);
                     if (bow < 0 || !hasArrows(mc)) return endCart(mc, p, "no flame bow or arrows");
+                    boolean widen = missCount >= 2 && aimDist < 8; // missed twice up close: a flatter angle from further away
+                    if (p.isUsingItem() && !safeForUs(us, hp) && drawTicks >= need) {
+                        // trained: it stood there fully drawn for 8 s waiting to be safe. Switching the slot cancels the
+                        // draw without shooting – then back off again.
+                        mc.options.keyUse.setDown(false);
+                        var inv = p.getInventory();
+                        inv.setSelectedSlot(inv.getSelectedSlot() == 0 ? 1 : 0);
+                        drawTicks = 0;
+                        CombatLog.log("cart: too close while drawn – cancel, back off");
+                        return true;
+                    }
+                    if ((!safeForUs(us, hp) || widen) && !p.isUsingItem()) { // too close for a power 4 blast: run off first (sprinting, not drawing)
+                        float away = yawTo(cartBox.getCenter(), p.position());
+                        p.setYRot(away);
+                        p.setXRot(0f);
+                        mc.options.keyUp.setDown(true);
+                        mc.options.keyDown.setDown(false);
+                        mc.options.keySprint.setDown(true);
+                        mc.options.keyJump.setDown(p.horizontalCollision && p.onGround());
+                        mode = carts.get(0).getDeltaMovement().horizontalDistance() > 0.03 ? "cart · backing off (cart rolling)" : "cart · backing off";
+                        if (++retreatTicks > 90) return endCart(mc, p, "couldn't get far enough");
+                        return true;
+                    }
+                    retreatTicks = 0;
+                    mc.options.keyUp.setDown(false);
+                    mc.options.keySprint.setDown(false);
+                    mc.options.keyJump.setDown(false);
+                    mc.options.keyDown.setDown(false);
+                    Vec3 aim = cartAimPoint(eye, cartBox);
+                    if (aim == null && !p.isUsingItem() && ++blockedTicks < 30) { // they stand in the line: step sideways
+                        float side = yawTo(eye, cartBox.getCenter()) + 90f;
+                        p.setYRot(side);
+                        p.setXRot(0f);
+                        mc.options.keyUp.setDown(true);
+                        mc.options.keySprint.setDown(false);
+                        mode = "cart · stepping aside for a clear shot";
+                        return true;
+                    }
+                    if (aim == null) aim = cartBox.getCenter();
+                    blockedTicks = 0;
+                    // ballistic aim for the charge the arrow will have at release (gravity 0.05, drag 0.99)
+                    float power = bowPower(Math.max(drawTicks + 1, 1));
+                    float yaw = yawTo(eye, aim);
+                    float pitch = bowPitch(Math.hypot(aim.x - eye.x, aim.z - eye.z), aim.y - eye.y, 3.0 * Math.max(0.3f, power));
+                    p.setYRot(yaw); // every tick: the server shoots with the rotation of the last movement packet
+                    p.setXRot(pitch);
+                    p.setYHeadRot(yaw);
                     p.getInventory().setSelectedSlot(bow);
                     if (!p.isUsingItem()) {
                         mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
@@ -1871,22 +2023,34 @@ public final class Combat {
                         drawTicks = 0;
                     } else drawTicks++;
                     mode = "cart · drawing";
-                    if (drawTicks >= 4 && safeForUs(us, hp)) { // a short draw is plenty at this distance
+                    double dist = eye.distanceTo(aim);
+                    if (drawTicks >= need && safeForUs(us, hp)) {
                         mc.options.keyUse.setDown(false);
                         mc.gameMode.releaseUsingItem(p);
-                        CombatLog.log("cart: flame arrow  distance " + CombatLog.f(eye.distanceTo(aim)) + "  their est. " + CombatLog.f(Blast.damage(target, aim, 4f))
-                                + "  ours " + CombatLog.f(us));
+                        CombatLog.log("cart: flame arrow  distance " + CombatLog.f(dist) + "  draw " + drawTicks + "  pitch " + CombatLog.f(pitch)
+                                + "  power up to " + CombatLog.f(worst) + "  their est. " + CombatLog.f(Blast.damage(target, cartBox.getCenter(), (float) (4 + 0.75 * Math.min(5, arrowSpeed))))
+                                + "  ours worst " + CombatLog.f(us));
                         cartStage = 3;
                         drawTicks = 0;
+                        cartsAtShot = carts.size();
                     }
                 }
                 default -> { // wait for the blast; missed: draw again
                     mc.options.keyDown.setDown(false);
-                    if (cartsAt(mc, railPos).isEmpty()) return endCart(mc, p, "boom");
-                    if (++drawTicks > 12) {
+                    var left = cartsAt(mc, railPos);
+                    if (left.isEmpty()) return endCart(mc, p, "boom");
+                    if (left.size() < cartsAtShot) { // one went off, the other one got thrown and primed (4 s fuse)
+                        CombatLog.log("cart: boom, " + left.size() + " cart(s) left (primed by the blast) – shooting/avoiding them");
                         cartStage = 2;
                         drawTicks = 0;
-                        CombatLog.log("cart: arrow missed, again");
+                        cartsAtShot = left.size();
+                        return true;
+                    }
+                    if (++drawTicks > 25) {
+                        cartStage = 2;
+                        drawTicks = 0;
+                        missCount++;
+                        CombatLog.log("cart: arrow missed, again (" + missCount + ")");
                     }
                 }
             }
