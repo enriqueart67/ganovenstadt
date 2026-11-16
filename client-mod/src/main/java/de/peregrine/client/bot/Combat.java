@@ -179,6 +179,7 @@ public final class Combat {
             }
 
             if (p.hurtTime > 0) lastHurt = ticks;
+            if (p.hurtTime >= 9) lastHitOnUs = ticks; // the moment a hit lands, not the whole animation
 
             // ---- they walled themselves in: break the block between us
             if (d < 7 && breakIn(mc, p)) return false;
@@ -782,11 +783,55 @@ public final class Combat {
             return true;
         }
 
+        // combo: hits in a row on them without a hit back
+        private int lastHitOnUs = -1000, comboHits, lastSwingTick = -1000, lastLandedTick = -1000, jumpReset, targetHurtSeen;
+
+        /** We are on a run: our last hit landed within 1.5 s and they have not hit us since. */
+        private boolean inCombo() {
+            return comboHits > 0 && ticks - lastLandedTick < 30 && lastHitOnUs < lastLandedTick;
+        }
+
+        /** Counts a hit as landed when their hurt animation starts right after our swing. */
+        private void trackCombo() {
+            if (target.hurtTime > targetHurtSeen && target.hurtTime >= 9 && ticks - lastSwingTick <= 4) {
+                comboHits = inCombo() ? comboHits + 1 : 1;
+                lastLandedTick = ticks;
+                if (comboHits >= 2) CombatLog.log("combo x" + comboHits);
+            }
+            targetHurtSeen = target.hurtTime;
+            if (lastHitOnUs > lastLandedTick && comboHits > 0) { // they hit back: the run is over
+                if (comboHits >= 3) CombatLog.log("combo ended at " + comboHits);
+                comboHits = 0;
+            }
+        }
+
+        /**
+         * Jump reset: the moment their hit lands (our hurt animation starts) jump while running at them. The jump
+         * cancels most of the backwards push, so we stay in reach and can hit straight back instead of being comboed.
+         */
+        private boolean jumpReset(Minecraft mc, LocalPlayer p, double reach) {
+            if (p.hurtTime >= 9 && p.onGround() && !p.isInWater() && reach < 4.5 && jumpReset == 0) {
+                jumpReset = 3;
+                CombatLog.log("jump reset");
+            }
+            if (jumpReset <= 0) return false;
+            jumpReset--;
+            mc.options.keyUp.setDown(true);
+            mc.options.keyDown.setDown(false);
+            mc.options.keySprint.setDown(true);
+            mc.options.keyJump.setDown(jumpReset >= 1);
+            if (jumpReset == 0) mc.options.keyJump.setDown(false);
+            mode = "jump reset";
+            return true;
+        }
+
         /**
          * Sword fight: hits only at real reach (eye to their hitbox, like the game checks) and only when the swing is
          * charged and their hurt-invulnerability is over, so no swing is wasted. Between hits it keeps at the edge of
          * their reach and steps in so that it arrives exactly when the next hit is ready – they walk into the hit
-         * instead of trading. Sprint hit + w-tap for knockback, critical hits when they are in the air or nearly dead.
+         * instead of trading. Jump reset when they hit us. Combos: once a hit lands, it stays on them – short w-tap,
+         * full sprint after them, the next sprint hit the moment the swing is charged and they are back in reach, no
+         * crit jumps (a crit takes out the sprint knockback that keeps them helpless).
          */
         private void melee(Minecraft mc, LocalPlayer p, double d) {
             boolean shield = target.isBlocking() && Bot.count(mc, "wooden_axe", "stone_axe", "iron_axe", "golden_axe", "diamond_axe", "netherite_axe") > 0;
@@ -795,21 +840,32 @@ public final class Combat {
             mode = shield ? "axe vs shield" : "sword";
             double reach = reachTo(p, target), range = p.entityInteractionRange() - 0.08;
             boolean spear = hotbar(mc, s -> id(s).endsWith("_spear") ? 1 : 0) >= 0; // swapped in for hits past sword reach
-            if (chaseAround(mc, p, reach, spear ? range + 1.2 : range)) return;
+            trackCombo();
+            boolean combo = inCombo();
+            if (combo) mode = "combo x" + comboHits;
+            if (!combo && chaseAround(mc, p, reach, spear ? range + 1.2 : range)) return;
             Bot.look(p, aimPoint());
             int charge = ticksToCharge(p);
             boolean ready = charge == 0;
-            // strafe in an uneven rhythm so the opponent can't time it
+            double hitRange = spear ? range + 1.2 : range;
+            boolean iframes = target.hurtTime > 1; // a hit now would mostly be swallowed by their invulnerability
+            // strafe in an uneven rhythm so the opponent can't time it; in a combo straight at them (no lost speed)
             if (--strafeT <= 0) {
                 strafeLeft = !strafeLeft;
                 strafeT = 7 + rnd.nextInt(10);
             }
-            mc.options.keyLeft.setDown(strafeLeft); // with forward held this is a diagonal run (W+A / W+D)
-            mc.options.keyRight.setDown(!strafeLeft);
+            mc.options.keyLeft.setDown(!combo && strafeLeft);
+            mc.options.keyRight.setDown(!combo && !strafeLeft);
+            if (jumpReset(mc, p, reach)) {
+                // still hit back in the air if the swing is ready – that is the point of the reset
+                if (ready && reach <= hitRange && !iframes) swingAt(mc, p, reach, false);
+                return;
+            }
             if (wtap > 0) { // sprint reset: let go of forward for a moment after a hit
                 wtap--;
                 mc.options.keyUp.setDown(false);
-                mc.options.keyDown.setDown(wtap > 1);
+                mc.options.keyDown.setDown(!combo && wtap > 1); // in a combo only a tap, no step back
+                mc.options.keySprint.setDown(false);
                 return;
             }
             if (reach > range + 1.0) { // chase – diagonally, so they can't line up a clean hit
@@ -820,27 +876,29 @@ public final class Combat {
                 return;
             }
             // spacing: with the swing still charging, hold just outside their reach; step in when the hit will be ready
-            // on arrival (sprinting covers ~0.28 blocks a tick)
-            boolean stepIn = reach - 0.28 * charge > range - 0.5;
-            boolean tooClose = charge > 3 && reach < 2.0;
+            // on arrival (sprinting covers ~0.28 blocks a tick). In a combo: always after them, they are flying away
+            boolean stepIn = combo || reach - 0.28 * charge > range - 0.5;
+            boolean tooClose = !combo && charge > 3 && reach < 2.0;
             mc.options.keyUp.setDown(stepIn && !tooClose);
             mc.options.keyDown.setDown(tooClose);
             mc.options.keySprint.setDown(!tooClose);
-            boolean targetAirborne = !target.onGround();
-            boolean wantCrit = targetAirborne || target.getHealth() + target.getAbsorptionAmount() < 6; // crits finish, sprint hits push away
+            boolean finishing = target.getHealth() + target.getAbsorptionAmount() < 6;
+            boolean wantCrit = finishing || !combo && !target.onGround(); // crits finish, sprint hits keep the combo going
             if (ready && wantCrit && p.onGround() && !p.isInWater() && reach <= range + 0.4) {
                 mc.options.keyJump.setDown(true);
                 return;
             }
             mc.options.keyJump.setDown(p.horizontalCollision && p.onGround() && stepIn);
             boolean falling = !p.onGround() && p.getDeltaMovement().y < -0.08;
-            boolean iframes = target.hurtTime > 1; // a hit now would mostly be swallowed by their invulnerability
-            double hitRange = spear ? range + 1.2 : range;
-            if (ready && reach <= hitRange && !iframes && (!wantCrit || falling || p.isInWater() || !p.onGround() && reach > range - 0.3)) {
-                attackWithSwap(mc, p, target);
-                CombatLog.log("hit  reach " + CombatLog.f(reach) + (falling ? "  crit" : "") + "  their hp " + CombatLog.f(target.getHealth()));
-                if (!wantCrit) wtap = 3;
-            }
+            if (ready && reach <= hitRange && !iframes && (!wantCrit || falling || p.isInWater() || !p.onGround() && reach > range - 0.3))
+                swingAt(mc, p, reach, falling);
+            if (lastSwingTick == ticks && !wantCrit) wtap = combo ? 1 : 3;
+        }
+
+        private void swingAt(Minecraft mc, LocalPlayer p, double reach, boolean crit) {
+            attackWithSwap(mc, p, target);
+            lastSwingTick = ticks;
+            CombatLog.log("hit  reach " + CombatLog.f(reach) + (crit ? "  crit" : "") + (inCombo() ? "  combo " + comboHits : "") + "  their hp " + CombatLog.f(target.getHealth()));
         }
 
         // ------------------------------------------------------------------ mace
