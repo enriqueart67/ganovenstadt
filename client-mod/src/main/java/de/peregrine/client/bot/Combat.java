@@ -180,6 +180,19 @@ public final class Combat {
                 return false;
             }
 
+            // now and then a bite in a quiet moment (not hit for 1.5 s, room around us): food stays above 14 so sprint,
+            // lunge and regeneration keep working, and a golden apple below 7.5 hearts. Eating happens on the move.
+            boolean quiet = ticks - lastHitOnUs > 30 && d > 4.5 && maceStage == 0 && flyStage == 0 && railPos == null && anchorPos == null;
+            if (quiet && p.getFoodData().getFoodLevel() <= 14 && Guard.eatNow(mc, false)) {
+                mode = "eating in a quiet moment";
+                CombatLog.log("eat  food " + p.getFoodData().getFoodLevel() + "  hp " + CombatLog.f(hp));
+                return false;
+            }
+            if (quiet && hp < 15 && Guard.canGapple(mc, p) && Guard.eatGapple(mc)) {
+                mode = "golden apple in a quiet moment";
+                CombatLog.log("gapple  hp " + CombatLog.f(hp));
+                return false;
+            }
             if (p.hurtTime > 0) lastHurt = ticks;
             if (p.hurtTime >= 9) lastHitOnUs = ticks; // the moment a hit lands, not the whole animation
 
@@ -598,6 +611,7 @@ public final class Combat {
                 // the charge hits the ground just behind us: the blast throws us forward and up, after the pearl
                 if (quickUse(mc, p, "wind_charge", catchYaw + 180f, 68f)) {
                     mode = "pearl catch";
+                    CombatLog.log("pearl catch  wind charge after the pearl");
                     return true;
                 }
             }
@@ -640,8 +654,8 @@ public final class Combat {
             }
             // engage pearl (+ pearl catch) when they are far away and visible
             boolean catchKit = has(mc, "ender_pearl") && has(mc, "wind_charge");
-            if ((d > 14 || (catchKit && d > 9)) && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target)
-                    && calm(p, 10) && p.onGround()) {
+            if ((d > 14 || (catchKit && d > 7.5)) && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target)
+                    && (calm(p, 10) || catchKit && ticks - lastHitOnUs > 15) && p.onGround()) {
                 Vec3 t = target.position();
                 double hd = Math.hypot(t.x - eye.x, t.z - eye.z) - 2.0;
                 float pitch = pearlPitch(hd, t.y - eye.y);
@@ -961,7 +975,7 @@ public final class Combat {
          * own momentum carry us (air drag 0.91 per tick), and the rest is made up with forward/back and strafe keys –
          * so it lands on them instead of next to them. Looks at the predicted spot the whole time.
          */
-        private void airSteer(Minecraft mc, LocalPlayer p) {
+        private double[] airSteer(Minecraft mc, LocalPlayer p) {
             int t = Math.max(1, Math.min(40, ticksToFall(p)));
             Vec3 tv = target.getDeltaMovement();
             Vec3 pred = target.position().add(tv.x * Math.min(t, 20), 0, tv.z * Math.min(t, 20));
@@ -990,6 +1004,60 @@ public final class Combat {
             mc.options.keyRight.setDown(left < -0.25);
             mc.options.keySprint.setDown(fwd > 0.25);
             mc.options.keyJump.setDown(false);
+            return new double[]{ex, ez, t};
+        }
+
+        private int airLungeAim;
+        private float airLungeYaw;
+
+        /**
+         * Spear-mace lunge swap: in the air, a jab with a Lunge spear pushes us 0.46 blocks/tick per level in the look
+         * direction (horizontal only; works mid-air, not while gliding or in water, needs food 7+ – from the
+         * enchantment data). When the fall would land off target by more than the air keys can fix, it turns flat
+         * towards the gap (one tick, so the server has that rotation), jabs with the spear and swaps straight back to
+         * the mace – the smash bonus doesn't depend on the swing charge, so the jab costs nothing there.
+         * Returns true in the tick of the jab (no smash in the same tick).
+         */
+        private boolean airLunge(Minecraft mc, LocalPlayer p, double[] err) {
+            double ex = err[0], ez = err[1];
+            int t = (int) err[2];
+            double miss = Math.hypot(ex, ez);
+            if (lungeCd > 0 || p.isFallFlying() || p.isInWater() || p.getFoodData().getFoodLevel() < 7 || t < 4) {
+                airLungeAim = 0;
+                return false;
+            }
+            int slot = hotbar(mc, s -> id(s).endsWith("_spear") ? Blast.level(s, "lunge") : 0);
+            if (slot < 0) return false;
+            int lvl = Blast.level(p.getInventory().getItem(slot), "lunge");
+            double push = 0.458 * lvl * (1 - Math.pow(0.91, t)) / 0.09; // how far the impulse carries in the time left
+            double fix = 0.12 * t; // what the air keys manage on their own
+            if (airLungeAim == 0) {
+                if (miss < fix + 1.0 || push > miss + 2.5) return false; // the keys do it, or the push would overshoot
+                airLungeYaw = (float) Math.toDegrees(Math.atan2(-ex, ez));
+                airLungeAim = 1;
+                p.setYRot(airLungeYaw);
+                p.setXRot(0f);
+                p.setYHeadRot(airLungeYaw);
+                return false;
+            }
+            airLungeAim = 0;
+            p.setYRot(airLungeYaw);
+            p.setXRot(0f);
+            var inv = p.getInventory();
+            int hand = inv.getSelectedSlot();
+            inv.setSelectedSlot(slot);
+            try {
+                var m = Minecraft.class.getDeclaredMethod("startAttack");
+                m.setAccessible(true);
+                m.invoke(mc);
+            } catch (ReflectiveOperationException e) {
+                Bot.swing(p);
+            }
+            inv.setSelectedSlot(hand);
+            lungeCd = 12;
+            mode = "mace · lunge swap";
+            CombatLog.log("air lunge  miss " + CombatLog.f(miss) + "  push " + CombatLog.f(push) + "  ticks left " + t);
+            return true;
         }
 
         private int launchTick;
@@ -1033,7 +1101,7 @@ public final class Combat {
                 }
                 hotbar(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0);
                 Bot.holdBest(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0);
-                airSteer(mc, p);
+                if (airLunge(mc, p, airSteer(mc, p))) return true;
                 boolean falling = p.getDeltaMovement().y < -0.08;
                 double reach = reachTo(p, target);
                 if (falling && reach <= p.entityInteractionRange() - 0.05 && holding(p, "mace")) {
@@ -1209,7 +1277,7 @@ public final class Combat {
                     if (!p.isFallFlying() && p.onGround()) return endFlight(mc);
                 }
                 case 5 -> { // free fall onto them, steered, smash the moment they are in reach
-                    airSteer(mc, p);
+                    if (airLunge(mc, p, airSteer(mc, p))) return true;
                     Bot.holdBest(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0);
                     if (reachTo(p, target) <= p.entityInteractionRange() - 0.05 && p.getDeltaMovement().y < -0.2 && p.fallDistance > 1.5) {
                         CombatLog.log("ELYTRA SMASH  reach " + CombatLog.f(reachTo(p, target)) + "  fall " + CombatLog.f(p.fallDistance) + "  their hp " + CombatLog.f(target.getHealth()));
