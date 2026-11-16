@@ -28,6 +28,9 @@ public final class Sparring {
 
     public static final String TAG = "peregrine_sparring";
 
+    /** Last time (ms) the assistant was in a fight – the partner only fights back while a duel runs. */
+    static volatile long duelSeen;
+
     private static final class State {
         int swingCd, strafeT, eatCd, eating, totems = 4, gapples = 8, jumpCd;
         boolean left;
@@ -95,6 +98,10 @@ public final class Sparring {
             return new State();
         });
         if (target.isSpectator() || target.isCreative()) return;
+        if (System.currentTimeMillis() - duelSeen > 3000) { // no duel running: stand still and wait (trained: a partner
+            m.getMoveControl().strafe(0f, 0f);             // left in the world killed us while the world was loading)
+            return;
+        }
         if (s.swingCd > 0) s.swingCd--;
         if (s.eatCd > 0) s.eatCd--;
         if (s.jumpCd > 0) s.jumpCd--;
@@ -159,9 +166,24 @@ public final class Sparring {
         // swing like a sword player: every 12 ticks when in reach
         double reach = m.getEyePosition().distanceTo(nearest(target.getBoundingBox(), m.getEyePosition()));
         if (ready && reach <= 3.0 && m.hasLineOfSight(target)) {
-            m.swing(InteractionHand.MAIN_HAND);
+            swing(m);
             m.doHurtTarget(level, target);
             s.swingCd = 12;
+        }
+    }
+
+    /** Arm swing – the signature differs between 26.1/26.2 and 26.3, so found by name. */
+    private static void swing(Mob m) {
+        for (var meth : net.minecraft.world.entity.LivingEntity.class.getMethods()) {
+            if (!meth.getName().equals("swing") || meth.getParameterCount() == 0 || meth.getParameterTypes()[0] != InteractionHand.class) continue;
+            Object[] args = new Object[meth.getParameterCount()];
+            args[0] = InteractionHand.MAIN_HAND;
+            for (int i = 1; i < args.length; i++) args[i] = meth.getParameterTypes()[i] == boolean.class ? Boolean.TRUE : null;
+            try {
+                meth.invoke(m, args);
+                return;
+            } catch (ReflectiveOperationException | IllegalArgumentException ignored) {
+            }
         }
     }
 

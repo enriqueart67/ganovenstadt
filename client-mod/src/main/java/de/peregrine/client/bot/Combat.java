@@ -80,13 +80,14 @@ public final class Combat {
         private float lastTh = -1, lastOh = -1;
         private double dealt, taken;
         private int startTick = -1;
+        private long startMs;
         private boolean finished;
 
         /** Writes the fight summary once (won, or lost when we died). */
         void finish(String result) {
             if (finished || startTick < 0) return;
             finished = true;
-            CombatLog.summary(result + " vs " + targetName, (ticks - startTick) / 20.0, dealt, taken);
+            CombatLog.summary(result + " vs " + targetName, (System.currentTimeMillis() - startMs) / 1000.0, dealt, taken);
         }
 
         /**
@@ -162,6 +163,7 @@ public final class Combat {
             LocalPlayer p = mc.player;
             ticks++;
             sinceSwordHit++;
+            Sparring.duelSeen = System.currentTimeMillis();
             if (cartCd > 0) cartCd--; // counted here: cartKit() needs it at 0 before cart() is ever called again
             if (!mode.equals(loggedMode) && ticks - loggedAt >= 4) { // what it is doing, for tuning
                 CombatLog.log("mode " + mode + (target != null ? "  dist " + CombatLog.f(p.distanceTo(target)) : ""));
@@ -190,7 +192,17 @@ public final class Combat {
                         + ", crystals " + Bot.count(mc, "end_crystal") + ", obsidian " + Bot.count(mc, "obsidian") + ", totems " + Bot.count(mc, "totem_of_undying")
                         + ", golden apples " + Bot.count(mc, "golden_apple", "enchanted_golden_apple") + ", elytra " + has(mc, "elytra") + ", rockets " + Bot.count(mc, "firework_rocket")
                         + ", tnt carts " + Bot.count(mc, "tnt_minecart") + ", rails " + Bot.count(mc, RAILS) + ", flame bow " + (flameBow(mc) >= 0) + ", arrows " + Bot.count(mc, "arrow", "spectral_arrow", "tipped_arrow"));
-                Bot.say("Target: " + targetName + "." + (Bot.count(mc, "totem_of_undying") > 0 || Guard.hasTotem(p) ? " Totem in the off hand." : " No totem – careful.")
+                double[] ta = Blast.armor(target);
+                int tProt = 0, tBlast = 0;
+                for (var slot : new net.minecraft.world.entity.EquipmentSlot[]{net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.entity.EquipmentSlot.CHEST,
+                        net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.FEET}) {
+                    tProt += Blast.level(target.getItemBySlot(slot), "protection");
+                    tBlast += Blast.level(target.getItemBySlot(slot), "blast_protection");
+                }
+                // what they wear decides what pays: the damage model already counts armor, this is the readable version
+                CombatLog.log("profile  armor " + CombatLog.f(ta[0]) + "  toughness " + CombatLog.f(ta[1]) + "  protection " + tProt + "  blast protection " + tBlast
+                        + "  off hand " + id(target.getOffhandItem()) + "  main hand " + id(target.getMainHandItem()));
+                Bot.say("Target: " + targetName + "." + (tBlast >= 8 ? " Blast protection – explosions do little, I'll lean on mace and sword." : "") + (Bot.count(mc, "totem_of_undying") > 0 || Guard.hasTotem(p) ? " Totem in the off hand." : " No totem – careful.")
                         + (Bot.count(mc, "end_crystal") > 0 ? " Crystals ready." : "") + (Bot.count(mc, "mace") > 0 ? " Mace ready." : "")
                         + (cartKit(mc) && flameBow(mc) >= 0 ? " Carts ready." : Bot.count(mc, "tnt_minecart") > 0 ? " Carts need rails, a Flame bow and arrows." : ""));
             }
@@ -201,7 +213,10 @@ public final class Combat {
             if (lastOh >= 0 && oh < lastOh) taken += lastOh - oh;
             lastTh = th;
             lastOh = oh;
-            if (startTick < 0) startTick = ticks;
+            if (startTick < 0) {
+                startTick = ticks;
+                startMs = System.currentTimeMillis();
+            }
             if (ticks % 10 == 0) refill(mc, p);
             if (restoreSlot >= 0) { // back to the weapon after a lunge
                 p.getInventory().setSelectedSlot(restoreSlot);
@@ -1679,8 +1694,8 @@ public final class Combat {
             }
             // 3) no spot: one obsidian base next to them on our side, at most two bases every 10 s
             if (!has(mc, "obsidian")) return false;
-            if (++obiWindow > 200) {
-                obiWindow = 0;
+            if (ticks - obiWindow > 200) { // trained: this used to count calls, not time – after 4 bases it stayed locked for 15–20 s
+                obiWindow = ticks;
                 obiPlaced = 0;
             }
             if (obiPlaced >= 4) return false; // trained: 2 per 10 s left it swinging a sword on open ground most of the fight
