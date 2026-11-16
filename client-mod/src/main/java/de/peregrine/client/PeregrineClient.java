@@ -44,6 +44,7 @@ public final class PeregrineClient implements ClientModInitializer {
         entityEspKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.peregrine.entityesp", InputConstants.KEY_J, CATEGORY));
         de.peregrine.client.feature.Access.init();
         de.peregrine.client.feature.CodeLock.init();
+        de.peregrine.client.bot.Sparring.init();
         net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents.GAME.register((msg, overlay) -> {
             if (!overlay) Modules.AUTO_GG.onMessage(msg.getString());
         });

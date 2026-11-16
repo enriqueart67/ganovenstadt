@@ -223,6 +223,7 @@ public final class Bot {
         }
         LocalPlayer p = mc.player;
         if (p.isDeadOrDying()) {
+            if (task instanceof Commands.Chain c && c.duel() != null) c.duel().finish("LOST");
             stop("You died – sorry. I stopped. Respawn and ask me again.");
             return;
         }

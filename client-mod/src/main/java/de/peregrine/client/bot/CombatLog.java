@@ -27,8 +27,19 @@ public final class CombatLog {
         return (h != null ? h : net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()).resolve("peregrine-combat.log");
     }
 
+    private static final java.util.Map<String, Integer> COUNTS = new java.util.TreeMap<>();
+
+    /** One summary line at the end of a fight: result, time, damage both ways, and how often each move came up. */
+    static void summary(String result, double seconds, double dealt, double taken) {
+        StringBuilder b = new StringBuilder("RESULT " + result + "  time " + f(seconds) + " s  damage dealt " + f(dealt) + "  taken " + f(taken) + "  |");
+        COUNTS.forEach((k, v) -> b.append(' ').append(k).append('=').append(v));
+        log(b.toString());
+        de.peregrine.client.bot.Tuning.fightEnded(result, seconds, dealt, taken, COUNTS);
+    }
+
     static void start(String header) {
         lines = 0;
+        COUNTS.clear();
         try {
             Files.createDirectories(file().getParent());
             Files.writeString(file(), "# Peregrine combat log – " + header + "\n", StandardCharsets.UTF_8);
@@ -37,6 +48,8 @@ public final class CombatLog {
     }
 
     static void log(String line) {
+        String key = line.startsWith("mode ") || line.startsWith("RESULT") ? null : line.split("[ :]", 2)[0];
+        if (key != null && !key.isEmpty()) COUNTS.merge(key, 1, Integer::sum);
         if (++lines > 4000) return;
         try {
             Files.writeString(file(), LocalTime.now().format(TIME) + "  " + line + "\n", StandardCharsets.UTF_8,

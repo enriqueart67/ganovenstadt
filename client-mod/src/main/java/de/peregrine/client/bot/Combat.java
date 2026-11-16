@@ -66,7 +66,7 @@ public final class Combat {
         private Navigator nav;
         private String mode = "looking", targetName = "";
         private int ticks, lost, wtap, strafeT, crystalCd, navAge, maceStage;
-        private int restoreSlot = -1, catchIn = -1, lungeCd, pearlCd;
+        private int restoreSlot = -1, catchIn = -1, lungeCd, pearlCd, windPushCd;
         private float catchYaw;
         private int flyStage, flyTicks, rocketCd, flyCd;
         private boolean strafeLeft, hadTarget;
@@ -75,6 +75,53 @@ public final class Combat {
 
         public LivingEntity target() {
             return target;
+        }
+
+        private float lastTh = -1, lastOh = -1;
+        private double dealt, taken;
+        private int startTick = -1;
+        private boolean finished;
+
+        /** Writes the fight summary once (won, or lost when we died). */
+        void finish(String result) {
+            if (finished || startTick < 0) return;
+            finished = true;
+            CombatLog.summary(result + " vs " + targetName, (ticks - startTick) / 20.0, dealt, taken);
+        }
+
+        /**
+         * Keeps the hotbar stocked during the fight (real inventory clicks, so it works on servers): when the hotbar
+         * has run out of something the fight lives on – totems, crystals, obsidian, carts, rails, anchors, glowstone,
+         * wind charges, rockets, golden apples, pearls – one stack comes up from the main inventory into an empty
+         * hotbar slot (or a slot holding something less useful). One move every half second, never in a busy moment.
+         */
+        private void refill(Minecraft mc, LocalPlayer p) {
+            if (p.isUsingItem() || maceStage != 0 || flyStage != 0 || railPos != null && cartStage >= 10) return;
+            var inv = p.getInventory();
+            String[] need = {"end_crystal", "obsidian", "tnt_minecart", "rail", "respawn_anchor", "glowstone", "wind_charge", "firework_rocket",
+                    "golden_apple", "ender_pearl", "totem_of_undying"};
+            for (String item : need) {
+                boolean inBar = false;
+                for (int i = 0; i < 9; i++) if (id(inv.getItem(i)).equals(item)) inBar = true;
+                if (inBar) continue;
+                int from = -1;
+                for (int i = 9; i < 36; i++) if (id(inv.getItem(i)).equals(item)) from = i;
+                if (from < 0) continue;
+                int to = -1;
+                for (int i = 8; i >= 0; i--) if (inv.getItem(i).isEmpty() && i != inv.getSelectedSlot()) to = i;
+                if (to < 0) for (int i = 8; i >= 0; i--) { // something we never fight with
+                    String h = id(inv.getItem(i));
+                    if (i != inv.getSelectedSlot() && !(h.endsWith("_sword") || h.endsWith("_axe") || h.equals("mace") || h.equals("bow") || h.endsWith("_spear")
+                            || java.util.Arrays.asList(need).contains(h))) {
+                        to = i;
+                        break;
+                    }
+                }
+                if (to < 0) return;
+                Inv.toHotbar(mc, from, to);
+                CombatLog.log("refill " + item + " -> hotbar " + (to + 1));
+                return;
+            }
         }
 
         public Duel(String wanted) {
@@ -98,7 +145,8 @@ public final class Combat {
                     String n = pl.getName().getString().toLowerCase(Locale.ROOT);
                     ok = wanted == null || n.equals(wanted) || n.startsWith(wanted);
                 } else {
-                    ok = wanted != null && BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath().replace('_', ' ').startsWith(wanted.replaceAll("s$", ""));
+                    ok = wanted != null && (BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath().replace('_', ' ').startsWith(wanted.replaceAll("s$", ""))
+                            || e.hasCustomName() && e.getName().getString().toLowerCase(Locale.ROOT).startsWith(wanted)); // a named mob, e.g. the sparring partner
                 }
                 double d = e.distanceTo(p);
                 if (ok && d < bd) {
@@ -122,6 +170,7 @@ public final class Combat {
             }
             if (target == null || !target.isAlive() || target.isRemoved()) {
                 if (hadTarget && target != null && !target.isAlive()) {
+                    finish("WON");
                     Bot.say("Won – " + targetName + " is down.");
                     return true;
                 }
@@ -146,6 +195,14 @@ public final class Combat {
                         + (cartKit(mc) && flameBow(mc) >= 0 ? " Carts ready." : Bot.count(mc, "tnt_minecart") > 0 ? " Carts need rails, a Flame bow and arrows." : ""));
             }
             double d = p.distanceTo(target);
+            // damage bookkeeping for the fight summary
+            float th = target.getHealth() + target.getAbsorptionAmount(), oh = p.getHealth() + p.getAbsorptionAmount();
+            if (lastTh >= 0 && th < lastTh) dealt += lastTh - th;
+            if (lastOh >= 0 && oh < lastOh) taken += lastOh - oh;
+            lastTh = th;
+            lastOh = oh;
+            if (startTick < 0) startTick = ticks;
+            if (ticks % 10 == 0) refill(mc, p);
             if (restoreSlot >= 0) { // back to the weapon after a lunge
                 p.getInventory().setSelectedSlot(restoreSlot);
                 restoreSlot = -1;
@@ -508,7 +565,8 @@ public final class Combat {
         /** Pillars straight up (jump, block under the feet) while the target is more than 3 blocks above and close by. */
         private boolean pillar(Minecraft mc, LocalPlayer p) {
             double dy = target.getY() - p.getY(), hd = Math.hypot(target.getX() - p.getX(), target.getZ() - p.getZ());
-            if (dy < 3 || hd > 4 || wearingElytra(p) && p.isFallFlying()) {
+            // trained: a wind charge threw them up and it started building – only for someone standing up there
+            if (dy < 3 || hd > 4 || !target.onGround() || wearingElytra(p) && p.isFallFlying()) {
                 pillarY = Integer.MIN_VALUE;
                 return false;
             }
@@ -626,7 +684,8 @@ public final class Combat {
             }
             float hp = p.getHealth() + p.getAbsorptionAmount();
             // escape pearl: low, no totem, enemy close – away and up, then heal
-            if (hp < 7 && !Guard.hasTotem(p) && d < 6 && pearlCd == 0 && has(mc, "ender_pearl")) {
+            // trained: the pearl itself costs 5 HP on landing – at 2 hearts it killed us. Only with HP to spare.
+            if (hp < 11 && hp >= 7.5 && !Guard.hasTotem(p) && d < 6 && pearlCd == 0 && has(mc, "ender_pearl")) {
                 float away = yawTo(target.position(), p.position());
                 if (quickUse(mc, p, "ender_pearl", away, -28f)) {
                     pearlCd = 40;
@@ -640,10 +699,12 @@ public final class Combat {
                 }
             }
             // wind charge into their face when it gets tight (knocks them away)
-            if (hp < 9 && d < 3.2 && has(mc, "wind_charge") && target.onGround()) {
+            if (windPushCd > 0) windPushCd--;
+            if (hp < 9 && d < 3.2 && has(mc, "wind_charge") && target.onGround() && windPushCd == 0) {
                 Vec3 feet = target.position();
                 float pitch = (float) -Math.toDegrees(Math.atan2(feet.y - eye.y, Math.hypot(feet.x - eye.x, feet.z - eye.z)));
                 if (quickUse(mc, p, "wind_charge", yawTo(eye, feet), pitch)) {
+                    windPushCd = 60;
                     mode = "wind push";
                     return true;
                 }
@@ -663,7 +724,7 @@ public final class Combat {
             }
             // engage pearl (+ pearl catch) when they are far away and visible
             boolean catchKit = has(mc, "ender_pearl") && has(mc, "wind_charge");
-            if ((d > 14 || (catchKit && d > 7.5)) && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target)
+            if ((d > 14 || (catchKit && d > 7.5)) && d < 60 && pearlCd == 0 && has(mc, "ender_pearl") && p.hasLineOfSight(target) && hp >= 9
                     && (calm(p, 10) || catchKit && ticks - lastHitOnUs > 15) && p.onGround()) {
                 Vec3 t = target.position();
                 double hd = Math.hypot(t.x - eye.x, t.z - eye.z) - 2.0;
@@ -1000,7 +1061,7 @@ public final class Combat {
                 double ry = Math.toRadians(p.getYRot());
                 side = new Vec3(Math.sin(ry), 0, -Math.cos(ry));
             }
-            Vec3 land = pred.add(side.normalize().scale(1.1));
+            Vec3 land = pred.add(side.normalize().scale(Tuning.maceOffset())); // learned from hits and misses
             double ex = land.x - (p.getX() + v.x * carry), ez = land.z - (p.getZ() + v.z * carry);
             float yaw = yawTo(p.position(), pred);
             p.setYRot(yaw);
@@ -1033,7 +1094,7 @@ public final class Combat {
             double ex = err[0], ez = err[1];
             int t = (int) err[2];
             double miss = Math.hypot(ex, ez);
-            if (lungeCd > 0 || p.isFallFlying() || p.isInWater() || p.getFoodData().getFoodLevel() < 7 || t < 4) {
+            if (lungeCd > 0 || p.isFallFlying() || p.isInWater() || p.getFoodData().getFoodLevel() < 7 || t < 4 || miss > 9) { // >9: a wind-burst bounce, not a drift
                 airLungeAim = 0;
                 return false;
             }
@@ -1071,7 +1132,7 @@ public final class Combat {
             return true;
         }
 
-        private int launchTick;
+        private int launchTick, lastSmash = -1;
         private double launchFrom;
 
         private boolean mace(Minecraft mc, LocalPlayer p, double d) {
@@ -1079,11 +1140,14 @@ public final class Combat {
             double hd = Math.hypot(target.getX() - p.getX(), target.getZ() - p.getZ());
             // stage 1: on the ground – wind charge so the blast throws us up AND towards them
             boolean shieldWall = target.isBlocking() && hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0) < 0; // blocked without an axe
-            if (maceStage == 0 && charges && p.onGround() && d < 7 && d > 2.0 && ticks - lastHurt > 15 && p.getHealth() + p.getAbsorptionAmount() >= 6 && !shieldWall) {
+            // trained: "no damage for 0.75 s" never happened against someone who keeps swinging – a fresh hit 0.4 s ago is enough
+            if (maceStage == 0 && charges && p.onGround() && d < 7 && d > 2.0 && ticks - lastHitOnUs > 8 && p.getHealth() + p.getAbsorptionAmount() >= 6 && !shieldWall) {
                 float toThem = yawTo(p.position(), target.position());
                 // close: straight down. Further: the charge hits the ground behind us, the blast pushes us towards them
-                float yaw = hd <= 2.5 ? p.getYRot() : toThem + 180f;
-                float pitch = hd <= 2.5 ? 90f : (float) Math.max(55, Math.min(85, 90 - hd * 6));
+                // trained: a tilted launch lands the charge further back and lifts us only 0.3–1 block (no smash at all);
+                // straight down gives the full height, the air keys and the lunge swap do the sideways part
+                float yaw = hd <= 4 ? p.getYRot() : toThem + 180f;
+                float pitch = hd <= 4 ? 90f : (float) Math.max(70, Math.min(85, 90 - (hd - 4) * Tuning.launchTilt()));
                 if (quickUse(mc, p, "wind_charge", yaw, pitch)) {
                     maceStage = 1;
                     boosted = false;
@@ -1104,10 +1168,12 @@ public final class Combat {
                 }
             }
             // stage 2: in the air – steer onto them, mace out, smash the moment they are in reach on the way down
-            if (maceStage == 1 || p.fallDistance > 1.5) {
+            if (maceStage == 1 || p.fallDistance > 3) { // trained: crit jumps (fall 1.6–2) were taken for smashes
                 if (p.onGround() && maceStage == 1 && ticks - launchTick > 6) {
                     maceStage = 0; // landed without a hit
                     CombatLog.log("MISS  landed " + CombatLog.f(hd) + " blocks from them (launched at " + CombatLog.f(launchFrom) + ")");
+                    Tuning.mace(false, hd);
+                    if (launchFrom > 4) Tuning.launch(launchFrom, hd);
                     return false;
                 }
                 hotbar(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0);
@@ -1115,12 +1181,14 @@ public final class Combat {
                 if (airLunge(mc, p, airSteer(mc, p))) return true;
                 boolean falling = p.getDeltaMovement().y < -0.08;
                 double reach = reachTo(p, target);
-                if (falling && reach <= p.entityInteractionRange() - 0.05 && holding(p, "mace")) {
+                if (falling && reach <= p.entityInteractionRange() - 0.05 && holding(p, "mace") && p.fallDistance > 1.5 && lastSmash != ticks) {
+                    lastSmash = ticks;
                     boolean burst = enchanted(p.getMainHandItem(), "wind_burst");
                     float before = target.getHealth();
                     CombatLog.log("SMASH  reach " + CombatLog.f(reach) + "  fall " + CombatLog.f(p.fallDistance) + "  their hp " + CombatLog.f(before)
                             + (target.isBlocking() ? "  (shield up)" : ""));
                     smash(mc, p);
+                    Tuning.mace(true, 0);
                     maceStage = burst ? 1 : 0; // wind burst throws us up again: stay in the air and smash again
                     if (burst) {
                         mode = "mace · wind burst chain";
@@ -1258,7 +1326,7 @@ public final class Combat {
                     Vec3 tv = target.getDeltaMovement();
                     Vec3 tPred = t.add(tv.x * Math.min(fall, 20), 0, tv.z * Math.min(fall, 20));
                     double miss = Math.hypot(land.x - tPred.x, land.z - tPred.z);
-                    double fix = Math.min(4.0, 0.12 * fall); // what sprint + air keys can still move us on the way down
+                    double fix = Math.min(4.0, Tuning.elytraFix() * fall); // what the air keys can still move us on the way down (learned)
                     double toPred = Math.hypot(tPred.x - p.getX(), tPred.z - p.getZ());
                     float yawP = yawTo(p.position(), tPred);
                     if (miss <= fix + 0.6 && hv.length() < 1.1) {
@@ -1293,6 +1361,7 @@ public final class Combat {
                     if (reachTo(p, target) <= p.entityInteractionRange() - 0.05 && p.getDeltaMovement().y < -0.2 && p.fallDistance > 1.5) {
                         CombatLog.log("ELYTRA SMASH  reach " + CombatLog.f(reachTo(p, target)) + "  fall " + CombatLog.f(p.fallDistance) + "  their hp " + CombatLog.f(target.getHealth()));
                         smash(mc, p);
+                        Tuning.elytra(true);
                         flyStage = 6;
                         return true;
                     }
@@ -1301,6 +1370,7 @@ public final class Combat {
                     boolean hopeless = hd > 6 && airBelow(mc, p) < 12;
                     if (passed || hopeless) {
                         CombatLog.log("ELYTRA MISS  " + CombatLog.f(hd) + " blocks from them, " + airBelow(mc, p) + " blocks of air below");
+                        Tuning.elytra(false);
                         return recover(mc, p);
                     }
                     if (p.onGround()) {
@@ -1613,7 +1683,7 @@ public final class Combat {
                 obiWindow = 0;
                 obiPlaced = 0;
             }
-            if (obiPlaced >= 2) return false;
+            if (obiPlaced >= 4) return false; // trained: 2 per 10 s left it swinging a sword on open ground most of the fight
             Vec3 toUs = p.position().subtract(target.position()).multiply(1, 0, 1);
             BlockPos spotBest = null;
             double spotScore = 0;
@@ -1756,12 +1826,14 @@ public final class Combat {
 
         // ------------------------------------------------------------------ cart PvP (TNT minecart)
         private BlockPos railPos;
+        private double instaDist;
+        private int awayTicks;
         private int cartStage, cartTicks, cartCd, cartsPlaced, drawTicks, retreatTicks, missCount, blockedTicks, cartsAtShot;
 
         /** Ticks to draw for an insta-cart shot: just enough speed that the arrow gets to the spot in ~6 ticks without a high arc. */
         private static int instaDraw(Vec3 eye, Vec3 c) {
             double d = eye.distanceTo(c);
-            return d < 2.5 ? 4 : d < 3.5 ? 5 : d < 4.5 ? 6 : 7;
+            return (d < 2.5 ? 4 : d < 3.5 ? 5 : d < 4.5 ? 6 : 7) + Tuning.instaBias(d); // learned: more draw where it missed
         }
 
         /** Nothing solid between our eyes and the point (blocks only). */
@@ -1894,7 +1966,8 @@ public final class Combat {
         private boolean cart(Minecraft mc, LocalPlayer p) {
             float hp = p.getHealth() + p.getAbsorptionAmount();
             Vec3 eye = p.getEyePosition();
-            double minDmg = minDamage();
+            // a cart is worth the time from 2.5 hearts up (or when it finishes them) – armored players take little
+            double minDmg = Math.max(minDamage(), Math.min(5, target.getHealth() + target.getAbsorptionAmount()));
             if (railPos == null) {
                 if (cartCd > 0 || flameBow(mc) < 0 || !hasArrows(mc)) return false;
                 // carts already lying around them (an earlier try that timed out): shoot those first – trained: left-over
@@ -1950,9 +2023,16 @@ public final class Combat {
                     }
                 }
                 if (best == null) return false;
+                boolean insta = instaReady(mc, p, best);
+                // trained vs. the sparring partner: the slow way (place, back off, full draw) never works on someone who
+                // moves – they follow or walk off the rail. Only against a (nearly) standing target.
+                if (!insta && target.getDeltaMovement().horizontalDistance() > 0.06) {
+                    cartCd = 10;
+                    return false;
+                }
                 railPos = best;
                 cartStage = isRail(Bot.id(mc.level.getBlockState(best))) ? 1 : 0;
-                if (instaReady(mc, p, best)) cartStage = 10;
+                if (insta) cartStage = 10;
                 cartTicks = cartsPlaced = drawTicks = retreatTicks = missCount = 0;
                 CombatLog.log("cart: rail spot " + best.toShortString() + "  their est. " + CombatLog.f(bestScore));
             }
@@ -2069,6 +2149,11 @@ public final class Combat {
                     } else drawTicks++;
                     mode = "cart · drawing";
                     double dist = eye.distanceTo(aim);
+                    if (drawTicks >= need && Blast.damage(target, cartBox.getCenter(), 4f) < minDmg * 0.6) { // they left the cart: don't waste it
+                        if (++awayTicks > 20) return endCart(mc, p, "they moved off the rail");
+                        return true;
+                    }
+                    awayTicks = 0;
                     if (drawTicks >= need && safeForUs(us, hp)) {
                         mc.options.keyUse.setDown(false);
                         mc.gameMode.releaseUsingItem(p);
@@ -2133,6 +2218,7 @@ public final class Combat {
                             + "  distance " + CombatLog.f(eye.distanceTo(c)) + "  their est. " + CombatLog.f(Blast.damage(target, c, (float) (4 + 0.75 * 3 * power)))
                             + "  ours worst " + CombatLog.f(Blast.damage(p, p.position(), c, (float) (4 + 1.5 * 3 * power) + (placed > 1 ? 3f : 0f), true)));
                     mode = "insta cart";
+                    instaDist = eye.distanceTo(c);
                     cartsPlaced = placed;
                     cartsAtShot = placed;
                     drawTicks = 0;
@@ -2140,8 +2226,12 @@ public final class Combat {
                 }
                 case 11 -> { // insta: did the arrow get it? (it flies a few ticks) – if not, shoot the cart normally
                     var left = cartsAt(mc, railPos);
-                    if (left.isEmpty() && ++drawTicks > 2) return endCart(mc, p, "boom");
+                    if (left.isEmpty() && ++drawTicks > 2) {
+                        Tuning.insta(instaDist, true);
+                        return endCart(mc, p, "boom");
+                    }
                     if (++drawTicks > 16) {
+                        Tuning.insta(instaDist, false);
                         CombatLog.log("cart: insta arrow missed, shooting the cart");
                         cartStage = 2;
                         drawTicks = 0;

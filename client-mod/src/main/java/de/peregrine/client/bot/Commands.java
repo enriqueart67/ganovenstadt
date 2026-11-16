@@ -154,6 +154,7 @@ public final class Commands {
         }
         if (t.matches("(help|hilfe|\\?|was kannst du.*|what can you do.*|befehle|commands)")) return help();
         if (t.matches("(status|was machst du.*|what are you doing.*)")) return Bot.status();
+        if (t.matches("(stats|statistik|training|tuning|was hast du gelernt.*|what did you learn.*)")) return Tuning.overview();
         if (t.matches("(combat log|kampf ?log|kampfprotokoll|fight log)")) {
             java.nio.file.Path f = CombatLog.file();
             de.peregrine.client.gui.EmergencyScreen.open(f.getParent().toFile());
@@ -185,8 +186,14 @@ public final class Commands {
 
         if (mc.player == null || mc.level == null) return "Join a world first.";
         if (!Bot.allowed(mc)) return Bot.NOT_ALLOWED;
-        if (t.matches("(?:gib mir |give me |mach mir |make me |hol mir )?(?:ein |einen |a )?(?:cart ?kit|kit cart|cart pvp kit|kit|pvp kit)(?: bitte| please)?[.!]*"))
-            return Kits.cart(mc);
+        java.util.regex.Matcher kit = Pattern.compile("^(?:gib mir |give me |mach mir |make me |hol mir )?(?:ein |einen |a |das |the )?(?:(cart|crystal|kristall|anchor|mace|elytra|full|voll|alles)[ -]?(?:pvp )?kit|kit(?: (cart|crystal|kristall|anchor|mace|elytra|full|voll|alles))?|pvp kit)(?: bitte| please)?[.!]*$").matcher(t);
+        if (kit.find()) {
+            String k = kit.group(1) != null ? kit.group(1) : kit.group(2) != null ? kit.group(2) : "cart";
+            k = switch (k) { case "kristall" -> "crystal"; case "voll", "alles" -> "full"; default -> k; };
+            return Kits.give(mc, k);
+        }
+        java.util.regex.Matcher spar = Pattern.compile("^(?:spawn |hol |mach )?(?:einen |a )?(?:sparring|sparring ?partner|trainingspartner|training partner|gegner zum üben|dummy)(?: (blast|shield|schild))?[.!]*$").matcher(t);
+        if (spar.find()) return Kits.sparring(mc, spar.group(1) == null ? "" : spar.group(1).replace("schild", "shield"));
         return run(t);
     }
 
