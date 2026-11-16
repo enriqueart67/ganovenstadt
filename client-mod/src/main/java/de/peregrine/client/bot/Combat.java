@@ -677,58 +677,90 @@ public final class Combat {
             return false;
         }
 
-        /**
-         * Attribute swap: the swing is charged with the weapon in hand, and in the same tick the hotbar switches to
-         * the item whose attributes should hit (axe against a shield, mace while falling or Breach against armor),
-         * attacks, and switches straight back – the server uses the charge of the first and the stats of the second.
-         */
-        /** Rough hit damage of an item right now (base + sharpness, mace fall bonus, density, breach vs. armor). */
-        private double hitDamage(ItemStack s, LocalPlayer p, LivingEntity t, double dist) {
+        /** Attack damage attribute of an item while it is held (what the server counts as the base of a hit). */
+        private static double baseDamage(ItemStack s) {
             String id = id(s);
-            double dmg;
-            if (id.endsWith("_sword")) dmg = switch (id) {
-                case "netherite_sword" -> 8; case "diamond_sword" -> 7; case "iron_sword" -> 6; case "stone_sword" -> 5; default -> 4;
+            if (id.endsWith("_sword")) return switch (id) {
+                case "netherite_sword" -> 8; case "diamond_sword" -> 7; case "iron_sword" -> 6; case "stone_sword", "copper_sword" -> 5; default -> 4;
             };
-            else if (id.endsWith("_axe")) dmg = switch (id) {
-                case "netherite_axe" -> 10; case "diamond_axe", "iron_axe", "stone_axe" -> 9; default -> 7;
+            if (id.endsWith("_axe")) return switch (id) {
+                case "netherite_axe" -> 10; case "diamond_axe", "iron_axe", "stone_axe", "copper_axe" -> 9; default -> 7;
             };
-            else if (id.equals("mace")) {
-                double f = p.fallDistance;
-                dmg = 6 + (f <= 1.5 ? 0 : f <= 3 ? 4 * f : f <= 8 ? 12 + 2 * (f - 3) : 22 + (f - 8));
-                if (enchanted(s, "density") && f > 1.5) dmg += 1.5 * f;
-                if (enchanted(s, "breach")) dmg *= 1 + Math.min(0.4, t.getArmorValue() / 50.0);
-            } else if (id.endsWith("_spear")) dmg = switch (id) {
+            if (id.equals("mace")) return 6;
+            if (id.equals("trident")) return 9;
+            if (id.endsWith("_spear")) return switch (id) {
                 case "netherite_spear" -> 7; case "diamond_spear" -> 6; case "iron_spear" -> 5; default -> 4;
             };
-            else return 0;
-            if (dist > 3.0 && !id.endsWith("_spear")) return 0; // only the spear reaches that far
-            if (enchanted(s, "sharpness")) dmg += 2.5;
-            return dmg;
+            return 1;
         }
 
+        /** Mace smash bonus for the current fall (vanilla steps: 4/block to 3, 2/block to 8, then 1/block), plus Density. */
+        private static double maceBonus(ItemStack s, LocalPlayer p) {
+            if (!id(s).equals("mace") || p.fallDistance <= 1.5 || p.isFallFlying()) return 0;
+            double f = p.fallDistance;
+            double b = f <= 3 ? 4 * f : f <= 8 ? 12 + 2 * (f - 3) : 22 + (f - 8);
+            return b + 0.5 * Blast.level(s, "density") * f;
+        }
+
+        /**
+         * What an item adds when it is swapped in for the hit only. The server works out the base damage and the
+         * charge from the item held during the last tick (attributes update in the player tick), but the enchantments,
+         * the mace smash bonus and shield breaking from the item in hand at the moment of the hit – so the charge and
+         * base come from the fast sword, everything else from the swapped item.
+         */
+        private double swapBonus(ItemStack s, LocalPlayer p, LivingEntity t, double base, float charge) {
+            if (s.isEmpty()) return 0;
+            double b = 0;
+            int sharp = Blast.level(s, "sharpness");
+            if (sharp > 0) b += (0.5 * sharp + 0.5) * charge;
+            int fire = Blast.level(s, "fire_aspect");
+            if (fire > 0 && !t.isOnFire()) b += 2.5 * fire; // burning afterwards
+            double mace = maceBonus(s, p);
+            b += mace; // not scaled by the charge
+            int breach = Blast.level(s, "breach");
+            if (breach > 0 && id(s).equals("mace")) { // Breach: their armor counts 15 % less per level
+                double armor = Blast.armor(t)[0];
+                b += (base + mace) * Math.min(0.8, armor / 25) * 0.15 * breach;
+            }
+            return b;
+        }
+
+        /**
+         * Attribute swap: charge with the weapon in hand, and in the same tick switch the hotbar to the item whose
+         * extras should hit (axe against a raised shield, mace while falling, Sharpness / Fire Aspect / Breach), attack,
+         * and switch straight back. Picks the item that adds the most right now; against a shield the axe always wins.
+         * Past sword reach only a spear can hit.
+         */
         private void attackWithSwap(Minecraft mc, LocalPlayer p, LivingEntity t) {
             var inv = p.getInventory();
             int hand = inv.getSelectedSlot();
-            double dist = p.getEyePosition().distanceTo(t.getBoundingBox().getCenter()) - t.getBbWidth() / 2;
+            double dist = reachTo(p, t);
             if (t == target && t.isBlocking() && p.fallDistance > 1.5 && hotbar(mc, s -> id(s).equals("mace") ? 1 : 0) >= 0
                     && hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0) >= 0) {
                 smash(mc, p); // falling onto a raised shield: axe takes the shield down, the mace lands in the same tick
                 return;
             }
+            ItemStack held = inv.getItem(hand);
+            float charge = p.getAttackStrengthScale(0.5f);
+            double base = baseDamage(held) * (0.2 + charge * charge * 0.8);
             int swap = -1;
-            if (t.isBlocking()) swap = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 : 0); // shield: axe first
-            if (swap < 0) { // otherwise whatever hits hardest now – the charge comes from the fast weapon in hand
-                double handDmg = hitDamage(inv.getItem(hand), p, t, dist);
-                int best = hotbar(mc, s -> hitDamage(s, p, t, dist));
-                if (best >= 0 && hitDamage(inv.getItem(best), p, t, dist) > handDmg + 0.5) swap = best;
+            if (t.isBlocking()) swap = hotbar(mc, s -> id(s).endsWith("_axe") ? 1 + Blast.level(s, "sharpness") * 0.1 : 0); // shield: axe first
+            if (swap < 0 && dist > p.entityInteractionRange() && !id(held).endsWith("_spear"))
+                swap = hotbar(mc, s -> id(s).endsWith("_spear") ? baseDamage(s) : 0); // out of sword reach: only a spear gets there
+            if (swap < 0) {
+                double handExtra = swapBonus(held, p, t, base, charge);
+                int best = hotbar(mc, s -> swapBonus(s, p, t, base, charge));
+                if (best >= 0 && best != hand && swapBonus(inv.getItem(best), p, t, base, charge) > handExtra + 0.5) swap = best;
             }
             if (t == target) sinceSwordHit = 0; // a hit knocks them up – the crystal may follow
             if (swap >= 0 && swap != hand) {
+                String what = id(inv.getItem(swap));
                 inv.setSelectedSlot(swap);
                 mc.gameMode.attack(p, t);
                 Bot.swing(p);
                 inv.setSelectedSlot(hand);
-                mode = mode + " · swap";
+                mode = mode + " · swap " + what.replace("netherite_", "").replace("diamond_", "");
+                CombatLog.log("attribute swap  " + id(held) + " -> " + what + "  charge " + CombatLog.f(charge) + "  fall " + CombatLog.f(p.fallDistance));
             } else {
                 mc.gameMode.attack(p, t);
                 Bot.swing(p);
@@ -1049,23 +1081,48 @@ public final class Combat {
             return id(p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST)).equals("elytra");
         }
 
+        /** Blocks of free air under us (up to 40). */
+        private static int airBelow(Minecraft mc, LocalPlayer p) {
+            BlockPos b = p.blockPosition();
+            for (int i = 1; i <= 40; i++) if (!Bot.passable(mc, b.below(i))) return i - 1;
+            return 40;
+        }
+
+        private static final double FLY_ALT = 22; // height above them for the drop: ~25 fall = a 30+ damage smash
+
         /**
-         * Elytra mace, done the way it works: elytra on, take off, rockets up, then fly level until it is right above
-         * the target – there the chestplate goes back on (the elytra comes off), so it free-falls and the fall distance
-         * builds up – and the mace smash lands on the way down (stun slam against a shield). Missed and close to the
-         * ground: a wind charge under the feet takes the fall. Never flies into blocks (see {@link #steerClear}).
+         * Elytra mace:
+         * <ol>
+         *   <li>elytra on, jump, open the wings;</li>
+         *   <li>climb with rockets – nearly straight up when they are close, so it can start right in the fight;</li>
+         *   <li>at ~22 above them: fly over and brake (nose up, no rockets) until the point where a free fall would carry
+         *   us lands within what the air keys can still correct – worked out as a vector (our momentum with air drag
+         *   0.91 per tick over the real fall time against where they will be), not just "distance &lt; carry";</li>
+         *   <li>chestplate on (elytra off) → free fall, steered to land just beside them, mace smash when in reach
+         *   (stun slam against a shield);</li>
+         *   <li>missed: wings open again (elytra back on) and glide down, or a wind charge under the feet, so the fall
+         *   doesn't kill us.</li>
+         * </ol>
+         * Never flies into blocks (see {@link #steerClear}).
          */
         private boolean elytraMace(Minecraft mc, LocalPlayer p, double d) {
             if (flyCd > 0) flyCd--;
-            boolean can = has(mc, "mace") && has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"));
+            boolean can = has(mc, "mace") && has(mc, "firework_rocket") && (wearingElytra(p) || has(mc, "elytra"))
+                    && Bot.count(mc, "firework_rocket") >= 2;
             if (flyStage == 0) {
-                if (!can || flyCd > 0 || d < 9 || d > 64 || !calm(p, 9) || !mc.level.canSeeSky(p.blockPosition().above(2)) || !openAbove(mc, target)) return false;
+                // start right in the fight too: only not while their hits keep landing (taking off takes half a second)
+                boolean quiet = ticks - lastHitOnUs > 12 || d > 6;
+                if (d < 6 && has(mc, "end_crystal") && crystalPotential(mc, p) >= minDamage()) return false; // crystals hit harder right here
+                if (!can || flyCd > 0 || d > 64 || !quiet || p.getHealth() + p.getAbsorptionAmount() < 8
+                        || !mc.level.canSeeSky(p.blockPosition().above(2)) || !openAbove(mc, target) || !p.onGround()) return false;
                 flyStage = 1;
                 flyTicks = 0;
+                climbYaw = null;
+                CombatLog.log("elytra mace: take off  dist " + CombatLog.f(d));
             }
             flyTicks++;
             mode = "elytra mace";
-            if (flyTicks > 20 * 20 || !target.isAlive()) return endFlight(mc);
+            if (flyTicks > 20 * 25 || !target.isAlive()) return flyStage == 5 ? recover(mc, p) : endFlight(mc);
             if (flyStage >= 3 && flyStage <= 4 && !openAbove(mc, target)) { // they went under a roof: a dive would only hit blocks
                 flyStage = 6;
                 mode = "elytra mace · they're under cover";
@@ -1087,7 +1144,7 @@ public final class Combat {
                     mc.options.keyJump.setDown(false); // let go, so the next press opens the wings
                     flyStage = 2;
                 }
-                case 2 -> { // open the wings in the air
+                case 2 -> { // open the wings in the air (a fresh key press each time)
                     if (p.isFallFlying()) {
                         flyStage = 3;
                         rocketCd = 0;
@@ -1096,72 +1153,134 @@ public final class Combat {
                         if (p.onGround() && flyTicks > 20) return endFlight(mc);
                     }
                 }
-                case 3 -> { // climb: rockets, up to ~25 above them
+                case 3 -> { // climb
                     mc.options.keyJump.setDown(false);
-                    // close to them: nearly straight up on a fixed heading (aiming at them would loop over and back)
-                    if (hd < 15 && climbYaw == null) climbYaw = p.getYRot();
-                    float pitch = hd < 15 ? -80f : -50f;
-                    float[] aim = steerClear(mc, p, hd < 15 && climbYaw != null ? climbYaw : yawT, pitch);
+                    boolean near = hd < 14;
+                    if (near && climbYaw == null) climbYaw = p.getYRot();
+                    float[] aim = steerClear(mc, p, near && climbYaw != null ? climbYaw : yawT, near ? -82f : -40f);
                     p.setYRot(aim[0]);
                     p.setXRot(aim[1]);
-                    if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 20;
-                    if (p.getY() > t.y + 25) flyStage = 4;
+                    if (--rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 18;
+                    if (p.getY() > t.y + FLY_ALT) {
+                        flyStage = 4;
+                        CombatLog.log("elytra mace: at height " + CombatLog.f(p.getY() - t.y) + "  horizontal " + CombatLog.f(hd));
+                    }
                     if (!p.isFallFlying() && p.onGround()) return endFlight(mc);
                 }
-                case 4 -> { // level flight until right above them
-                    float pitch = p.getY() < t.y + 20 ? -15f : 5f;
-                    float[] aim = steerClear(mc, p, yawT, pitch);
-                    p.setYRot(aim[0]);
-                    p.setXRot(aim[1]);
-                    double speed = p.getDeltaMovement().horizontalDistance();
-                    if (hd > 12 && speed < 0.9 && --rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 30;
-                    // drop where the momentum carries us onto them: free fall time from here, air drag 0.91 per tick
-                    int fall = Math.max(1, ticksToFall(p));
-                    double carry = speed * (1 - Math.pow(0.91, fall)) / 0.09;
-                    Vec3 hv = p.getDeltaMovement().multiply(1, 0, 1);
-                    boolean passed = hd < 12 && hv.lengthSqr() > 0.01 && hv.dot(new Vec3(t.x - p.getX(), 0, t.z - p.getZ())) < 0;
-                    if (hd <= carry + 1.5 || passed) {
+                case 4 -> { // over them: line up the drop
+                    Vec3 v = p.getDeltaMovement();
+                    Vec3 hv = new Vec3(v.x, 0, v.z);
+                    int fall = Math.max(1, Math.min(60, ticksToFallFromRest(p)));
+                    double k = (1 - Math.pow(0.91, fall)) / 0.09;
+                    Vec3 land = p.position().add(hv.scale(k));
+                    Vec3 tv = target.getDeltaMovement();
+                    Vec3 tPred = t.add(tv.x * Math.min(fall, 20), 0, tv.z * Math.min(fall, 20));
+                    double miss = Math.hypot(land.x - tPred.x, land.z - tPred.z);
+                    double fix = Math.min(4.0, 0.12 * fall); // what sprint + air keys can still move us on the way down
+                    double toPred = Math.hypot(tPred.x - p.getX(), tPred.z - p.getZ());
+                    float yawP = yawTo(p.position(), tPred);
+                    if (miss <= fix + 0.6 && hv.length() < 1.1) {
                         Guard.keepElytra = false;
                         equip(mc, p, "chestplate"); // elytra off → free fall
                         hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
+                        mc.options.keyJump.setDown(false);
                         flyStage = 5;
-                        mode = "elytra mace · chestplate on, falling";
-                        CombatLog.log("elytra off over them  horizontal " + CombatLog.f(hd) + "  height " + CombatLog.f(p.getY() - t.y));
+                        mode = "elytra mace · dropping";
+                        CombatLog.log("elytra mace: DROP  height " + CombatLog.f(p.getY() - t.y) + "  predicted miss " + CombatLog.f(miss)
+                                + "  air fix " + CombatLog.f(fix) + "  speed " + CombatLog.f(hv.length()));
+                        return true;
                     }
+                    // brake when the momentum would carry us past them, otherwise fly at them
+                    boolean overshoot = hv.length() * k > toPred - 1;
+                    float pitch;
+                    if (p.getY() < t.y + FLY_ALT - 5) pitch = -35f; // lost height: climb back
+                    else if (overshoot) pitch = -60f; // nose up: speed turns into height
+                    else pitch = p.getY() > t.y + FLY_ALT + 8 ? 15f : 0f;
+                    float[] aim = steerClear(mc, p, yawP, pitch);
+                    p.setYRot(aim[0]);
+                    p.setXRot(aim[1]);
+                    mode = overshoot ? "elytra mace · braking over them" : "elytra mace · flying over";
+                    boolean lowSlow = p.getY() < t.y + FLY_ALT - 5 || toPred > 14 && hv.length() < 0.8;
+                    if (lowSlow && --rocketCd <= 0 && quickUse(mc, p, "firework_rocket", aim[0], aim[1])) rocketCd = 25;
+                    else if (!lowSlow) rocketCd = Math.min(rocketCd, 5);
                     if (!p.isFallFlying() && p.onGround()) return endFlight(mc);
                 }
                 case 5 -> { // free fall onto them, steered, smash the moment they are in reach
                     airSteer(mc, p);
                     Bot.holdBest(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0);
-                    if (reachTo(p, target) <= p.entityInteractionRange() - 0.05 && p.getDeltaMovement().y < -0.2) {
-                        CombatLog.log("ELYTRA SMASH  reach " + CombatLog.f(reachTo(p, target)) + "  fall " + CombatLog.f(p.fallDistance));
+                    if (reachTo(p, target) <= p.entityInteractionRange() - 0.05 && p.getDeltaMovement().y < -0.2 && p.fallDistance > 1.5) {
+                        CombatLog.log("ELYTRA SMASH  reach " + CombatLog.f(reachTo(p, target)) + "  fall " + CombatLog.f(p.fallDistance) + "  their hp " + CombatLog.f(target.getHealth()));
                         smash(mc, p);
                         flyStage = 6;
                         return true;
                     }
-                    // missed and the ground is close: a wind charge under the feet takes the fall
-                    if (p.fallDistance > 6 && has(mc, "wind_charge")) {
-                        for (int i = 1; i <= 3; i++)
-                            if (Bot.solid(mc, p.blockPosition().below(i))) {
-                                if (quickUse(mc, p, "wind_charge", p.getYRot(), 90f)) mode = "elytra mace · missed, fall cancel";
-                                break;
-                            }
+                    // gone past them (below their feet), or they're out of reach for good: don't hit the ground at full speed
+                    boolean passed = p.getY() < target.getY() - 0.5;
+                    boolean hopeless = hd > 6 && airBelow(mc, p) < 12;
+                    if (passed || hopeless) {
+                        CombatLog.log("ELYTRA MISS  " + CombatLog.f(hd) + " blocks from them, " + airBelow(mc, p) + " blocks of air below");
+                        return recover(mc, p);
                     }
                     if (p.onGround()) {
                         CombatLog.log("ELYTRA MISS  landed " + CombatLog.f(hd) + " blocks from them");
                         return endFlight(mc);
                     }
                 }
-                default -> { // done or aborted: land
+                case 7 -> { // recovering: wings open again, then glide down
+                    if (p.onGround() || p.isInWater()) return endFlight(mc);
+                    if (p.isFallFlying()) {
+                        flyStage = 6;
+                        return true;
+                    }
+                    if (!wearingElytra(p)) {
+                        Guard.keepElytra = true;
+                        equip(mc, p, "elytra");
+                        return true;
+                    }
+                    mc.options.keyJump.setDown(flyTicks % 2 == 0);
+                    // close to the ground and still not gliding: a wind charge takes the fall
+                    if (airBelow(mc, p) <= 3 && p.getDeltaMovement().y < -0.5 && has(mc, "wind_charge"))
+                        quickUse(mc, p, "wind_charge", p.getYRot(), 90f);
+                }
+                default -> { // done or aborted: glide down and land
+                    mc.options.keyJump.setDown(false);
                     if (wearingElytra(p) && p.isFallFlying()) {
                         float[] aim = steerClear(mc, p, p.getYRot(), 20f);
                         p.setYRot(aim[0]);
                         p.setXRot(aim[1]);
                     }
-                    if (p.onGround() || !p.isFallFlying()) return endFlight(mc);
+                    if (p.onGround() || p.isInWater() || !p.isFallFlying() && !wearingElytra(p)) return endFlight(mc);
+                    if (!p.isFallFlying() && airBelow(mc, p) > 4) flyStage = 7; // falling without wings: open them
                 }
             }
             return true;
+        }
+
+        /** After a missed drop: wind charge if the ground is close, otherwise the elytra back on to glide down. */
+        private boolean recover(Minecraft mc, LocalPlayer p) {
+            int air = airBelow(mc, p);
+            if (air <= 3 && has(mc, "wind_charge") && quickUse(mc, p, "wind_charge", p.getYRot(), 90f)) {
+                mode = "elytra mace · missed, fall cancel";
+                flyStage = 6;
+                return true;
+            }
+            if (air > 3 && (wearingElytra(p) || has(mc, "elytra"))) {
+                mode = "elytra mace · missed, wings out";
+                flyStage = 7;
+                return true;
+            }
+            return endFlight(mc);
+        }
+
+        /** Ticks of free fall from the current height down to their head, starting from zero vertical speed. */
+        private int ticksToFallFromRest(LocalPlayer p) {
+            double y = p.getY(), vy = Math.min(0, p.getDeltaMovement().y), goal = target.getBoundingBox().maxY;
+            for (int t = 0; t < 100; t++) {
+                if (y <= goal) return t;
+                vy = (vy - 0.08) * 0.98;
+                y += vy;
+            }
+            return 100;
         }
 
         /** Best chestplate (netherite first) or the elytra into the chest slot. */
