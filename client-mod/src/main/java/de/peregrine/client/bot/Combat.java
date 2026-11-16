@@ -1758,6 +1758,44 @@ public final class Combat {
         private BlockPos railPos;
         private int cartStage, cartTicks, cartCd, cartsPlaced, drawTicks, retreatTicks, missCount, blockedTicks, cartsAtShot;
 
+        /** Ticks to draw for an insta-cart shot: just enough speed that the arrow gets to the spot in ~6 ticks without a high arc. */
+        private static int instaDraw(Vec3 eye, Vec3 c) {
+            double d = eye.distanceTo(c);
+            return d < 2.5 ? 4 : d < 3.5 ? 5 : d < 4.5 ? 6 : 7;
+        }
+
+        /** Nothing solid between our eyes and the point (blocks only). */
+        private static boolean clearShot(Minecraft mc, LocalPlayer p, Vec3 to) {
+            var hit = mc.level.clip(new net.minecraft.world.level.ClipContext(p.getEyePosition(), to,
+                    net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE, p));
+            return hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS || hit.getLocation().distanceTo(to) < 0.3;
+        }
+
+        /** One cart, or two (overload) when the armor takes even the chained blast. */
+        private int instaCarts(LocalPlayer p, float hp, Vec3 c) {
+            if (Bot.count(Minecraft.getInstance(), "tnt_minecart") < 2 || blastProt(p) < 8) return 1;
+            float pw = (float) (4 + 1.5 * 3 * bowPower(instaDraw(p.getEyePosition(), c))) + 3f;
+            return safeForUs(Blast.damage(p, p.position(), c, pw, true), hp) ? 2 : 1;
+        }
+
+        /** Insta cart works from here: in place reach, the slow arrow's blast is safe for us, and it still hurts them. */
+        private boolean instaReady(Minecraft mc, LocalPlayer p, BlockPos spot) {
+            Vec3 eye = p.getEyePosition(), c = Vec3.atBottomCenterOf(spot).add(0, 0.35, 0);
+            if (eye.distanceTo(Vec3.atCenterOf(spot)) > 4.4 || eye.distanceTo(c) < 1.6) return false;
+            if (target.getBoundingBox().inflate(0.35).clip(eye, c).isPresent()) return false; // they'd catch the arrow
+            if (!clearShot(mc, p, c)) return false;
+            float hp = p.getHealth() + p.getAbsorptionAmount();
+            float pw = (float) (4 + 1.5 * 3 * bowPower(instaDraw(eye, c)));
+            return safeForUs(Blast.damage(p, p.position(), c, pw, true), hp) && Blast.damage(target, c, 4f) >= minDamage();
+        }
+
+        /** Another hotbar slot holding a TNT minecart. */
+        private int hotbarExcept(Minecraft mc, int not) {
+            var inv = mc.player.getInventory();
+            for (int i = 0; i < 9; i++) if (i != not && id(inv.getItem(i)).equals("tnt_minecart")) return i;
+            return -1;
+        }
+
         /** Explosion protection points on our armor (blast protection counts double, like the damage formula). */
         private static int blastProt(LivingEntity e) {
             int epf = 0;
@@ -1888,6 +1926,9 @@ public final class Combat {
                         if (!Bot.solid(mc, n.below()) && Bot.passable(mc, n)) flat = false;
                     }
                     if (!flat) continue;
+                    if (!clearShot(mc, p, Vec3.atBottomCenterOf(b).add(0, 0.4, 0))) continue; // trained: shots from a crater hit its wall
+                    Vec3 cc = Vec3.atBottomCenterOf(b).add(0, 0.4, 0);
+                    if (Math.abs(Math.toDegrees(Math.atan2(cc.y - eye.y, Math.hypot(cc.x - eye.x, cc.z - eye.z)))) > 35 && p.getEyeY() < cc.y) continue; // steep shots up out of a hole missed
                     if (eye.distanceTo(Vec3.atCenterOf(b)) > 4.4) continue;
                     Vec3 c = Vec3.atBottomCenterOf(b).add(0, 0.35, 0);
                     double them = Blast.damage(target, c, 4f);
@@ -1911,6 +1952,7 @@ public final class Combat {
                 if (best == null) return false;
                 railPos = best;
                 cartStage = isRail(Bot.id(mc.level.getBlockState(best))) ? 1 : 0;
+                if (instaReady(mc, p, best)) cartStage = 10;
                 cartTicks = cartsPlaced = drawTicks = retreatTicks = missCount = 0;
                 CombatLog.log("cart: rail spot " + best.toShortString() + "  their est. " + CombatLog.f(bestScore));
             }
@@ -1997,6 +2039,9 @@ public final class Combat {
                     mc.options.keySprint.setDown(false);
                     mc.options.keyJump.setDown(false);
                     mc.options.keyDown.setDown(false);
+                    if (!clearShot(mc, p, cartBox.getCenter()) && !p.isUsingItem() && retreatTicks == 0) {
+                        if (++blockedTicks > 10) return endCart(mc, p, "no line of sight to the cart"); // a new spot from a better place
+                    }
                     Vec3 aim = cartAimPoint(eye, cartBox);
                     if (aim == null && !p.isUsingItem() && ++blockedTicks < 30) { // they stand in the line: step sideways
                         float side = yawTo(eye, cartBox.getCenter()) + 90f;
@@ -2035,6 +2080,73 @@ public final class Combat {
                         cartsAtShot = carts.size();
                     }
                 }
+                case 10 -> { // insta cart: draw a little, aim at the spot, release – then rail + cart into the arrow's path, same tick
+                    if (!instaReady(mc, p, railPos)) { // got unsafe or they left: cancel the draw (slot change) and do it the slow way
+                        if (p.isUsingItem()) {
+                            mc.options.keyUse.setDown(false);
+                            var inv = p.getInventory();
+                            inv.setSelectedSlot(inv.getSelectedSlot() == 0 ? 1 : 0);
+                        }
+                        cartStage = isRail(Bot.id(mc.level.getBlockState(railPos))) ? 1 : 0;
+                        return true;
+                    }
+                    int bow = flameBow(mc), rail = hotbar(mc, st -> isRail(id(st)) ? 1 : 0), cartSlot = hotbar(mc, st -> id(st).equals("tnt_minecart") ? 1 : 0);
+                    if (bow < 0 || rail < 0 && !isRail(Bot.id(mc.level.getBlockState(railPos))) || cartSlot < 0) return true; // items still moving to the hotbar
+                    int draw = instaDraw(eye, c);
+                    float power = bowPower(Math.max(draw, drawTicks + 1));
+                    float yaw = yawTo(eye, c);
+                    float pitch = bowPitch(Math.hypot(c.x - eye.x, c.z - eye.z), c.y - eye.y, 3.0 * power);
+                    p.setYRot(yaw);
+                    p.setXRot(pitch);
+                    p.setYHeadRot(yaw);
+                    mc.options.keyUp.setDown(false);
+                    mc.options.keySprint.setDown(false);
+                    var inv = p.getInventory();
+                    if (!p.isUsingItem()) {
+                        inv.setSelectedSlot(bow);
+                        mc.gameMode.useItem(p, InteractionHand.MAIN_HAND);
+                        mc.options.keyUse.setDown(true);
+                        drawTicks = 0;
+                        mode = "insta cart · draw";
+                        return true;
+                    }
+                    if (++drawTicks < draw) return true;
+                    // release, then rail and cart(s) in the same tick: the arrow is still at the bow when the cart appears
+                    mc.options.keyUse.setDown(false);
+                    mc.gameMode.releaseUsingItem(p);
+                    BlockPos floor = railPos.below();
+                    if (!isRail(Bot.id(mc.level.getBlockState(railPos)))) {
+                        inv.setSelectedSlot(rail);
+                        mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false));
+                    }
+                    int placed = 0, want = instaCarts(p, hp, c);
+                    for (int k = 0; k < want; k++) {
+                        int cs = k == 0 ? cartSlot : hotbarExcept(mc, cartSlot);
+                        if (cs < 0) break;
+                        inv.setSelectedSlot(cs);
+                        mc.gameMode.useItemOn(p, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atBottomCenterOf(railPos).add(0, 0.1, 0), Direction.UP, railPos, false));
+                        placed++;
+                    }
+                    Bot.swing(p);
+                    inv.setSelectedSlot(bow);
+                    CombatLog.log("insta cart  draw " + drawTicks + "  arrow speed " + CombatLog.f(3 * power) + "  pitch " + CombatLog.f(pitch) + "  carts " + placed
+                            + "  distance " + CombatLog.f(eye.distanceTo(c)) + "  their est. " + CombatLog.f(Blast.damage(target, c, (float) (4 + 0.75 * 3 * power)))
+                            + "  ours worst " + CombatLog.f(Blast.damage(p, p.position(), c, (float) (4 + 1.5 * 3 * power) + (placed > 1 ? 3f : 0f), true)));
+                    mode = "insta cart";
+                    cartsPlaced = placed;
+                    cartsAtShot = placed;
+                    drawTicks = 0;
+                    cartStage = 11;
+                }
+                case 11 -> { // insta: did the arrow get it? (it flies a few ticks) – if not, shoot the cart normally
+                    var left = cartsAt(mc, railPos);
+                    if (left.isEmpty() && ++drawTicks > 2) return endCart(mc, p, "boom");
+                    if (++drawTicks > 16) {
+                        CombatLog.log("cart: insta arrow missed, shooting the cart");
+                        cartStage = 2;
+                        drawTicks = 0;
+                    }
+                }
                 default -> { // wait for the blast; missed: draw again
                     mc.options.keyDown.setDown(false);
                     var left = cartsAt(mc, railPos);
@@ -2064,7 +2176,7 @@ public final class Combat {
             mc.options.keyDown.setDown(false);
             railPos = null;
             cartStage = 0;
-            cartCd = why.equals("boom") ? 2 : 30;
+            cartCd = why.equals("boom") ? 2 : why.startsWith("no line") ? 8 : 30;
             if (why.equals("boom")) mode = "cart · boom";
             return false;
         }

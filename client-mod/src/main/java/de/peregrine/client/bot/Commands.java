@@ -185,6 +185,8 @@ public final class Commands {
 
         if (mc.player == null || mc.level == null) return "Join a world first.";
         if (!Bot.allowed(mc)) return Bot.NOT_ALLOWED;
+        if (t.matches("(?:gib mir |give me |mach mir |make me |hol mir )?(?:ein |einen |a )?(?:cart ?kit|kit cart|cart pvp kit|kit|pvp kit)(?: bitte| please)?[.!]*"))
+            return Kits.cart(mc);
         return run(t);
     }
 
