@@ -54,6 +54,7 @@ public final class CodeScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent e) {
+        if (TextInput.key(this, e)) return true;
         if (e.key() == InputConstants.KEY_ESCAPE) {
             onClose();
             return true;
@@ -79,7 +80,20 @@ public final class CodeScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent e) {
+        if (TextInput.echo(e)) return true; // already typed by its key press
         if (e.isAllowedChatCharacter() && code.length() < 16) code += e.codepointAsString();
         return true;
+    }
+
+    @Override
+    public void removed() {
+        TextInput.focus(this, false);
+        super.removed();
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        TextInput.focus(this, true); // a text field has focus: Minecraft switches the window to text input
     }
 }

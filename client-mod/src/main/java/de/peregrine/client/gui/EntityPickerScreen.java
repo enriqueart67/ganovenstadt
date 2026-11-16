@@ -271,6 +271,7 @@ public final class EntityPickerScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent e) {
+        if (TextInput.key(this, e)) return true;
         if (e.key() == InputConstants.KEY_BACKSPACE && !query.isEmpty()) {
             query = query.substring(0, query.length() - 1);
             scrollTarget = scroll = 0;
@@ -289,11 +290,24 @@ public final class EntityPickerScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent e) {
+        if (TextInput.echo(e)) return true; // already typed by its key press
         if (e.isAllowedChatCharacter() && query.length() < 32) {
             query += e.codepointAsString();
             scrollTarget = scroll = 0;
             return true;
         }
         return super.charTyped(e);
+    }
+
+    @Override
+    public void removed() {
+        TextInput.focus(this, false);
+        super.removed();
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        TextInput.focus(this, true); // a text field has focus: Minecraft switches the window to text input
     }
 }

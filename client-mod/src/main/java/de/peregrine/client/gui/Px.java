@@ -43,29 +43,66 @@ public final class Px {
         if (r - ri > 0.02f && ri >= li) g.fill(ri, y, ri + 1, y + 1, withAlpha(argb, (r - ri) * rowCov));
     }
 
+    // ------------------------------------------------------------------ corner textures
+    // A rounded box used to be drawn row by row in screen pixels: at 4K with a big GUI scale that was thousands of
+    // fills per box and every frame – the menus lagged. Now each corner radius (in screen pixels) gets one small
+    // anti-aliased circle texture, made once; a box is 4 corner blits + 3 fills, a frame is 9 draws per box no matter
+    // how high the resolution is, and the edges stay sharp because everything lands on whole screen pixels.
+    private static final java.util.Map<Integer, net.minecraft.resources.Identifier> FILLS = new java.util.HashMap<>(), RINGS = new java.util.HashMap<>();
+
+    private static net.minecraft.resources.Identifier corner(int r, boolean ring) {
+        var cache = ring ? RINGS : FILLS;
+        var id = cache.get(r);
+        if (id != null) return id;
+        int n = r * 2;
+        var img = new com.mojang.blaze3d.platform.NativeImage(n, n, false);
+        float outer = r, inner = r - 1f;
+        for (int py = 0; py < n; py++)
+            for (int px = 0; px < n; px++) {
+                int hits = 0;
+                for (int sy = 0; sy < 4; sy++)
+                    for (int sx = 0; sx < 4; sx++) { // 4×4 samples per pixel
+                        float dx = px + (sx + 0.5f) / 4f - r, dy = py + (sy + 0.5f) / 4f - r;
+                        float d = (float) Math.sqrt(dx * dx + dy * dy);
+                        if (d <= outer && (!ring || d >= inner)) hits++;
+                    }
+                img.setPixel(px, py, ((hits * 255 / 16) << 24) | 0xFFFFFF);
+            }
+        id = net.minecraft.resources.Identifier.fromNamespaceAndPath("peregrine", "px/" + (ring ? "ring" : "fill") + "_" + r);
+        var tex = new net.minecraft.client.renderer.texture.DynamicTexture(() -> "peregrine corner", img);
+        Minecraft.getInstance().getTextureManager().register(id, tex);
+        tex.upload();
+        cache.put(r, id);
+        return id;
+    }
+
+    /** The four corners of a circle texture of radius r at the corners of the box (X, Y, W, H) in screen pixels. */
+    private static void corners(GuiGraphicsExtractor g, net.minecraft.resources.Identifier id, int X, int Y, int W, int H, int r, int argb) {
+        int n = r * 2;
+        var pipe = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
+        g.blit(pipe, id, X, Y, 0, 0, r, r, r, r, n, n, argb);
+        g.blit(pipe, id, X + W - r, Y, r, 0, r, r, r, r, n, n, argb);
+        g.blit(pipe, id, X, Y + H - r, 0, r, r, r, r, r, n, n, argb);
+        g.blit(pipe, id, X + W - r, Y + H - r, r, r, r, r, r, r, n, n, argb);
+    }
+
     /** Filled rectangle with round corners. */
     public static void roundRect(GuiGraphicsExtractor g, float x, float y, float w, float h, float radius, int argb) {
         if (w <= 0 || h <= 0 || (argb >>> 24) == 0) return;
         float s = scale();
-        float X = x * s, Y = y * s, W = w * s, H = h * s, R = Math.min(radius * s, Math.min(W, H) / 2f);
+        int X = Math.round(x * s), Y = Math.round(y * s), W = Math.round((x + w) * s) - X, H = Math.round((y + h) * s) - Y;
+        if (W <= 0 || H <= 0) return;
+        int r = Math.min(Math.round(radius * s), Math.min(Math.min(W, H) / 2, 256));
         begin(g, s);
-        int y0 = (int) Math.floor(Y), y1 = (int) Math.ceil(Y + H);
-        int midTop = (int) Math.ceil(Y + R), midBot = (int) Math.floor(Y + H - R);
-        if (midBot > midTop) {
-            int li = (int) Math.ceil(X), ri = (int) Math.floor(X + W);
-            g.fill(li, midTop, ri, midBot, argb);
-            if (li - X > 0.02f) g.fill(li - 1, midTop, li, midBot, withAlpha(argb, li - X));
-            if (X + W - ri > 0.02f) g.fill(ri, midTop, ri + 1, midBot, withAlpha(argb, X + W - ri));
-        }
-        for (int row = y0; row < y1; row++) {
-            if (row >= midTop && row < midBot) continue;
-            float cy = row + 0.5f;
-            // vertical coverage of this row (top and bottom edge)
-            float cov = Math.min(1f, Math.min(row + 1 - Y, Y + H - row));
-            if (cov <= 0) continue;
-            float dy = cy < Y + R ? (Y + R) - cy : cy > Y + H - R ? cy - (Y + H - R) : 0;
-            float inset = dy > 0 ? R - (float) Math.sqrt(Math.max(0, R * R - dy * dy)) : 0;
-            span(g, X + inset, X + W - inset, row, argb, cov);
+        if (r <= 0) {
+            g.fill(X, Y, X + W, Y + H, argb);
+        } else {
+            corners(g, corner(r, false), X, Y, W, H, r, argb);
+            if (W > 2 * r) {
+                g.fill(X + r, Y, X + W - r, Y + r, argb);
+                g.fill(X + r, Y + H - r, X + W - r, Y + H, argb);
+            }
+            if (H > 2 * r) g.fill(X, Y + r, X + W, Y + H - r, argb);
         }
         end(g);
     }
@@ -74,23 +111,25 @@ public final class Px {
     public static void roundStroke(GuiGraphicsExtractor g, float x, float y, float w, float h, float radius, int argb) {
         if (w <= 0 || h <= 0 || (argb >>> 24) == 0) return;
         float s = scale();
-        float X = x * s, Y = y * s, W = w * s, H = h * s, R = Math.min(radius * s, Math.min(W, H) / 2f);
-        float Ri = Math.max(0, R - 1);
+        int X = Math.round(x * s), Y = Math.round(y * s), W = Math.round((x + w) * s) - X, H = Math.round((y + h) * s) - Y;
+        if (W <= 1 || H <= 1) return;
+        int r = Math.min(Math.round(radius * s), Math.min(Math.min(W, H) / 2, 256));
         begin(g, s);
-        int y0 = (int) Math.floor(Y), y1 = (int) Math.ceil(Y + H);
-        for (int row = y0; row < y1; row++) {
-            float cy = row + 0.5f;
-            float dy = cy < Y + R ? (Y + R) - cy : cy > Y + H - R ? cy - (Y + H - R) : 0;
-            float outer = dy > 0 ? R - (float) Math.sqrt(Math.max(0, R * R - dy * dy)) : 0;
-            boolean cap = row == y0 || row == y1 - 1 || (dy > 0 && dy >= Ri);
-            if (cap) {
-                span(g, X + outer, X + W - outer, row, argb, 1f);
-                continue;
+        if (r <= 1) {
+            g.fill(X, Y, X + W, Y + 1, argb);
+            g.fill(X, Y + H - 1, X + W, Y + H, argb);
+            g.fill(X, Y + 1, X + 1, Y + H - 1, argb);
+            g.fill(X + W - 1, Y + 1, X + W, Y + H - 1, argb);
+        } else {
+            corners(g, corner(r, true), X, Y, W, H, r, argb);
+            if (W > 2 * r) {
+                g.fill(X + r, Y, X + W - r, Y + 1, argb);
+                g.fill(X + r, Y + H - 1, X + W - r, Y + H, argb);
             }
-            float inner = 1f + (dy > 0 ? Ri - (float) Math.sqrt(Math.max(0, Ri * Ri - dy * dy)) : 0);
-            inner = Math.max(inner, outer + 1f);
-            span(g, X + outer, X + inner, row, argb, 1f);
-            span(g, X + W - inner, X + W - outer, row, argb, 1f);
+            if (H > 2 * r) {
+                g.fill(X, Y + r, X + 1, Y + H - r, argb);
+                g.fill(X + W - 1, Y + r, X + W, Y + H - r, argb);
+            }
         }
         end(g);
     }

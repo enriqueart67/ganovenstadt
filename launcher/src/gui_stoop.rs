@@ -267,7 +267,8 @@ fn paint_peak(p: &egui::Painter, r: Rect, pal: &Pal, par: Vec2) {
             let rgba = img.to_rgba8();
             let size = [rgba.width() as usize, rgba.height() as usize];
             let ci = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-            let t = ctx.load_texture("peak-bg", ci, egui::TextureOptions::LINEAR);
+            let opts = egui::TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..egui::TextureOptions::LINEAR };
+            let t = ctx.load_texture("peak-bg", ci, opts);
             ctx.data_mut(|d| d.insert_temp(id, t.clone()));
             t
         }
@@ -280,6 +281,16 @@ fn paint_peak(p: &egui::Painter, r: Rect, pal: &Pal, par: Vec2) {
     let dst = Rect::from_center_size(c, vec2(dw, dh));
     p.image(tex.id(), dst, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
     p.rect_filled(r, 0.0, alpha(pal.bg, 70));
+}
+
+/// Ein eigenes Bild formatfuellend (wie „Peak“): leicht groesser als das Fenster fuer die Parallaxe.
+pub(super) fn paint_cover(p: &egui::Painter, r: Rect, tex: &egui::TextureHandle, par: Vec2) {
+    let [w, h] = tex.size();
+    let over = 1.04;
+    let (ia, ra) = (w as f32 / h as f32, r.width() / r.height());
+    let (dw, dh) = if ia > ra { (r.height() * ia * over, r.height() * over) } else { (r.width() * over, r.width() / ia * over) };
+    let c = r.center() + vec2(-par.x * 18.0, -par.y * 10.0);
+    p.image(tex.id(), Rect::from_center_size(c, vec2(dw, dh)), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
 }
 
 // ------------------------------------------------------------------ Figur

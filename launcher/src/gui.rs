@@ -426,7 +426,9 @@ impl App {
         }
         match load_image(&path) {
             Ok(img) => {
-                let t = ctx.load_texture("hintergrund", img, egui::TextureOptions::LINEAR);
+                // mipmaps: a 4K image drawn into a smaller window stays smooth instead of shimmering
+                let opts = egui::TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..egui::TextureOptions::LINEAR };
+                let t = ctx.load_texture("hintergrund", img, opts);
                 self.bg_tex = Some((path, t.clone()));
                 self.bg_err = None;
                 Some(t)
@@ -1244,7 +1246,8 @@ impl App {
 // ------------------------------------------------------------------ Widgets
 fn load_image(path: &str) -> anyhow::Result<egui::ColorImage> {
     let img = image::open(path)?;
-    let img = if img.width() > 2560 || img.height() > 2560 { img.resize(2560, 2560, image::imageops::FilterType::Triangle) } else { img };
+    // up to 4K stays sharp; larger images are scaled down once with a high-quality filter
+    let img = if img.width() > 3840 || img.height() > 2400 { img.resize(3840, 2400, image::imageops::FilterType::Lanczos3) } else { img };
     let rgba = img.to_rgba8();
     Ok(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
 }
@@ -1400,9 +1403,16 @@ impl eframe::App for App {
             if self.page == Page::Client {
                 // Auf der Seite Client-Mods: Foto als Umhang hochladen
                 self.import_cape(&path);
-            } else {
+            } else if image::ImageFormat::from_path(&path).is_ok() {
+                // keep a copy in the Peregrine folder, so the background stays even if the download is deleted
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("jpg").to_ascii_lowercase();
+                let dir = config::base_dir().join("backgrounds");
+                let dest = dir.join(format!("custom.{ext}"));
+                let kept = std::fs::create_dir_all(&dir).and_then(|_| std::fs::copy(&path, &dest)).is_ok();
                 self.cfg.look.background = "Image".into();
-                self.cfg.look.image_path = path.to_string_lossy().into_owned();
+                self.cfg.look.image_path = if kept { dest } else { path }.to_string_lossy().into_owned();
+                self.bg_tex = None;
+                self.bg_err = None;
             }
         }
         let pal = Pal::from(&self.cfg.look);
@@ -1445,6 +1455,21 @@ impl eframe::App for App {
                     }
                 }
                 "Chart" => theme::paint_chart(&ui.painter().with_clip_rect(full), Rect::from_min_max(pos2(full.left(), title.bottom()), full.max), &pal),
+                "Image" => {
+                    let tex = self.bg_texture(&ctx);
+                    let painter = ui.painter().with_clip_rect(full);
+                    match tex {
+                        Some(tex) => stoop_ui::paint_cover(&painter, full, &tex, par),
+                        None => stoop_ui::paint_atmosphere(&painter, full, &pal, t, par), // not loadable: the built-in mountain
+                    }
+                    let dim = self.cfg.look.dim.clamp(0.0, 0.9);
+                    if dim > 0.0 {
+                        painter.rect_filled(full, 0.0, alpha(Color32::BLACK, (dim * 255.0) as u8));
+                    }
+                    if self.page != Page::Home {
+                        painter.rect_filled(full, 0.0, alpha(pal.bg, 120));
+                    }
+                }
                 _ => {}
             }
             // Seite blendet beim Wechsel ein und gleitet dabei leicht nach oben

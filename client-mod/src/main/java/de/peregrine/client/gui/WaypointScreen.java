@@ -136,6 +136,7 @@ public final class WaypointScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent e) {
+        if (TextInput.key(this, e)) return true;
         if (editing != null) {
             if (e.key() == InputConstants.KEY_BACKSPACE && !editing.name.isEmpty()) {
                 editing.name = editing.name.substring(0, editing.name.length() - 1);
@@ -154,6 +155,7 @@ public final class WaypointScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent e) {
+        if (TextInput.echo(e)) return true; // already typed by its key press
         if (editing != null && e.isAllowedChatCharacter() && editing.name.length() < 28) {
             editing.name += e.codepointAsString();
             return true;
@@ -163,7 +165,14 @@ public final class WaypointScreen extends Screen {
 
     @Override
     public void removed() {
+        TextInput.focus(this, false);
         Waypoints.save();
         super.removed();
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        TextInput.focus(this, true); // a text field has focus: Minecraft switches the window to text input
     }
 }

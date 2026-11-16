@@ -272,7 +272,7 @@ public final class ClickGui extends Screen {
             } else {
                 Type.spaced(g, Type.fit(up(m.category.label), Type.MONO, 0.55f, textW), Type.MONO, x + 9, yy + 6, 0.55f, m.enabled ? t.accent : t.muted2, 1.2f);
                 Type.left(g, Type.fit(m.name, Type.BOLD, 1f, textW), Type.BOLD, x + 9, yy + 15, 1f, m.enabled ? t.text : t.muted);
-                Type.left(g, Type.fit(m.description, Type.UI, 0.72f, cardW - 18), Type.UI, x + 9, yy + 29, 0.72f, t.muted2);
+                Type.left(g, Type.fit(m.description, Type.UI, 0.72f, cardW - 18 - (m.settings.isEmpty() || compact ? 0 : 40)), Type.UI, x + 9, yy + 29, 0.72f, t.muted2); // room for SETUP
                 toggle(g, x + cardW - 28, yy + 7, m.enabled, hov, m);
             }
             if (vis) hits.add(new Hit(x, Math.max(yy, top), cardW, Math.max(0, Math.min(yy + cardH, cy + ch) - Math.max(yy, top)), () -> {
@@ -473,6 +473,7 @@ public final class ClickGui extends Screen {
             onClose();
             return true;
         }
+        if (TextInput.key(this, e)) return true;
         if (k == InputConstants.KEY_BACKSPACE && open == null && !search.isEmpty()) {
             search = search.substring(0, search.length() - 1);
             scrollTarget = scroll = 0;
@@ -483,6 +484,7 @@ public final class ClickGui extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent e) {
+        if (TextInput.echo(e)) return true; // already typed by its key press
         if (open == null && e.isAllowedChatCharacter() && search.length() < 24) {
             search += e.codepointAsString();
             scrollTarget = scroll = 0;
@@ -493,7 +495,14 @@ public final class ClickGui extends Screen {
 
     @Override
     public void removed() {
+        TextInput.focus(this, false);
         Store.save();
         super.removed();
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        TextInput.focus(this, true); // a text field has focus: Minecraft switches the window to text input
     }
 }

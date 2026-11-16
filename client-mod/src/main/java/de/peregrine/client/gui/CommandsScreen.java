@@ -288,6 +288,7 @@ public final class CommandsScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent e) {
+        if (TextInput.key(this, e)) return true;
         if (e.key() == InputConstants.KEY_ESCAPE) {
             onClose();
             return true;
@@ -317,10 +318,23 @@ public final class CommandsScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent e) {
+        if (TextInput.echo(e)) return true; // already typed by its key press
         if (!e.isAllowedChatCharacter()) return super.charTyped(e);
         String c = e.codepointAsString();
         if (field == 0 && name.length() < 32) name += c;
         if (field == 1 && steps.length() < 600) steps += c;
         return true;
+    }
+
+    @Override
+    public void removed() {
+        TextInput.focus(this, false);
+        super.removed();
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        TextInput.focus(this, true); // a text field has focus: Minecraft switches the window to text input
     }
 }
