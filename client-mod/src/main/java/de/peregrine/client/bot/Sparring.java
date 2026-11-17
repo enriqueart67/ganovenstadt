@@ -16,8 +16,8 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * A sparring partner for training, only in a world running on this computer: a player-sized mob (husk – it doesn't
- * burn) in real gear whose vanilla AI is switched off and that moves like a PvP player instead: strafes in an uneven
+ * A sparring partner for training, only in a world running on this computer: a player-sized mob (a zombie – the
+ * netherite helmet keeps it from burning; trained: a husk's Hunger on every hit had the bot eating all fight) in real gear whose vanilla AI is switched off and that moves like a PvP player instead: strafes in an uneven
  * rhythm, keeps at the edge of reach, swings on a sword cooldown, jumps, backs off to "eat" (absorption +
  * regeneration, like a golden apple), puts a new totem in the off hand after a pop, and gets away from TNT carts,
  * end crystals and charged anchors near it. It moves, so every technique gets trained against a moving target.
@@ -32,8 +32,13 @@ public final class Sparring {
     static volatile long duelSeen;
 
     private static final class State {
-        int swingCd, strafeT, eatCd, eating, totems = 4, gapples = 8, jumpCd;
-        boolean left;
+        int swingCd, strafeT, eatCd, eating, totems = 4, gapples = 8, jumpCd, playerPops = -1, firstPops = -1, popped;
+        boolean left, offhandEmpty;
+
+        int basePops() {
+            if (firstPops < 0) firstPops = playerPops;
+            return firstPops;
+        }
     }
 
     private static final Map<java.util.UUID, State> STATES = new HashMap<>();
@@ -47,19 +52,20 @@ public final class Sparring {
         String pos = String.format(java.util.Locale.ROOT, "%.1f %.1f %.1f", x, y, z);
         return new String[]{
                 "kill @e[tag=" + TAG + "]",
-                "summon husk " + pos + " {Tags:[\"" + TAG + "\"],CustomName:\"Sparring\",CustomNameVisible:1b,PersistenceRequired:1b,CanPickUpLoot:0b}",
+                "summon zombie " + pos + " {Tags:[\"" + TAG + "\"],CustomName:\"Sparring\",CustomNameVisible:1b,PersistenceRequired:1b,CanPickUpLoot:0b}",
                 "execute positioned " + pos + " run attribute " + sel + " minecraft:max_health base set 20",
                 "execute positioned " + pos + " run attribute " + sel + " minecraft:movement_speed base set 0.32",
                 "execute positioned " + pos + " run attribute " + sel + " minecraft:knockback_resistance base set 0",
                 "execute positioned " + pos + " run attribute " + sel + " minecraft:attack_damage base set 1",
                 "execute positioned " + pos + " run attribute " + sel + " minecraft:follow_range base set 0",
+                "execute positioned " + pos + " run attribute " + sel + " minecraft:spawn_reinforcements base set 0",
                 "execute positioned " + pos + " run item replace entity " + sel + " armor.head with netherite_helmet[" + ench + "]",
                 "execute positioned " + pos + " run item replace entity " + sel + " armor.chest with netherite_chestplate[" + ench + "]",
                 "execute positioned " + pos + " run item replace entity " + sel + " armor.legs with netherite_leggings[" + ench + "]",
                 "execute positioned " + pos + " run item replace entity " + sel + " armor.feet with netherite_boots[" + ench + "]",
                 "execute positioned " + pos + " run item replace entity " + sel + " weapon.mainhand with netherite_sword[enchantments={\"minecraft:sharpness\":5}]",
                 "execute positioned " + pos + " run item replace entity " + sel + " weapon.offhand with " + (variant.contains("shield") ? "shield" : "totem_of_undying"),
-                "effect give " + sel + " minecraft:instant_damage 1 0 true", // husk is undead: instant damage heals it to full
+                "effect give " + sel + " minecraft:instant_damage 1 0 true", // undead: instant damage heals it to full
         };
     }
 
@@ -95,7 +101,10 @@ public final class Sparring {
                 } catch (ReflectiveOperationException ignored) {
                 }
             }
-            return new State();
+            State st = new State();
+            st.playerPops = target.getStats().getValue(net.minecraft.stats.Stats.ITEM_USED.get(net.minecraft.world.item.Items.TOTEM_OF_UNDYING));
+            st.firstPops = st.playerPops;
+            return st;
         });
         if (target.isSpectator() || target.isCreative()) return;
         if (System.currentTimeMillis() - duelSeen > 3000) { // no duel running: stand still and wait (trained: a partner
@@ -115,6 +124,19 @@ public final class Sparring {
         m.getLookControl().setLookAt(target, 30f, 30f);
 
         // totem back in the off hand after a pop
+        // fair numbers for training: pops on both sides from the server's statistics, its own hits below
+        int used = target.getStats().getValue(net.minecraft.stats.Stats.ITEM_USED.get(net.minecraft.world.item.Items.TOTEM_OF_UNDYING));
+        if (s.playerPops < 0) s.playerPops = used;
+        if (used > s.playerPops) {
+            CombatLog.log("POP-you  (" + (used - s.basePops()) + ")");
+            s.playerPops = used;
+        }
+        if (m.getOffhandItem().isEmpty() && !s.offhandEmpty) {
+            s.offhandEmpty = true;
+            s.popped++;
+            CombatLog.log("POP-sparring  (" + s.popped + ")");
+        }
+        if (!m.getOffhandItem().isEmpty()) s.offhandEmpty = false;
         if (m.getOffhandItem().isEmpty() && s.totems > 0 && level.getGameTime() % 10 == 0) {
             m.setItemInHand(InteractionHand.OFF_HAND, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.TOTEM_OF_UNDYING));
             s.totems--;
@@ -167,7 +189,9 @@ public final class Sparring {
         double reach = m.getEyePosition().distanceTo(nearest(target.getBoundingBox(), m.getEyePosition()));
         if (ready && reach <= 3.0 && m.hasLineOfSight(target)) {
             swing(m);
-            m.doHurtTarget(level, target);
+            float before = target.getHealth() + target.getAbsorptionAmount();
+            boolean landed = m.doHurtTarget(level, target);
+            if (landed) CombatLog.log("spar-hit  " + CombatLog.f(before - target.getHealth() - target.getAbsorptionAmount()));
             s.swingCd = 12;
         }
     }

@@ -186,10 +186,10 @@ public final class Commands {
 
         if (mc.player == null || mc.level == null) return "Join a world first.";
         if (!Bot.allowed(mc)) return Bot.NOT_ALLOWED;
-        java.util.regex.Matcher kit = Pattern.compile("^(?:gib mir |give me |mach mir |make me |hol mir )?(?:ein |einen |a |das |the )?(?:(cart|crystal|kristall|anchor|mace|elytra|full|voll|alles)[ -]?(?:pvp )?kit|kit(?: (cart|crystal|kristall|anchor|mace|elytra|full|voll|alles))?|pvp kit)(?: bitte| please)?[.!]*$").matcher(t);
+        java.util.regex.Matcher kit = Pattern.compile("^(?:gib mir |give me |mach mir |make me |hol mir )?(?:ein |einen |a |das |the )?(?:(cart|crystal|kristall|anchor|mace|elytra|full|voll|alles|sword|schwert)[ -]?(?:pvp )?kit|kit(?: (cart|crystal|kristall|anchor|mace|elytra|full|voll|alles|sword|schwert))?|pvp kit)(?: bitte| please)?[.!]*$").matcher(t);
         if (kit.find()) {
             String k = kit.group(1) != null ? kit.group(1) : kit.group(2) != null ? kit.group(2) : "cart";
-            k = switch (k) { case "kristall" -> "crystal"; case "voll", "alles" -> "full"; default -> k; };
+            k = switch (k) { case "kristall" -> "crystal"; case "voll", "alles" -> "full"; case "schwert" -> "sword"; default -> k; };
             return Kits.give(mc, k);
         }
         java.util.regex.Matcher spar = Pattern.compile("^(?:spawn |hol |mach )?(?:einen |a )?(?:sparring|sparring ?partner|trainingspartner|training partner|gegner zum üben|dummy)(?: (blast|shield|schild))?[.!]*$").matcher(t);

@@ -272,6 +272,8 @@ public final class Combat {
                 return false;
             }
             if (p.hurtTime > 0) lastHurt = ticks;
+            if (p.hurtTime >= 9 && lastHitOnUs != ticks - 1) hitsOnUs.addLast(ticks);
+            while (!hitsOnUs.isEmpty() && ticks - hitsOnUs.peekFirst() > 200) hitsOnUs.pollFirst();
             if (p.hurtTime >= 9) lastHitOnUs = ticks; // the moment a hit lands, not the whole animation
 
             // ---- they walled themselves in: break the block between us
@@ -974,7 +976,8 @@ public final class Combat {
             if (shield) Bot.holdBest(mc, s -> id(s).endsWith("_axe") ? 10 : 0); // an axe hit disables the shield
             else Bot.holdBest(mc, Guard::weaponScore);
             mode = shield ? "axe vs shield" : "sword";
-            double reach = reachTo(p, target), range = p.entityInteractionRange() - 0.08;
+            // trained: the partner hit from 3.0 while we held back at 2.92 – the long gaps sat right at that edge
+            double reach = reachTo(p, target), range = p.entityInteractionRange() - 0.02;
             boolean spear = hotbar(mc, s -> id(s).endsWith("_spear") ? 1 : 0) >= 0; // swapped in for hits past sword reach
             trackCombo();
             boolean combo = inCombo();
@@ -1017,19 +1020,51 @@ public final class Combat {
             boolean tooClose = !combo && charge > 3 && reach < 2.0;
             mc.options.keyUp.setDown(stepIn && !tooClose);
             mc.options.keyDown.setDown(tooClose);
-            mc.options.keySprint.setDown(!tooClose);
+            // trained vs. a partner that swings every 12 ticks no matter what: a sprint hit throws them 3 blocks away
+            // and the chase cost 1.2–1.5 s per hit while they walked back in swinging. In reach, a hit without sprint
+            // keeps them close (less knockback) – the next swing is ready the moment they are
+            boolean pressure = reach <= range - 0.25 && targetSwingsAnyway(); // closing in: sprint; well inside: no sprint
+            mc.options.keySprint.setDown(!tooClose && !pressure);
             boolean finishing = target.getHealth() + target.getAbsorptionAmount() < 6;
             boolean wantCrit = finishing || !combo && !target.onGround(); // crits finish, sprint hits keep the combo going
+            // timed crits: jump ~5 ticks before the swing is charged, so it lands charged on the way down – a crit
+            // (1.5×) on every swing at no cost in time. Crits don't count while sprinting, so sprint is dropped first.
+            // trained A/B (6 rounds vs. the sparring partner): timed crit jumps on every swing gave 56 % crits but
+            // fewer hits (jumping costs movement) – 87–91 s per kill against 81–83 s without. So only to finish them.
+            boolean critCycle = targetSwingsAnyway() && !p.isInWater() && reach <= range + 0.6
+                    && target.getHealth() + target.getAbsorptionAmount() <= 6;
+            if (critCycle) {
+                if (!mode.contains("crit")) mode = mode + " · crit cycle";
+                if (p.isSprinting()) p.setSprinting(false);
+                // trained: jumping 3–5 ticks ahead had us still rising when the swing was ready (a jump rises ~6
+                // ticks) – 6–8 ahead puts the ready moment in the fall, with ~5 ticks of air left to land the crit
+                if (p.onGround() && charge >= 6 && charge <= 8) {
+                    mc.options.keyJump.setDown(true);
+                    return;
+                }
+            }
             if (ready && wantCrit && p.onGround() && !p.isInWater() && reach <= range + 0.4) {
                 mc.options.keyJump.setDown(true);
                 return;
             }
             mc.options.keyJump.setDown(p.horizontalCollision && p.onGround() && stepIn);
             boolean falling = !p.onGround() && p.getDeltaMovement().y < -0.08;
-            if (ready && reach <= hitRange && !iframes && (!wantCrit || falling || p.isInWater() || !p.onGround() && reach > range - 0.3))
-                swingAt(mc, p, reach, falling);
-            if (lastSwingTick == ticks && !wantCrit) wtap = combo ? 1 : 3;
+            boolean rising = !p.onGround() && !falling;
+            boolean waitForFall = critCycle && rising && reach < range - 0.05; // a tick or two more makes it a crit (worth ~1.8×)
+            if (ready && reach <= hitRange && !iframes && !waitForFall && (!wantCrit || critCycle || falling || p.isInWater() || !p.onGround() && reach > range - 0.3))
+                swingAt(mc, p, reach, falling && !p.isSprinting());
+            if (lastSwingTick == ticks && !wantCrit && !targetSwingsAnyway()) wtap = combo ? 1 : 3;
         }
+
+        /**
+         * The opponent keeps swinging at us whatever the knockback does (they hit us at least every 1.5 s on average
+         * over the last 10 s): then trading at close range wins more hits than sprint-hit-and-chase.
+         */
+        private boolean targetSwingsAnyway() {
+            return hitsOnUs.size() >= 6;
+        }
+
+        private final java.util.ArrayDeque<Integer> hitsOnUs = new java.util.ArrayDeque<>();
 
         private void swingAt(Minecraft mc, LocalPlayer p, double reach, boolean crit) {
             attackWithSwap(mc, p, target);

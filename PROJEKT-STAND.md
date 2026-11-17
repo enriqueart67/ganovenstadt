@@ -453,3 +453,14 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
   - Elytra-Mace: steigt in ~1 s auf ~23 Blöcke, Abwurf mit ~1,7 Blöcken vorhergesagtem Fehler. Der Gegner strafet in 3 s Fall weg, das Tuning gleicht nach. Gewonnen in 44 s.
   - Anchor: 3 Explosionen, gewonnen.
 - **Nicht gemacht:** Crossbow Carting (die Guides dazu sind im Container gesperrt). Nichts gegen echte Spieler getestet.
+
+## Schwert-Training (faire Runden gegen den Sparringspartner)
+
+- **„sword kit“:** gleiche Ausrüstung wie der Partner (Protection-IV-Netherite, Sharpness-V-Schwert, Axt, 5 Totems, 8 Äpfel), damit es ein fairer Schwertkampf ist.
+- **Faire Messung:** Der Partner loggt serverseitig seine Treffer („spar-hit“ mit Schaden) und beide Seiten ihre Pops („POP-you“ aus der Server-Statistik `ITEM_USED totem`, „POP-sparring“). Das alte „damage dealt“ ist schief, weil Absorption bei anderen Entities nicht synchronisiert wird.
+- **Partner jetzt Zombie statt Husk:** Der Husk gab bei jedem Treffer Hunger, der Bot musste dauernd essen (4–5 s Pausen). Der Netherite-Helm verhindert Brennen, keine Verstärkungen.
+- **Gefunden und geändert:**
+  1. Gegen einen Gegner, der ohnehin dauernd schlägt (≥ 6 Treffer auf uns in 10 s): kein Sprint-Treffer in Reichweite (weniger Rückstoß, er bleibt nah) und kein W-Tap. Vorher kostete Sprint-Treffer + Nachlaufen 1,2–1,5 s pro Treffer.
+  2. Volle Reichweite (3,0 − 0,02 statt − 0,08): Der Partner schlug aus 3,0, die langen Lücken lagen genau an der Kante.
+  3. Gezielte Crit-Sprünge (6–8 Ticks vor dem Aufladen springen, im Fallen geladen schlagen) ergaben 56 % Crits, aber weniger Treffer. A/B: 87–91 s gegen 81–83 s. Deshalb nur noch zum Erledigen (Gegner ≤ 3 Herzen).
+- **Ergebnis (9 Runden):** Jede Runde gewonnen, Bot 0 Pops, Partner alle 6. Zeit bis zum Sieg 80 s → 76 s (bestes Ergebnis). Trefferquote des Bots ~0,8/s gegen ~1,25/s des Partners, der ohne Abklingzeit-Skalierung alle 12 Ticks schlägt. Schaden pro Treffer gegen Protection-IV-Netherite ~0,8, Crit ~1,5. Gegen echte Spieler weiter ungetestet.

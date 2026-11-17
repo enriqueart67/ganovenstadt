@@ -37,7 +37,7 @@ final class Kits {
         c.add("clear " + me);
         // trained vs. the sparring partner: full blast protection lost every sword trade. Explosive kits get the usual
         // PvP mix (blast protection only on the leggings), mace kits plain protection
-        boolean boom = kind.equals("cart") || kind.equals("crystal") || kind.equals("anchor") || kind.equals("full");
+        boolean boom = !kind.equals("sword") && (kind.equals("cart") || kind.equals("crystal") || kind.equals("anchor") || kind.equals("full"));
         for (String[] a : new String[][]{{"head", "helmet"}, {"chest", "chestplate"}, {"legs", "leggings"}, {"feet", "boots"}}) {
             String prot = boom && a[0].equals("legs") ? "blast_protection" : "protection";
             String extra = a[0].equals("feet") ? ",\"minecraft:feather_falling\":4" : "";
@@ -52,6 +52,9 @@ final class Kits {
                 inv.add("end_crystal 64");
                 inv.add("end_crystal 64");
                 inv.add("obsidian 64");
+            }
+            case "sword" -> { // same gear as the sparring partner: a fair sword fight
+                bar = new String[]{SWORD, AXE, "golden_apple 8", "cooked_beef 64", "totem_of_undying", "air", "air", "air", "air"};
             }
             case "anchor" -> {
                 bar = new String[]{SWORD, "respawn_anchor 64", "glowstone 64", AXE, "golden_apple 64", "ender_pearl 16", "cobblestone 64", "obsidian 64", "totem_of_undying"};
@@ -87,12 +90,13 @@ final class Kits {
                 for (int i = 0; i < 16; i++) inv.add("tnt_minecart");
             }
         }
-        for (int i = 0; i < 9; i++) c.add("item replace entity " + me + " hotbar." + i + " with " + bar[i]);
-        for (int i = 0; i < 4; i++) inv.add("totem_of_undying");
+        for (int i = 0; i < 9; i++) if (!bar[i].equals("air")) c.add("item replace entity " + me + " hotbar." + i + " with " + bar[i]);
+        for (int i = 0; i < (kind.equals("sword") ? 3 : 4); i++) inv.add("totem_of_undying");
         for (int i = 0; i < inv.size() && i < 27; i++) c.add("item replace entity " + me + " inventory." + i + " with " + inv.get(i));
         run(mc, c);
         return switch (kind) {
             case "crystal" -> "Crystal kit: blast protection netherite, totems, crystals, obsidian, sword + axe, golden apples, pearls.";
+            case "sword" -> "Sword kit: same gear as the sparring partner (protection netherite, Sharpness V sword, axe, 5 totems, 8 golden apples).";
             case "anchor" -> "Anchor kit: blast protection netherite, totems, respawn anchors + glowstone, sword + axe, golden apples.";
             case "mace" -> "Mace kit: blast protection netherite, totems, mace (Density V, Wind Burst), wind charges, Lunge III spear, sword + axe.";
             case "elytra" -> "Elytra mace kit: armor (chestplate on, elytra in the bag), rockets, mace, wind charges, Lunge spear, totems.";
