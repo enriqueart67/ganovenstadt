@@ -150,8 +150,11 @@ final class Guard {
         List<LivingEntity> enemies = new ArrayList<>();
         LivingEntity enemy = null, creeper = null;
         double ed = Double.MAX_VALUE, cd = Double.MAX_VALUE;
+        // the duel target is the fight's business, never a "monster" for us (trained: with a zombie sparring partner
+        // this took over the tick and the duel's sword and elytra smash didn't run)
+        LivingEntity duelTarget = duelTask != null ? duelTask.target() : null;
         for (LivingEntity e : mc.level.getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(14),
-                e -> e instanceof Enemy && e.isAlive() && e != p)) {
+                e -> e instanceof Enemy && e.isAlive() && e != p && e != duelTarget)) {
             double d = e.distanceTo(p);
             boolean seen = p.hasLineOfSight(e);
             if (e instanceof Creeper) {

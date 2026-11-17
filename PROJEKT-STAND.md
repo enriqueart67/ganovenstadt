@@ -464,3 +464,12 @@ GitHub Actions (`.github/workflows/launcher.yml`, „Peregrine Client bauen“) 
   2. Volle Reichweite (3,0 − 0,02 statt − 0,08): Der Partner schlug aus 3,0, die langen Lücken lagen genau an der Kante.
   3. Gezielte Crit-Sprünge (6–8 Ticks vor dem Aufladen springen, im Fallen geladen schlagen) ergaben 56 % Crits, aber weniger Treffer. A/B: 87–91 s gegen 81–83 s. Deshalb nur noch zum Erledigen (Gegner ≤ 3 Herzen).
 - **Ergebnis (9 Runden):** Jede Runde gewonnen, Bot 0 Pops, Partner alle 6. Zeit bis zum Sieg 80 s → 76 s (bestes Ergebnis). Trefferquote des Bots ~0,8/s gegen ~1,25/s des Partners, der ohne Abklingzeit-Skalierung alle 12 Ticks schlägt. Schaden pro Treffer gegen Protection-IV-Netherite ~0,8, Crit ~1,5. Gegen echte Spieler weiter ungetestet.
+
+## Elytra-Mace als Raketen-Sturzflug
+
+- **Spielregel (26.2-Code):** `MaceItem.canSmashAttack` = Fallhöhe > 1,5 **und nicht gleitend**. Während des Gleitens zählt kein Smash. Die Fallhöhe baut sich im Sturzflug aber auf (bei Lösen ~20–23 Blöcke).
+- **Neuer Ablauf (Stufe 8/9):** Aufsteigen wie bisher auf ~22 Blöcke. Sobald der Gegner steil unter ihm ist (horizontal ≤ 1,1 × Höhe), Sturzflug mit Elytra direkt auf ihn. Gezielt wird auf die Vorhersage (seine Geschwindigkeit × Flugzeit), 1 Block neben den Kopf, damit er vorbeischießt statt durchzufliegen. Rakete nur, wenn er weit weg und langsam ist. Elytra ab (Brustpanzer an), wenn die Entfernung ≤ 2,8 × Tempo + 1,2 ist. Der Server beendet das Gleiten in diesem Tick, ab dem nächsten Tick folgt der Smash in Reichweite. Bei Vorbeiflug: Flügel bleiben, Abfangen. Nach dem Lösen ohne Treffer: Elytra wieder an oder Windladung.
+- **Trainingsfunde:**
+  1. Der Zombie-Partner galt für `Guard` als Monster. Unter 3 Blöcken übernahm Guard den Tick, Smash und Schwertkampf des Duells liefen nicht (Bot landete, Fallhöhe weg). Jetzt ist das Duell-Ziel für Guard nie ein Monster. Das betraf auch die Schwertrunden gegen den Zombie-Partner. Danach erneut gemessen: 81 s, Bot 0 Pops, Partner 6 – gleich.
+  2. Lösen bei ~2 Ticks Restflug: Smash erst nach 3 Ticks am Boden (Fall 0). Jetzt ~1 Tick früher lösen, und der Smash wartet nicht auf das Client-Flag `isFallFlying` (hängt einen Tick nach).
+- **Ergebnis:** Altes Elytra-Mace 44 s bis zum Sieg (Abwurf aus 22 Blöcken, Gegner strafte weg). Sturzflug: 3/3 bzw. 4/4 Smashes, zuletzt **alle 3 mit voller Fallhöhe 24–26 Blöcke, 2–3 Ticks nach dem Lösen, Sieg in 26 s**, 19 Schaden ausgeteilt, 17 eingesteckt.

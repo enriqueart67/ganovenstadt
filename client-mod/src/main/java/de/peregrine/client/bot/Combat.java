@@ -1182,7 +1182,7 @@ public final class Combat {
             return true;
         }
 
-        private int launchTick, lastSmash = -1;
+        private int launchTick, lastSmash = -1, diveTicks;
         private double launchFrom;
 
         private boolean mace(Minecraft mc, LocalPlayer p, double d) {
@@ -1323,7 +1323,7 @@ public final class Combat {
             flyTicks++;
             mode = "elytra mace";
             if (flyTicks > 20 * 25 || !target.isAlive()) return flyStage == 5 ? recover(mc, p) : endFlight(mc);
-            if (flyStage >= 3 && flyStage <= 4 && !openAbove(mc, target)) { // they went under a roof: a dive would only hit blocks
+            if ((flyStage >= 3 && flyStage <= 4 || flyStage == 8) && !openAbove(mc, target)) { // they went under a roof: a dive would only hit blocks
                 flyStage = 6;
                 mode = "elytra mace · they're under cover";
             }
@@ -1379,15 +1379,15 @@ public final class Combat {
                     double fix = Math.min(4.0, Tuning.elytraFix() * fall); // what the air keys can still move us on the way down (learned)
                     double toPred = Math.hypot(tPred.x - p.getX(), tPred.z - p.getZ());
                     float yawP = yawTo(p.position(), tPred);
-                    if (miss <= fix + 0.6 && hv.length() < 1.1) {
-                        Guard.keepElytra = false;
-                        equip(mc, p, "chestplate"); // elytra off → free fall
-                        hotbar(mc, s -> id(s).equals("mace") ? 1 : 0);
-                        mc.options.keyJump.setDown(false);
-                        flyStage = 5;
-                        mode = "elytra mace · dropping";
-                        CombatLog.log("elytra mace: DROP  height " + CombatLog.f(p.getY() - t.y) + "  predicted miss " + CombatLog.f(miss)
-                                + "  air fix " + CombatLog.f(fix) + "  speed " + CombatLog.f(hv.length()));
+                    // rocket dive instead of a long free fall: as soon as they are below us at a steep angle, dive at
+                    // them on the elytra and take it off only in the last tick (see case 8/9)
+                    double above = p.getY() - t.y;
+                    if (above > 8 && toPred <= above * 1.1) {
+                        flyStage = 8;
+                        diveTicks = 0;
+                        rocketCd = 0;
+                        mode = "elytra mace · rocket dive";
+                        CombatLog.log("elytra dive: start  height " + CombatLog.f(above) + "  horizontal " + CombatLog.f(toPred));
                         return true;
                     }
                     // brake when the momentum would carry us past them, otherwise fly at them
@@ -1427,6 +1427,77 @@ public final class Combat {
                         CombatLog.log("ELYTRA MISS  landed " + CombatLog.f(hd) + " blocks from them");
                         return endFlight(mc);
                     }
+                }
+                case 8 -> { // rocket dive straight at them, on the elytra – it steers to the last tick
+                    if (!p.isFallFlying()) {
+                        if (airBelow(mc, p) > 3) {
+                            flyStage = 7;
+                            return true;
+                        }
+                        return endFlight(mc);
+                    }
+                    diveTicks++;
+                    Guard.keepElytra = true;
+                    Bot.holdBest(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0); // mace in hand already
+                    Vec3 eye = p.getEyePosition(), v = p.getDeltaMovement();
+                    double speed = Math.max(0.4, v.length());
+                    double dist = reachTo(p, target);
+                    int tti = (int) Math.ceil(dist / speed);
+                    Vec3 tv = target.getDeltaMovement();
+                    AABB box = target.getBoundingBox();
+                    // pass one block beside their head, not through them: the moment they are in reach lasts longer
+                    Vec3 side = new Vec3(p.getX() - target.getX(), 0, p.getZ() - target.getZ());
+                    side = side.lengthSqr() < 1e-3 ? new Vec3(1, 0, 0) : side.normalize();
+                    Vec3 aim = new Vec3(box.getCenter().x + tv.x * Math.min(tti, 15) + side.x, box.maxY + 0.6, box.getCenter().z + tv.z * Math.min(tti, 15) + side.z);
+                    float yaw = yawTo(eye, aim);
+                    float pitch = (float) -Math.toDegrees(Math.atan2(aim.y - eye.y, Math.max(0.05, Math.hypot(aim.x - eye.x, aim.z - eye.z))));
+                    p.setYRot(yaw);
+                    p.setXRot(pitch);
+                    p.setYHeadRot(yaw);
+                    mc.options.keyJump.setDown(false);
+                    if (speed < 1.2 && dist > 10 && --rocketCd <= 0 && quickUse(mc, p, "firework_rocket", yaw, pitch)) rocketCd = 30;
+                    mode = "elytra mace · rocket dive";
+                    // a smash doesn't count while gliding (MaceItem.canSmashAttack: !isFallFlying), so the elytra comes
+                    // off about two ticks before reach: the server stops the glide in that tick, the smash follows
+                    // trained: releasing at ~2 ticks of flight left had us on the ground by the time of the smash
+                    // (3 ticks, fall reset); a tick earlier keeps the smash in the air with the whole dive's fall
+                    if (dist <= Math.max(3.6, speed * 2.8 + 1.2)) {
+                        Guard.keepElytra = false;
+                        equip(mc, p, "chestplate");
+                        flyStage = 9;
+                        diveTicks = 0;
+                        CombatLog.log("elytra dive: elytra off  dist " + CombatLog.f(dist) + "  speed " + CombatLog.f(speed) + "  fall " + CombatLog.f(p.fallDistance)
+                                + "  height " + CombatLog.f(p.getY() - target.getY()));
+                        return true;
+                    }
+                    if (p.getY() < target.getY() - 0.5 || diveTicks > 80) { // gone past or too long: wings stay, pull out
+                        CombatLog.log("ELYTRA MISS  dive passed them at " + CombatLog.f(dist));
+                        Tuning.elytra(false);
+                        flyStage = 6;
+                        return true;
+                    }
+                }
+                case 9 -> { // elytra off, a tick or two of plain fall: smash the moment they are in reach
+                    diveTicks++;
+                    Bot.holdBest(mc, s -> id(s).equals("mace") ? 1 + (enchanted(s, "density") ? 1 : 0) : 0);
+                    Bot.look(p, target.getBoundingBox().getCenter());
+                    double reach = reachTo(p, target);
+                    // the server ends the glide in the release tick already – the client flag lags a tick, so don't wait for it
+                    if (diveTicks >= 1 && reach <= p.entityInteractionRange() - 0.05 && lastSmash != ticks && !p.onGround()) {
+                        lastSmash = ticks;
+                        CombatLog.log("ELYTRA SMASH  reach " + CombatLog.f(reach) + "  fall " + CombatLog.f(p.fallDistance) + "  their hp " + CombatLog.f(target.getHealth())
+                                + "  ticks after release " + diveTicks);
+                        smash(mc, p);
+                        Tuning.elytra(true);
+                        flyStage = 6;
+                        return true;
+                    }
+                    if (diveTicks > 8 || p.getY() < target.getY() - 0.5) {
+                        CombatLog.log("ELYTRA MISS  " + CombatLog.f(reach) + " from them " + diveTicks + " ticks after release");
+                        Tuning.elytra(false);
+                        return recover(mc, p);
+                    }
+                    if (p.onGround()) return endFlight(mc);
                 }
                 case 7 -> { // recovering: wings open again, then glide down
                     if (p.onGround() || p.isInWater()) return endFlight(mc);
