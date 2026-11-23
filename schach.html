@@ -70,7 +70,7 @@ input{font:inherit}
 /* ---------- Game ---------- */
 #game{justify-content:flex-start;padding:10px 12px 12px;gap:8px}
 .top{width:var(--bw);display:flex;align-items:center;justify-content:space-between;gap:8px}
-.top .ttl{font-family:var(--comic);font-size:26px;letter-spacing:1px;color:var(--gold);text-shadow:0 2px 0 #000}
+.top .ttl{cursor:default;-webkit-user-select:none;user-select:none;font-family:var(--comic);font-size:26px;letter-spacing:1px;color:var(--gold);text-shadow:0 2px 0 #000}
 .icon{width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.07);border:1px solid var(--line);display:grid;place-items:center;font-size:18px}
 #arena{display:flex;flex-direction:column;align-items:center;gap:8px;will-change:transform}
 .bar{width:var(--bw);display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;background:var(--panel);border:1px solid var(--line);min-height:48px;transition:box-shadow .25s,border-color .25s}
@@ -98,7 +98,6 @@ input{font:inherit}
 #moves b{color:#666;font-weight:600;margin-left:8px}
 #moves span{color:var(--ink);margin-left:4px}
 #moves span.x{color:#ff9a6a}
-#moves span.cd{color:var(--gold);font-weight:700}
 
 .emo{position:fixed;font-size:56px;pointer-events:none;z-index:60;animation:emo 2.2s ease-out forwards}
 @keyframes emo{0%{transform:translate(-50%,0) scale(.3);opacity:0}15%{transform:translate(-50%,-30px) scale(1.3);opacity:1}100%{transform:translate(-50%,-220px) scale(1);opacity:0}}
@@ -177,7 +176,6 @@ input{font:inherit}
     <div class="emotes" id="emotes"><button>😂</button><button>🔥</button><button>😱</button><button>😈</button><button>👏</button></div>
     <button class="btn alt small" id="bUndo">Zurück</button>
     <button class="btn alt small" id="bFlip">Drehen</button>
-    <button class="btn alt small" id="bCode">Code</button>
     <button class="btn alt small" id="bResign">Aufgeben</button>
   </div>
   <div id="moves"></div>
@@ -191,8 +189,8 @@ input{font:inherit}
   <button class="btn alt" id="bView">Brett ansehen</button><div class="gap"></div>
   <button class="btn alt" id="bMenu">Hauptmenü</button>
 </div></div>
-<div class="modal" id="codeM" hidden><div class="card"><h2>Geheimcode</h2>
-  <input class="field" id="codeIn" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="····" style="text-align:center;font-size:28px;letter-spacing:10px;font-weight:700">
+<div class="modal" id="codeM" hidden><div class="card"><h2>Code</h2>
+  <input class="field" id="codeIn" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="····" style="text-align:center;font-size:28px;letter-spacing:10px;font-weight:700">
   <div class="gap"></div><div class="row"><button class="btn main" id="codeOk">OK</button><button class="btn alt" id="codeX">Abbrechen</button></div></div></div>
 <div class="modal" id="confM" hidden><div class="card"><h2 id="confT"></h2><div class="row"><button class="btn main" id="confY">Ja</button><button class="btn alt" id="confN">Nein</button></div></div></div>
 
@@ -524,7 +522,7 @@ const R3=(()=>{
     u.mv={x0,z0,x1:sqX(to),z1:sqZ(to),t0:performance.now(),dur:(dur||moveDur(from,to))*1000,arc};
     if(Math.hypot(dx,dz)>.1){u.faceYaw=Math.atan2(dx,dz);u.faceUntil=performance.now()+u.mv.dur+550;}
   }
-  let dropQueue=[],onLand=null;
+  let growQueue=[];
   function sync(instant){
     const st=cur(),alive=new Set();
     st.b.forEach((p,s)=>{
@@ -535,7 +533,7 @@ const R3=(()=>{
         scene.remove(old);scene.add(g);meshes.set(p.id,g);
       }
       if(!g){g=buildPiece(p.t,p.c);g.userData.pid=p.id;g.userData.s=s;g.position.set(sqX(s),0,sqZ(s));scene.add(g);meshes.set(p.id,g);
-        if(!instant&&dropQueue.length){const i=dropQueue.indexOf(p.id);if(i>=0){g.userData.drop={t0:performance.now()+i*140,dur:520};g.position.y=30;}}}
+        if(!instant&&growQueue.length){const i=growQueue.indexOf(p.id);if(i>=0){g.userData.grow={t0:performance.now()+i*110+90,dur:450};g.scale.setScalar(.001);}}}
       const u=g.userData;
       if(u.dropped){u.dropped=false;u.mv=null;u.s=s;g.position.set(sqX(s),0,sqZ(s));}
       else if(u.s!==s){
@@ -545,7 +543,7 @@ const R3=(()=>{
       }
     });
     for(const[id,g]of meshes)if(!alive.has(id)&&!dying.has(id)){scene.remove(g);meshes.delete(id);}
-    dropQueue=[];
+    growQueue=[];
   }
   function clear(){for(const g of meshes.values())scene.remove(g);meshes.clear();dying.clear();
     for(const d of debris)scene.remove(d.m);debris.length=0;for(const s of scorches)scene.remove(s);scorches.length=0;}
@@ -667,9 +665,9 @@ const R3=(()=>{
       const u=g.userData;
       if(!u.dragging){
         let x=sqX(u.s),z=sqZ(u.s),y=0;
-        if(u.drop){const k=(now-u.drop.t0)/u.drop.dur;
-          if(k<1){g.position.set(x,k<0?30:14*(1-k*k),z);g.rotation.y=u.yaw+(1-Math.max(0,k))*8;continue;}
-          u.drop=null;if(onLand)onLand(u.s);}
+        if(u.grow){const k=Math.max(0,(now-u.grow.t0)/u.grow.dur);
+          if(k<1){const c1=1.70158,c3=c1+1,e=1+c3*Math.pow(k-1,3)+c1*Math.pow(k-1,2);g.scale.setScalar(Math.max(.001,e));}
+          else{g.scale.setScalar(1);u.grow=null;}}
         if(u.mv){const k=Math.min(1,(now-u.mv.t0)/u.mv.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
           x=u.mv.x0+(u.mv.x1-u.mv.x0)*e;z=u.mv.z0+(u.mv.z1-u.mv.z0)*e;y=Math.sin(Math.PI*k)*u.mv.arc;if(k>=1)u.mv=null;}
         u.lift+=((G.sel===u.s&&!G.result?.18:0)-u.lift)*Math.min(1,dt*12);
@@ -710,7 +708,7 @@ const R3=(()=>{
   addEventListener('resize',()=>{lastW=0;});
 
   return{sync,clear,marks,setView,pick,pickPlane,dragTo,endDrag,sqCenter,tipScreen,attack,shatter,cannonball,boom,scorch,moveDur,kingId,
-    dropIn(ids){dropQueue=ids;},set onLand(f){onLand=f;},
+    growIn(ids){growQueue=ids;},
     isDying:id=>dying.has(id),markDying:id=>dying.add(id),has:id=>meshes.has(id),
     sqWorld:s=>({x:sqX(s),z:sqZ(s)})};
 })();
@@ -759,7 +757,7 @@ function renderMoves(){
   let h='';
   let n=0,needNum=true;
   G.moves.forEach(m=>{
-    if(m.code){h+='<span class="cd">'+m.san+'</span>';return;}
+    if(m.code)return;
     if(m.by==='w'){n++;h+='<b>'+n+'.</b>';}else if(needNum){h+='<b>'+(n||1)+'…</b>';}
     needNum=m.by==='w'?false:true;
     h+='<span'+(m.cap?' class="x"':'')+'>'+m.san+'</span>';
@@ -855,43 +853,43 @@ function doMove(m,{dragged=false,remote=false,instant=false}={}){
   }
   return true;
 }
-/* ---------- Geheimcode 1122: 10 Damen ---------- */
-function queenSquares(st,color,count){
+/* ---------- Geheimcode: eigene Bauern werden Damen ---------- */
+function codeHash(t){let x=0x811c9dc5;for(const c of 'krawall-schach:'+t){x^=c.charCodeAt(0);x=Math.imul(x,0x01000193)>>>0;}
+  for(let i=0;i<5000;i++){x^=x>>>13;x=Math.imul(x,0x5bd1e995)>>>0;x^=x>>>15;}return x.toString(36);}
+const CODE_H='-trfkz7';
+function queenSquares(st,color){
   const enemy=other(color),ek=kingSq(st.b,enemy),b=st.b.slice(),out=[];
-  // freie Felder, zuerst auf der eigenen Seite
-  const order=[...Array(64).keys()].filter(s=>!b[s]).sort((a,c)=>{
-    const da=color==='w'?7-(a>>3):(a>>3),dc=color==='w'?7-(c>>3):(c>>3);
-    return da-dc||Math.abs((a&7)-3.5)-Math.abs((c&7)-3.5);});
-  for(const s of order){
-    if(out.length>=count)break;
+  for(let s=0;s<64;s++){
+    const p=b[s];if(!p||p.t!=='p'||p.c!==color)continue;
     b[s]={t:'q',c:color,id:0};
     // wer am Zug ist, darf den gegnerischen König nicht sofort schlagen können
-    if(st.turn===color&&ek>=0&&attacked(b,ek,color)){b[s]=null;continue;}
+    if(st.turn===color&&ek>=0&&attacked(b,ek,color)){b[s]=p;continue;}
     out.push(s);
   }
   return out;
 }
 function parseQueenCode(u){
-  if(typeof u!=='string'||!/^Q[wb](?:[a-h][1-8]){1,10}$/.test(u))return null;
+  if(typeof u!=='string'||!/^Q[wb](?:[a-h][1-8]){1,8}$/.test(u))return null;
   const squares=[];for(let i=2;i<u.length;i+=2)squares.push(sqIdx(u.slice(i,i+2)));
   return{color:u[1],squares};
 }
 function applyQueens(color,squares,{instant=false,remote=false}){
-  const st=cur(),b=st.b.slice(),ids=[];
-  for(const s of squares){if(b[s])return false;b[s]={t:'q',c:color,id:++PID};ids.push(b[s].id);}
-  const next={...st,b,cap:null,capSq:-1,cr:{...st.cr}};
+  const st=cur(),b=st.b.slice(),ids=[],old=[];
+  for(const s of squares){const p=b[s];if(!p||p.t!=='p'||p.c!==color)return false;old.push(p.id);b[s]={t:'q',c:color,id:++PID};ids.push(b[s].id);}
+  const next={...st,b,cap:null,capSq:-1,cr:{...st.cr},hm:0};
   const u='Q'+color+squares.map(sqName).join('');
-  G.states.push(next);G.moves.push({code:true,by:color,san:'👑×'+squares.length,uci:u});
+  G.states.push(next);G.moves.push({code:true,by:color,san:'',uci:u});
   const k=posKey(next);G.keys[k]=(G.keys[k]||0)+1;
   G.sel=-1;G.targets=[];
-  if(G.mode==='online'&&!remote)NET.send({type:'code',q:u,n:G.moves.length-1});
-  if(!instant)R3.dropIn(ids);
+  if(G.mode==='online'&&!remote)NET.send({type:'swap',q:u,n:G.moves.length-1});
+  if(!instant){old.forEach(id=>R3.markDying(id));R3.growIn(ids);}
   renderAll(instant);
   if(instant)return true;
-  FX.queenRain(color,squares.length);
+  // Bauern zerspringen nacheinander, an ihrer Stelle wächst die Dame
+  old.forEach((id,i)=>setTimeout(()=>{R3.shatter(id,{x:0,z:0},1);SND.punch();},i*110));
   const res=outcome();
-  if(res){G.result=res;setTimeout(()=>{renderAll();showResult();},2600);}
-  else if(inCheck(next))setTimeout(()=>FX.check(kingSq(next.b,next.turn)),2000);
+  if(res){G.result=res;setTimeout(()=>{renderAll();showResult();},old.length*110+900);}
+  else if(inCheck(next))setTimeout(()=>FX.check(kingSq(next.b,next.turn)),old.length*110+500);
   return true;
 }
 function showResult(){
@@ -1218,15 +1216,7 @@ const FX=(()=>{
     setTimeout(()=>{doShake(14);const q=sqCenter(s);explosion(q.x,q.y,sz,6);},500);
     try{navigator.vibrate&&navigator.vibrate([200,80,500]);}catch(_){}
   }
-  function queenRain(color,n){
-    SND.thunder();doFlash('#ffd84a',.6,2);doShake(8);
-    text(n+' DAMEN!',W/2,H*.35,Math.min(W*.15,120),'#fff7b0','#ffb000','CHEAT-CODE 1122');
-    for(let i=0;i<40;i++)setTimeout(()=>sparks(rnd(0,W),-10,3,500,['#fff7b0','#ffd84a','#ffffff'],{dir:Math.PI/2,spread:.3,g:900,life:1.2}),i*30);
-  }
-  R3.onLand=s=>{const C=sqCenter(s,.1);SND.stomp();doShake(6);R3.boom(s,0xffd84a,6);
-    ring(C.x,C.y,C.size*.2,C.size*5,.45,'#ffd84a',8);sparks(C.x,C.y,26,C.size*5,['#fff7b0','#ffd84a','#ffffff'],{g:700});
-    smoke(C.x,C.y,4,C.size*.5);R3.scorch(s);};
-  return{capture,check,nuke,queenRain,
+  return{capture,check,nuke,
     emote(e){const el=document.createElement('div');el.className='emo';el.textContent=e;const r=$('board').getBoundingClientRect();
       el.style.left=(r.left+r.width*rnd(.25,.75))+'px';el.style.top=(r.top+r.height*.6)+'px';document.body.appendChild(el);setTimeout(()=>el.remove(),2300);SND.pop();}};
 })();
@@ -1334,11 +1324,11 @@ function onMsg(m){
       const mv=parseUci(m.uci);if(!mv||!doMove(mv,{remote:true})){NET.send({type:'needsync'});}
       break;}
     case'needsync':if(NET.role==='host')sendSync();break;
-    case'code':{
+    case'swap':{
       if(G.result)return;
       if(m.n!==G.moves.length){if(NET.role==='guest')NET.send({type:'needsync'});else sendSync();return;}
       const q=parseQueenCode(m.q);if(!q||q.color===G.myColor||cur().turn!==q.color){NET.send({type:'needsync'});return;}
-      applyQueens(q.color,q.squares,{remote:true});toast((NET.oppName||'Gegner')+' hat den Code 1122 benutzt!');
+      applyQueens(q.color,q.squares,{remote:true});
       break;}
     case'resign':
       if(G.result)return;
@@ -1375,20 +1365,24 @@ $('bSound').onclick=()=>{const m=SND.toggle();$('bSound').textContent=m?'🔇':'
 $('bSound').textContent=SND.muted?'🔇':'🔊';
 $('bFlip').onclick=()=>{G.flipped=!G.flipped;renderAll(true);};
 $('bUndo').onclick=undo;
-$('bCode').onclick=()=>{
-  if(G.result){toast('Das Spiel ist vorbei');return;}
-  if(G.mode==='online'&&cur().turn!==G.myColor){toast('Codes gehen nur, wenn du dran bist');return;}
+// Geheimer Zugang: dreimal schnell auf den Titel tippen
+let ttlTaps=[];
+document.querySelector('#game .ttl').addEventListener('click',()=>{
+  const now=Date.now();ttlTaps=ttlTaps.filter(t=>now-t<1500);ttlTaps.push(now);
+  if(ttlTaps.length<3)return;ttlTaps=[];
+  if(G.result)return;
+  if(G.mode==='online'&&cur().turn!==G.myColor){toast('Geht nur, wenn du dran bist');return;}
   $('codeIn').value='';$('codeM').hidden=false;setTimeout(()=>$('codeIn').focus(),50);
-};
+});
 $('codeX').onclick=()=>{$('codeM').hidden=true;};
 $('codeIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('codeOk').click();});
 $('codeOk').onclick=()=>{
-  const c=$('codeIn').value.trim();$('codeM').hidden=true;
-  if(c==='1122'){
+  const c=$('codeIn').value.trim();$('codeM').hidden=true;$('codeIn').value='';
+  if(codeHash(c)===CODE_H){
     const color=G.mode==='online'?G.myColor:cur().turn;
-    if(G.mode==='online'&&(!NET.connected||cur().turn!==color)){toast('Codes gehen nur, wenn du dran bist');return;}
-    const sq=queenSquares(cur(),color,10);
-    if(!sq.length){toast('Kein Platz mehr für Damen!');return;}
+    if(G.mode==='online'&&(!NET.connected||cur().turn!==color)){toast('Geht nur, wenn du dran bist');return;}
+    const sq=queenSquares(cur(),color);
+    if(!sq.length){toast('Keine Bauern mehr übrig');return;}
     applyQueens(color,sq,{});
   }else toast('Falscher Code');
 };
