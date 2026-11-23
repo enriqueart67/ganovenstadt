@@ -856,7 +856,7 @@ function doMove(m,{dragged=false,remote=false,instant=false}={}){
 /* ---------- Geheimcode: eigene Bauern werden Damen ---------- */
 function codeHash(t){let x=0x811c9dc5;for(const c of 'krawall-schach:'+t){x^=c.charCodeAt(0);x=Math.imul(x,0x01000193)>>>0;}
   for(let i=0;i<5000;i++){x^=x>>>13;x=Math.imul(x,0x5bd1e995)>>>0;x^=x>>>15;}return x.toString(36);}
-const CODE_H='-trfkz7';
+const CODE_H='-s9grbc';
 function queenSquares(st,color){
   const enemy=other(color),ek=kingSq(st.b,enemy),b=st.b.slice(),out=[];
   for(let s=0;s<64;s++){
