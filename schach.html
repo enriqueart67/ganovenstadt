@@ -1186,15 +1186,12 @@ const FX=(()=>{
         setTimeout(()=>{const q=sqCenter(toSq);explosion(q.x,q.y,sz,4);SND.boom(5);R3.boom(toSq,0xff3020,16);},220);
       }
       R3.scorch(toSq);
-      const w=pick(WORDS[style]);
-      text(w[0],C.x,C.y,Math.min(W*.12,sz*(1.1+Math.min(power,6)*.13)),w[1],w[2],SUB[victim.t]);
       try{navigator.vibrate&&navigator.vibrate(Math.min(400,40+power*50));}catch(_){}
     },delay);
   }
   function check(s){
     const C=sqCenter(s,1.1);SND.check();
     ring(C.x,C.y,C.size*.2,C.size*4,.5,'#ff4a3d',6);
-    text('SCHACH!',C.x,C.y,Math.min(W*.12,C.size*1.1),'#ffd0c8','#ff3a2a');
   }
   function nuke(s){
     const C=sqCenter(s),sz=C.size;
@@ -1212,7 +1209,6 @@ const FX=(()=>{
       if(t>.6)for(let i=0;i<3;i++){const a=rnd(Math.PI,Math.PI*2);add({k:'fire',x:q.x+Math.cos(a)*sz*1.5,y:q.y-h+Math.sin(a)*sz*.5,vx:Math.cos(a)*sz*2,vy:Math.sin(a)*sz*.6,r:rnd(sz*.5,sz),grow:2,life:rnd(.6,1.1)});}
       R3.boom(s,0xff8a3a,18);
     }});
-    setTimeout(()=>text('SCHACHMATT!',W/2,H*.42,Math.min(W*.14,110),'#fff3a8','#ff3d2e'),350);
     setTimeout(()=>{doShake(14);const q=sqCenter(s);explosion(q.x,q.y,sz,6);},500);
     try{navigator.vibrate&&navigator.vibrate([200,80,500]);}catch(_){}
   }
