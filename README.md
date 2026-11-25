@@ -12,6 +12,6 @@ Spielen: https://enriqueart67.github.io/ganovenstadt/schach.html
 
 ## Nadeljagd
 
-Such die Nadel im riesigen 3D-Heuhaufen: graben, Heu sammeln, Heu am Heu-Ankauf verkaufen, Förderbänder und Greifarme zu einer Heu-Fabrik verbauen, in der Werkstatt Upgrades und Maschinen (Bohrer, Sauger, Magnet) kaufen, Metalldetektor nutzen, Save-Laternen aufstellen (Fortschritt bleibt gespeichert) – allein oder mit Freunden im selben Haufen per Raum-Code/Link.
+Finde die Nadel im riesigen 3D-Heuhaufen: mit bloßen Händen anfangen, Heu verkaufen, Werkzeuge von der Harke bis zur Schwerkraft-Kanone freischalten, Förderbänder, Greifarme, Laser und Fräsen zu einer Heu-Fabrik verbauen. Der Haufen wird nach innen immer härter – ausgelegt auf mehrere Stunden pro Haufen. Speichert automatisch, auch die Multiplayer-Welt des Gastgebers (gleicher Raum-Code).
 
 Spielen: https://enriqueart67.github.io/ganovenstadt/nadel.html
