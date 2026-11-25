@@ -73,6 +73,26 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
 #modal{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45)}
 #modal .card{text-align:center}
 #modal h2{margin:0 0 6px;color:var(--gold);font-size:30px}
+#shop{position:fixed;inset:0;z-index:35;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(0,0,0,.4)}
+.shopcard{width:min(560px,100%);padding:16px 16px 10px}
+.shophead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.shophead h2{margin:0;color:var(--gold);font-size:24px;flex:1}
+.hayc{font-size:18px;font-weight:800;background:rgba(255,211,107,.15);border:1px solid rgba(255,211,107,.4);border-radius:999px;padding:5px 12px}
+.xbtn{background:#3d3222;border:0;color:#fff;border-radius:10px;width:36px;height:36px;font-size:18px}
+.sect{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#d7c7a5;margin:12px 0 4px}
+.item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line);margin-bottom:6px}
+.item .ic{font-size:28px;width:36px;text-align:center}
+.item .tx{flex:1;font-size:13px;line-height:1.35;color:#e8dcc2}
+.item .tx b{font-size:15px;color:#fff}
+.lv{display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle}.lv i{width:8px;height:8px;border-radius:2px;background:rgba(255,255,255,.18)}.lv i.on{background:var(--gold)}
+.buy{border:0;border-radius:10px;padding:9px 10px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffe07a,#f0b020);color:#3b2600;min-width:86px}
+.buy:disabled{background:#4a4030;color:#9a8c72}
+.buy.place{background:linear-gradient(180deg,#7be07b,#36a536);color:#062a06;margin-top:4px}
+.btns{display:flex;flex-direction:column}
+#gain{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);font-weight:900;font-size:18px;color:#ffe48a;text-shadow:0 2px 4px rgba(0,0,0,.7);opacity:0;transition:opacity .3s}
+#arrow{position:absolute;left:50%;top:50%;width:80px;height:80px;margin:-40px;pointer-events:none;opacity:0;transition:opacity .4s}
+#arrow div{position:absolute;left:50%;top:-34px;margin-left:-16px;font-size:32px;color:#7ff;text-shadow:0 0 12px #0ff}
+#arrow span{position:absolute;left:50%;top:94px;transform:translateX(-50%);white-space:nowrap;font-weight:800;color:#bff;text-shadow:0 2px 4px #000}
 #loading{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#2a1d10;color:var(--gold);font-size:20px;font-weight:700;text-align:center;padding:20px}
 @media (max-width:640px){
   .tl{font-size:12px;padding:6px 10px;line-height:1.45}
@@ -111,6 +131,7 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
       <b>PC:</b> <kbd>WASD</kbd> laufen · <kbd>Leertaste</kbd> springen · Maus umsehen (ins Bild klicken)<br>
       <b>Linke Maustaste halten</b> = graben / Nadel nehmen · <kbd>Q</kbd> Metalldetektor<br>
       <kbd>F</kbd> Save-Laterne abstellen · <kbd>R</kbd> zur Save-Laterne · <kbd>Esc</kbd> Menü<br>
+      <kbd>U</kbd> Werkstatt: mit gesammeltem 🌾 Heu Upgrades & Maschinen kaufen · <kbd>1</kbd> Bohrer <kbd>2</kbd> Sauger <kbd>3</kbd> Magnet aufstellen<br>
       <b>Handy:</b> links ziehen = laufen, rechts wischen = umsehen, Knöpfe rechts.<br>
       Gegrabene Tunnel, Save-Laternen und Zeit werden automatisch gespeichert.
     </div>
@@ -120,11 +141,11 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
 <div id="hud" class="hidden">
   <div class="tl">
     <div>⏱ <b id="hTime">0:00</b> · 🪡 <b id="hFound">0</b></div>
-    <div>🌾 <span id="hDug">0</span> % durchwühlt</div>
+    <div>🌾 <b id="hHay">0</b> Heu · <span id="hDug">0</span> % durchwühlt</div>
     <div>🏮 <span id="hSave">keine Save-Laterne</span></div>
   </div>
   <div class="tr">
-    <button class="pill" id="bMenuHud">☰ Menü</button>
+    <div style="display:flex;gap:6px"><button class="pill" id="bShopHud">🛠 Werkstatt</button><button class="pill" id="bMenuHud">☰ Menü</button></div>
     <div id="roomBox" class="hidden">
       Raum: <span class="code" id="rCode"></span>
       <button class="pill" id="bCopy" style="margin-left:6px;padding:4px 8px">Link kopieren</button>
@@ -134,10 +155,12 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
   </div>
   <div id="cross"></div>
   <div id="ping"></div>
+  <div id="gain"></div>
+  <div id="arrow"><div>➤</div><span></span></div>
   <div id="toast"></div>
   <div id="banner"></div>
   <div id="det"><span id="detTxt">📡 Detektor bereit</span><small id="detSub">Q drücken</small><div id="detBar"><div></div></div></div>
-  <div id="pcHelp">🖱 halten = graben · <kbd>Q</kbd> Detektor · <kbd>F</kbd> Laterne · <kbd>R</kbd> zurück</div>
+  <div id="pcHelp">🖱 halten = graben · <kbd>Q</kbd> Detektor · <kbd>F</kbd> Laterne · <kbd>R</kbd> zurück · <kbd>U</kbd> Werkstatt · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Maschinen</div>
 </div>
 
 <div id="touch" class="hidden">
@@ -148,6 +171,11 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
   <button class="tb" id="bSave"><span>🏮</span>Save</button>
   <button class="tb" id="bBack"><span>↩</span></button>
 </div>
+
+<div id="shop" class="hidden"><div class="card shopcard">
+  <div class="shophead"><h2>🛠 Werkstatt</h2><div class="hayc">🌾 <span id="shopHay">0</span></div><button class="xbtn" id="shopX">✕</button></div>
+  <div id="shopList"></div>
+</div></div>
 
 <div id="modal" class="hidden"><div class="card" id="modalCard"></div></div>
 
@@ -168,8 +196,11 @@ const IS_TOUCH='ontouchstart' in window&&matchMedia('(pointer:coarse)').matches;
    Speicherstand
    ===================================================================== */
 const SKEY='nadeljagd.v2';
-let SAVE={name:'',color:COLORS[1],found:0,best:null,world:null};
+let SAVE={name:'',color:COLORS[1],found:0,best:null,world:null,hay:0,up:{},mach:{}};
 try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(s&&typeof s==='object')Object.assign(SAVE,s);}catch(_){}
+SAVE.up=Object.assign({tool:0,speed:0,det:0,boots:0,lamp:0},SAVE.up||{});
+SAVE.mach=Object.assign({drill:0,vac:0,mag:0},SAVE.mach||{});
+SAVE.hay=Math.max(0,+SAVE.hay||0);
 function persist(){try{localStorage.setItem(SKEY,JSON.stringify(SAVE));}catch(_){}}
 
 /* =====================================================================
@@ -217,7 +248,7 @@ const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.05,700);
 camera.rotation.order='YXZ';
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();});
 
-const SUN_DIR=new V3(.62,.30,-.72).normalize();
+const SUN_DIR=new V3(.55,.30,.78).normalize();
 scene.fog=new THREE.Fog(0xf0b487,35,190);
 
 // Himmel mit Abendsonne
@@ -441,8 +472,8 @@ function rebuild(){
     _d.scale.set(.95+h2*.35,.85+h3*.3,.95+h1*.35);
     _d.updateMatrix();blobs.setMatrixAt(nb,_d.matrix);
     let occ=0;for(const o of AO_OFF)if(solid(i+o[0],j+o[1],k+o[2]))occ++;
-    const ao=1-.62*Math.pow(occ/AO_OFF.length,1.4);
-    _c.setHSL(.105+h1*.03,.55+h2*.15,.42+h3*.14);_c.convertSRGBToLinear().multiplyScalar(ao);
+    const ao=1-.6*Math.pow(occ/AO_OFF.length,1.6);
+    _c.setHSL(.11+h1*.03,.62+h2*.12,.56+h3*.14);_c.convertSRGBToLinear().multiplyScalar(ao);
     blobs.setColorAt(nb,_c);nb++;
     if(dp===1&&ns<MAXS-6){
       _n.set(0,0,0);
@@ -469,16 +500,17 @@ let dirty=false,rebuildCd=0;
 
 /* ---------- Graben ---------- */
 const DIG_R=.62;
-function digAt(x,y,z,fx){
-  const i0=Math.floor((x-DIG_R-OX)/CS),i1=Math.floor((x+DIG_R-OX)/CS);
-  const j0=Math.max(0,Math.floor((y-DIG_R-OY)/CS)),j1=Math.floor((y+DIG_R-OY)/CS);
-  const k0=Math.floor((z-DIG_R-OZ)/CS),k1=Math.floor((z+DIG_R-OZ)/CS);
+function digAt(x,y,z,fx,rad){
+  const DR=rad||DIG_R;
+  const i0=Math.floor((x-DR-OX)/CS),i1=Math.floor((x+DR-OX)/CS);
+  const j0=Math.max(0,Math.floor((y-DR-OY)/CS)),j1=Math.floor((y+DR-OY)/CS);
+  const k0=Math.floor((z-DR-OZ)/CS),k1=Math.floor((z+DR-OZ)/CS);
   let n=0;
   for(let j=j0;j<=j1;j++)for(let k=k0;k<=k1;k++)for(let i=i0;i<=i1;i++){
     if(i<0||k<0||i>=NX||k>=NZ||j>=NY)continue;
     const c=idx(i,j,k);if(!grid[c])continue;
     const cx=OX+(i+.5)*CS-x,cy=OY+(j+.5)*CS-y,cz=OZ+(k+.5)*CS-z;
-    if(cx*cx+cy*cy+cz*cz<=DIG_R*DIG_R){grid[c]=0;n++;}
+    if(cx*cx+cy*cy+cz*cz<=DR*DR){grid[c]=0;n++;}
   }
   if(n){dirty=true;worldDirty=true;if(fx!==false)hayBurst(x,y,z,n);}
   return n;
@@ -530,7 +562,7 @@ function placeNeedle(){
   N.state='hidden';N.vy=0;needle.visible=false;
 }
 function updateNeedleVisibility(){
-  if(N.state==='taken'||needleCell<0)return;
+  if(N.state==='taken'||N.state==='magnet'||needleCell<0)return;
   needle.visible=!grid[needleCell]||depth[needleCell]<=1;
   if(!grid[needleCell]&&N.state==='hidden')N.state='falling';
 }
@@ -549,6 +581,7 @@ function updateNeedle(dt,t){
     if(floorY>=0&&needle.position.y<=floorY){needle.position.y=floorY;N.vy=0;}
     if(needle.position.y<.03){needle.position.y=.03;N.vy=0;}
   }
+  if(N.state==='magnet'&&N.target){needle.position.lerp(N.target,Math.min(1,dt*2.5));needle.rotation.x=lerp(needle.rotation.x,0,dt*3);}
   if(N.state==='taken'){
     needle.position.lerp(_v.copy(camera.position).add(camDir().multiplyScalar(.6)),Math.min(1,dt*6));needle.rotation.y+=dt*6;
   }
@@ -557,7 +590,7 @@ function updateNeedle(dt,t){
 /* =====================================================================
    Spieler (Ego-Perspektive) + Kollision mit dem Heu
    ===================================================================== */
-const PR=.24,PHT=1.55,EYE=1.42,GRAV=22,JUMP=7.2,SPEED=3.6;
+const PR=.24,PHT=1.55,EYE=1.42,GRAV=22;
 const P={pos:new V3(),vel:new V3(),yaw:0,pitch:0,grounded:false,eyeY:null,bob:0,shake:0};
 const keys={},input={x:0,y:0,jump:false,dig:false,digKey:false};
 let state='menu',mode='solo';
@@ -585,6 +618,7 @@ function camDir(){return new V3(-Math.sin(P.yaw)*Math.cos(P.pitch),Math.sin(P.pi
 function physics(dt){
   let ix=input.x,iy=input.y;const l=Math.hypot(ix,iy);if(l>1){ix/=l;iy/=l;}
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=-fz,rz=fx;
+  const SPEED=[3.6,4.3,5,5.8][SAVE.up.boots]||3.6,JUMP=[7.2,7.7,8.3,9][SAVE.up.boots]||7.2;
   const tx=(fx*iy+rx*ix)*SPEED,tz=(fz*iy+rz*ix)*SPEED;
   const k=P.grounded?12:3;
   P.vel.x+=(tx-P.vel.x)*Math.min(1,k*dt);P.vel.z+=(tz-P.vel.z)*Math.min(1,k*dt);
@@ -639,10 +673,11 @@ function interact(dt){
   if(!(input.dig||input.digKey)||digCd>0)return;
   if(onNeedle){takeNeedle();return;}
   if(hit&&!hit.ground){
+    const r=upv('tool');
     const p=hit.p.addScaledVector(d,.25);
-    if(p.y<DIG_R*.4)p.y=DIG_R*.4;
-    digAt(p.x,p.y,p.z);digCd=.2;P.shake=.12;
-    net.dig(p);
+    if(p.y<r*.4)p.y=r*.4;
+    const n=digAt(p.x,p.y,p.z,true,r);digCd=upv('speed');P.shake=.12;
+    addHay(n);net.dig(p,r);
   }
 }
 
@@ -684,6 +719,198 @@ function gotoSave(){
   saveCycle--;
 }
 
+/* =====================================================================
+   Upgrades, Heu-Währung & Werkstatt
+   ===================================================================== */
+const UPG={
+  tool:{name:'Grab-Werkzeug',icon:'🪏',levels:['Hände','Mistgabel','Heugabel XL','Turbo-Schaufel','Heu-Bagger'],val:[.62,.75,.9,1.05,1.2],cost:[80,250,600,1400],info:v=>`Grab-Radius ${v.toFixed(2)} m`},
+  speed:{name:'Grab-Tempo',icon:'⚡',levels:['Normal','Flink','Schnell','Rasend','Hyper'],val:[.2,.16,.12,.09,.065],cost:[60,200,500,1200],info:v=>`${(1/v).toFixed(1)} Griffe pro Sekunde`},
+  det:{name:'Metalldetektor',icon:'📡',levels:['Basis','Turbo','Mit Meterangabe','Mit Richtungspfeil'],val:[2.2,1.4,1.1,.8],cost:[100,350,800],info:(v,l)=>['Sagt kalt/warm/heiß','Lädt schneller','Zeigt die Entfernung in Metern','Pfeil zeigt die Richtung + Höhe'][l]},
+  boots:{name:'Stiefel',icon:'👢',levels:['Gummistiefel','Laufstiefel','Sprungstiefel','Raketenstiefel'],val:[0,1,2,3],cost:[50,180,450],info:(v,l)=>['Normal','Schneller laufen','Schneller + höher springen','Superschnell + Riesensprung'][l]},
+  lamp:{name:'Laterne',icon:'🔦',levels:['Funzel','Helle Lampe','Flutlicht'],val:[0,1,2],cost:[40,150],info:(v,l)=>['Etwas Licht im Heu','Heller und weiter','Macht Tunnel taghell'][l]},
+};
+const upv=k=>UPG[k].val[SAVE.up[k]||0];
+const MDEF={
+  drill:{name:'Heu-Bohrer',icon:'🚜',cost:150,key:'1',desc:'Bohrt automatisch einen Tunnel geradeaus durch den Haufen und bringt Heu. Kommt danach zurück.'},
+  vac:{name:'Heu-Sauger',icon:'🌀',cost:400,key:'2',desc:'Saugt rundherum eine immer größere Höhle frei (bis 3 m). Kommt danach zurück.'},
+  mag:{name:'Super-Magnet',icon:'🧲',cost:900,key:'3',desc:'Bleibt stehen und zieht die Nadel heraus, sobald sie näher als 3,5 m ist.'},
+};
+let gainAcc=0,gainT=0;
+function addHay(n){
+  if(!n)return;SAVE.hay+=n;gainAcc+=n;gainT=.9;
+  const g=$('gain');g.textContent=`+${gainAcc} 🌾`;g.style.opacity=1;
+}
+let shopFrom='play';
+function openShop(){
+  if(state!=='play')return;
+  state='shop';if(document.pointerLockElement)document.exitPointerLock();
+  for(const k in keys)keys[k]=false;input.x=input.y=0;input.dig=false;
+  $('touch').classList.add('hidden');renderShop();$('shop').classList.remove('hidden');
+}
+function closeShop(){if(state!=='shop')return;$('shop').classList.add('hidden');state='play';$('touch').classList.toggle('hidden',!isTouch);}
+function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+function renderShop(){
+  $('shopHay').textContent=Math.floor(SAVE.hay);
+  const L=$('shopList');L.textContent='';
+  L.appendChild(el('div','sect','Upgrades'));
+  for(const k in UPG){
+    const u=UPG[k],l=SAVE.up[k]||0,max=l>=u.levels.length-1;
+    const it=el('div','item');it.appendChild(el('div','ic',u.icon));
+    const tx=el('div','tx');const b=el('b',null,u.name);tx.appendChild(b);
+    const lv=el('span','lv');for(let i=0;i<u.levels.length;i++){const x=el('i',i<=l?'on':'');lv.appendChild(x);}tx.appendChild(lv);
+    tx.appendChild(el('div',null,`${u.levels[l]} – ${u.info(u.val[l],l)}`));
+    if(!max)tx.appendChild(el('div',null,`Nächste Stufe: ${u.levels[l+1]} – ${u.info(u.val[l+1],l+1)}`));
+    it.appendChild(tx);
+    const btn=el('button','buy',max?'MAX':`🌾 ${u.cost[l]}`);
+    btn.disabled=max||SAVE.hay<u.cost[l];
+    btn.onclick=()=>{if(SAVE.hay<u.cost[l])return;SAVE.hay-=u.cost[l];SAVE.up[k]=l+1;persist();SFX.save();renderShop();};
+    it.appendChild(btn);L.appendChild(it);
+  }
+  L.appendChild(el('div','sect','Maschinen'));
+  for(const k in MDEF){
+    const m=MDEF[k],own=SAVE.mach[k]||0,busy=machines.filter(x=>x.k===k&&x.o===net.myId).length;
+    const it=el('div','item');it.appendChild(el('div','ic',m.icon));
+    const tx=el('div','tx');tx.appendChild(el('b',null,m.name));tx.appendChild(el('div',null,m.desc));
+    tx.appendChild(el('div',null,`Besitz: ${own} · im Einsatz: ${busy}`+(isTouch?'':` · Taste ${m.key}`)));
+    it.appendChild(tx);
+    const bs=el('div','btns');
+    const buy=el('button','buy',`🌾 ${m.cost}`);buy.disabled=SAVE.hay<m.cost;
+    buy.onclick=()=>{if(SAVE.hay<m.cost)return;SAVE.hay-=m.cost;SAVE.mach[k]=own+1;persist();SFX.save();renderShop();};
+    bs.appendChild(buy);
+    if(own>0){const pl=el('button','buy place','Aufstellen');pl.onclick=()=>{closeShop();placeMachine(k);};bs.appendChild(pl);}
+    it.appendChild(bs);L.appendChild(it);
+  }
+  const tip=el('div','sect',`Tipp: Jeder gegrabene Heubrocken bringt 🌾. Upgrades & Maschinen behältst du auch für neue Heuhaufen.`);
+  tip.style.textTransform='none';tip.style.letterSpacing='0';L.appendChild(tip);
+}
+
+/* =====================================================================
+   Maschinen
+   ===================================================================== */
+const machines=[];
+const MM={
+  yellow:new THREE.MeshStandardMaterial({color:0xf2b705,roughness:.45,metalness:.2}),
+  dark:new THREE.MeshStandardMaterial({color:0x222222,roughness:.7}),
+  steel:new THREE.MeshStandardMaterial({color:0xd8dde3,metalness:1,roughness:.25,envMap:envTex}),
+  red:new THREE.MeshStandardMaterial({color:0xd8282a,roughness:.4,metalness:.2}),
+  blue:new THREE.MeshStandardMaterial({color:0x2a7de1,roughness:.4,metalness:.3}),
+  glass:new THREE.MeshStandardMaterial({color:0x99ddff,transparent:true,opacity:.35,roughness:.1}),
+};
+function makeMachineMesh(k){
+  const g=new THREE.Group();const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;g.add(m);return m;};
+  if(k==='drill'){
+    add(new THREE.BoxGeometry(.7,.55,.9),MM.yellow,0,.5,-.1);
+    add(new THREE.BoxGeometry(.5,.35,.4),MM.glass,0,.95,-.2);
+    for(const x of[-.38,.38])for(const z of[-.4,.2]){const w=add(new THREE.CylinderGeometry(.17,.17,.12,14),MM.dark,x,.17,z);w.rotation.z=Math.PI/2;}
+    const pipe=add(new THREE.CylinderGeometry(.05,.05,.35,8),MM.dark,.22,1,.2);
+    const drill=new THREE.Group();drill.position.set(0,.6,.45);g.add(drill);
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(.3,.75,16,1,true),MM.steel);cone.rotation.x=Math.PI/2;cone.position.z=.37;cone.castShadow=true;drill.add(cone);
+    for(let i=0;i<3;i++){const sp=new THREE.Mesh(new THREE.TorusGeometry(.2-i*.06,.025,6,16),MM.steel);sp.position.z=.15+i*.2;drill.add(sp);}
+    g.userData.spin=drill;
+    for(let i=0;i<2;i++){const s=add(new THREE.BoxGeometry(.71,.06,.2),MM.dark,0,.5,-.35+i*.35);}
+  }else if(k==='vac'){
+    add(new THREE.CylinderGeometry(.38,.42,.8,20),MM.red,0,.45,0);
+    add(new THREE.CylinderGeometry(.4,.4,.08,20),MM.dark,0,.88,0);
+    const fan=new THREE.Group();fan.position.y=.95;g.add(fan);
+    for(let i=0;i<4;i++){const b=new THREE.Mesh(new THREE.BoxGeometry(.6,.02,.1),MM.steel);b.rotation.y=i*Math.PI/4;fan.add(b);}
+    g.userData.spin=fan;
+    const hose=new THREE.Mesh(new THREE.TorusGeometry(.35,.07,8,16,Math.PI),MM.dark);hose.position.set(0,.9,.25);hose.rotation.y=Math.PI/2;g.add(hose);
+    const field=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.MeshBasicMaterial({color:0xffd36b,transparent:true,opacity:.08,depthWrite:false,side:THREE.DoubleSide}));
+    field.position.y=1;g.add(field);g.userData.field=field;
+  }else{
+    add(new THREE.CylinderGeometry(.06,.08,1.2,10),MM.dark,0,.6,0);
+    add(new THREE.CylinderGeometry(.3,.35,.12,16),MM.dark,0,.06,0);
+    const head=new THREE.Group();head.position.y=1.45;g.add(head);
+    const u=new THREE.Mesh(new THREE.TorusGeometry(.28,.1,12,24,Math.PI),MM.red);u.rotation.z=Math.PI;u.castShadow=true;head.add(u);
+    for(const x of[-.28,.28]){const t=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,.18,12),MM.steel);t.position.set(x,.09,0);head.add(t);}
+    g.userData.spin=head;
+    const ring=new THREE.Mesh(new THREE.RingGeometry(3.4,3.5,64),new THREE.MeshBasicMaterial({color:0x58b8ff,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false}));
+    ring.rotation.x=-Math.PI/2;ring.position.y=.04;g.add(ring);g.userData.ring=ring;
+    const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0x66ccff,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:.6}));
+    glow.scale.set(1.2,1.2,1);glow.position.y=1.5;g.add(glow);g.userData.glow=glow;
+  }
+  scene.add(g);return g;
+}
+function serMachine(m){return{id:m.id,k:m.k,o:m.o,x:+m.x.toFixed(2),y:+m.y.toFixed(2),z:+m.z.toFixed(2),dx:+m.dx.toFixed(3),dz:+m.dz.toFixed(3),prog:+(m.prog||0).toFixed(2)};}
+function sanitizeMachine(d,owner){
+  if(!d||typeof d!=='object'||!MDEF[d.k])return null;
+  const v=[d.x,d.y,d.z,d.dx,d.dz].map(Number);if(v.some(x=>!isFinite(x)))return null;
+  return{id:String(d.id||'').slice(0,12)||Math.random().toString(36).slice(2,9),k:d.k,o:String(owner||d.o||''),x:clamp(v[0],-30,30),y:clamp(v[1],0,12),z:clamp(v[2],-30,30),dx:v[3],dz:v[4],prog:clamp(+d.prog||0,0,40),t:0};
+}
+function placeMachineMesh(m){
+  if(!m.mesh)return;
+  const off=m.k==='drill'?m.prog:0;
+  m.mesh.position.set(m.x+m.dx*off,m.y,m.z+m.dz*off);
+  m.mesh.rotation.y=Math.atan2(m.dx,m.dz);
+}
+function addMachine(m){m.mesh=makeMachineMesh(m.k);m.t=0;placeMachineMesh(m);machines.push(m);return m;}
+function removeMachine(id){const i=machines.findIndex(m=>m.id===id);if(i<0)return;scene.remove(machines[i].mesh);machines.splice(i,1);}
+function clearMachines(){for(const m of machines)scene.remove(m.mesh);machines.length=0;}
+function placeMachine(k){
+  if(state!=='play')return;
+  const own=SAVE.mach[k]||0,mine=machines.filter(m=>m.k===k&&m.o===net.myId);
+  if(!own){toast(`Du hast noch keinen ${MDEF[k].name}. Kauf einen in der Werkstatt (🛠).`,3000);return;}
+  if(roundOver){toast('Die Runde ist gerade vorbei.');return;}
+  if(mine.length>=own){
+    if(k==='mag'){removeMachineNet(mine[0].id);}
+    else{toast(`Alle deine ${MDEF[k].name} sind gerade im Einsatz.`);return;}
+  }
+  const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw);
+  const m=addMachine({id:Math.random().toString(36).slice(2,9),k,o:net.myId,x:P.pos.x+fx*1.2,y:P.pos.y,z:P.pos.z+fz*1.2,dx:fx,dz:fz,prog:0});
+  SFX.save();worldDirty=true;
+  toast(`${MDEF[k].icon} ${MDEF[k].name} aufgestellt!`);
+  netSend({t:'mach',m:serMachine(m)});
+}
+function removeMachineNet(id){removeMachine(id);netSend({t:'unmach',id});worldDirty=true;}
+function netSend(m){if(mode==='host')net.broadcast(m);else if(mode==='guest')net.sendHost(m);}
+function machineDig(x,y,z,r,m){
+  const n=digAt(x,y,z,camera.position.distanceTo(_w.set(x,y,z))<14,r);
+  if(n){addHay(n);net.dig(_w.set(x,y,z),r);
+    if(needle.visible&&N.state!=='taken'&&!m.found&&needle.position.distanceTo(_w.set(x,y,z))<r+.6){m.found=true;toast(`✨ Dein ${MDEF[m.k].name} hat etwas Glänzendes freigelegt!`,3500);}}
+  return n;
+}
+function updateMachines(dt,t){
+  for(const m of [...machines]){
+    const mine=m.o===net.myId,g=m.mesh.userData;
+    if(m.k==='drill'){
+      if(g.spin)g.spin.rotation.z+=dt*(m.done?0:14);
+      if(!mine||roundOver||state==='menu')continue;
+      m.t+=dt;
+      if(m.t>=.7){m.t=0;
+        const hx=m.x+m.dx*(m.prog+.95),hz=m.z+m.dz*(m.prog+.95);
+        machineDig(hx,m.y+.8,hz,.82,m);
+        m.prog+=.38;placeMachineMesh(m);netSend({t:'mpos',id:m.id,prog:+m.prog.toFixed(2)});worldDirty=true;
+        if(m.prog>=18){removeMachineNet(m.id);toast(`${MDEF.drill.icon} Bohrer fertig – wieder einsatzbereit (Taste 1)`);}
+      }
+    }else if(m.k==='vac'){
+      if(g.spin)g.spin.rotation.y+=dt*20;
+      const r=Math.min(3,.9+m.prog*.16);
+      if(g.field){g.field.scale.setScalar(r);g.field.material.opacity=.06+.04*Math.sin(t*6);}
+      if(!mine||roundOver||state==='menu')continue;
+      m.t+=dt;
+      if(m.t>=1){m.t=0;machineDig(m.x,m.y+1,m.z,r,m);m.prog+=1;worldDirty=true;
+        if(m.prog>=14){removeMachineNet(m.id);toast(`${MDEF.vac.icon} Sauger fertig – wieder einsatzbereit (Taste 2)`);}}
+    }else{
+      if(g.spin)g.spin.rotation.y+=dt*1.2;
+      if(g.ring)g.ring.material.opacity=.25+.15*Math.sin(t*3);
+      if(!mine||roundOver||state==='menu'||m.pulled)continue;
+      m.t+=dt;
+      if(m.t>=1){m.t=0;
+        const head=_n.set(m.x,m.y+1.45,m.z);
+        if(N.state!=='taken'&&needle.position.distanceTo(head)<3.5){
+          m.pulled=true;
+          const from=needle.position.clone(),to=head.clone(),L=from.distanceTo(to);
+          N.state='magnet';N.target=to.clone().add(new V3(.28,-.05,0));needle.visible=true;
+          for(let s=0;s<=L;s+=.35){const p=from.clone().lerp(to,s/L);machineDig(p.x,p.y,p.z,.5,m);}
+          if(g.glow){g.glow.material.color.set(0xffffff);g.glow.scale.set(2.4,2.4,1);}
+          beep(180,.6,'sawtooth',.06,90);
+          toast('🧲 Der Magnet hat die Nadel erwischt! Schnell hin und nimm sie!',4500);
+        }
+      }
+    }
+  }
+}
+
 /* ---------- Welt speichern / laden ---------- */
 function packGrid(){
   const b=new Uint8Array(Math.ceil(NCELL/8));
@@ -698,12 +925,12 @@ let worldDirty=false,gameTime=0;
 function saveWorld(force){
   if(mode!=='solo'||roundOver)return;
   if(!force&&!worldDirty)return;
-  SAVE.world={seed:worldSeed,grid:packGrid(),pos:[+P.pos.x.toFixed(2),+P.pos.y.toFixed(2),+P.pos.z.toFixed(2),+P.yaw.toFixed(2)],saves,time:Math.round(gameTime)};
+  SAVE.world={seed:worldSeed,grid:packGrid(),pos:[+P.pos.x.toFixed(2),+P.pos.y.toFixed(2),+P.pos.z.toFixed(2),+P.yaw.toFixed(2)],saves,time:Math.round(gameTime),machines:machines.filter(m=>m.o===net.myId).map(serMachine)};
   worldDirty=false;persist();
 }
 function resetPlayer(){P.pos.set((Math.random()-.5)*4,0,11+Math.random());P.yaw=0;P.pitch=.12;P.vel.set(0,0,0);P.eyeY=null;}
 function newWorld(seed){
-  roundOver=false;generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;resetPlayer();rebuild();
+  roundOver=false;clearMachines();generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;resetPlayer();rebuild();
 }
 function loadWorld(){
   const w=SAVE.world;
@@ -713,6 +940,7 @@ function loadWorld(){
   placeNeedle();
   saves=Array.isArray(w.saves)?w.saves.slice(0,3):[];syncSaveMeshes();saveCycle=saves.length-1;
   gameTime=w.time||0;
+  clearMachines();for(const mm of (Array.isArray(w.machines)?w.machines:[])){const m=sanitizeMachine(mm,net.myId);if(m)addMachine(m);}
   if(Array.isArray(w.pos)){P.pos.set(+w.pos[0]||0,+w.pos[1]||0,+w.pos[2]||11);P.yaw=+w.pos[3]||0;}else resetPlayer();
   P.vel.set(0,0,0);P.eyeY=null;
   rebuild();return true;
@@ -721,11 +949,11 @@ function loadWorld(){
 /* =====================================================================
    Detektor
    ===================================================================== */
-let detCd=0;
-const DET_CD=2.2;
+let detCd=0,arrowT=0;
+const detMax=()=>upv('det');
 function useDetector(){
   if(state!=='play'||detCd>0)return;
-  detCd=DET_CD;
+  detCd=detMax();
   const d=camera.position.distanceTo(needle.position);
   let txt,beeps,col;
   if(roundOver){txt='—';beeps=0;col='';}
@@ -736,12 +964,22 @@ function useDetector(){
   else if(d<9.5){txt='💨 Kühl';beeps=2;col='#9fd7ff';}
   else{txt='❄️ Eiskalt';beeps=1;col='#6fb6ff';}
   for(let i=0;i<beeps;i++)beep(600+beeps*180,.09,'square',.05,null,i*(.5/beeps+.04));
-  $('detTxt').textContent='📡 '+txt;$('detSub').textContent='Abstand zur Nadel';$('det').style.borderColor=col;
+  const lvl=SAVE.up.det;
+  $('detTxt').textContent='📡 '+txt;$('detSub').textContent=lvl>=2&&!roundOver?`ca. ${d.toFixed(1)} m entfernt`:'Abstand zur Nadel';$('det').style.borderColor=col;
+  if(lvl>=3&&!roundOver){
+    const dx=needle.position.x-camera.position.x,dz=needle.position.z-camera.position.z,dy=needle.position.y-camera.position.y;
+    let rel=Math.atan2(-dx,-dz)-P.yaw;rel=Math.atan2(Math.sin(rel),Math.cos(rel));
+    const a=$('arrow');a.style.transform=`rotate(${-rel-Math.PI/2}rad)`;a.style.opacity=1;arrowT=3;
+    a.querySelector('div').style.transform='';
+    a.querySelector('span').textContent=Math.abs(dy)<.6?'gleiche Höhe':dy>0?`${dy.toFixed(1)} m höher`:`${(-dy).toFixed(1)} m tiefer`;
+    a.querySelector('span').style.transform=`translateX(-50%) rotate(${rel+Math.PI/2}rad)`;
+  }
   const p=$('ping');p.style.borderColor=col||'#fff';p.classList.remove('go');void p.offsetWidth;p.classList.add('go');
 }
 function updateDet(dt){
   if(detCd>0)detCd=Math.max(0,detCd-dt);
-  $('detBar').firstChild.style.width=((1-detCd/DET_CD)*100)+'%';
+  $('detBar').firstChild.style.width=((1-detCd/detMax())*100)+'%';
+  if(arrowT>0){arrowT-=dt;if(arrowT<=0)$('arrow').style.opacity=0;}
 }
 
 /* =====================================================================
@@ -782,11 +1020,16 @@ function setTouch(v){if(isTouch===v)return;isTouch=v;$('touch').classList.toggle
 addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   setTouch(false);keys[e.code]=true;
+  if(state==='shop'&&(e.code==='Escape'||e.code==='KeyU')){closeShop();return;}
   if(state!=='play')return;
   if(e.code==='Space'){input.jump=true;e.preventDefault();}
   if(e.code==='KeyF'&&!e.repeat)placeSave();
   if(e.code==='KeyR'&&!e.repeat)gotoSave();
   if(e.code==='KeyQ'&&!e.repeat)useDetector();
+  if(e.code==='KeyU'&&!e.repeat)openShop();
+  if(e.code==='Digit1'&&!e.repeat)placeMachine('drill');
+  if(e.code==='Digit2'&&!e.repeat)placeMachine('vac');
+  if(e.code==='Digit3'&&!e.repeat)placeMachine('mag');
   if(e.code==='Escape')openMenu();
 });
 addEventListener('keyup',e=>{keys[e.code]=false;});
@@ -810,7 +1053,7 @@ let stickId=null,stickO={x:0,y:0},lookId=null,lookP={x:0,y:0};
 addEventListener('touchstart',e=>{
   setTouch(true);if(state!=='play')return;
   for(const t of e.changedTouches){
-    if(t.target.closest&&t.target.closest('.tb,.pill,#roomBox,#modal'))continue;
+    if(t.target.closest&&t.target.closest('.tb,.pill,#roomBox,#modal,#shop'))continue;
     if(t.clientX<innerWidth*.42&&stickId===null){stickId=t.identifier;stickO={x:t.clientX,y:t.clientY};stickEl.style.left=(t.clientX-65)+'px';stickEl.style.top=(t.clientY-65)+'px';stickEl.style.bottom='auto';}
     else if(lookId===null){lookId=t.identifier;lookP={x:t.clientX,y:t.clientY};}
   }
@@ -845,6 +1088,8 @@ function banner(t,s){const b=$('banner');b.textContent=t;b.style.opacity=1;banne
 let pctT=0;
 function hud(dt){
   $('hTime').textContent=fmtTime(gameTime);
+  $('hHay').textContent=Math.floor(SAVE.hay);
+  if(gainT>0){gainT-=dt;if(gainT<=0){$('gain').style.opacity=0;gainAcc=0;}}
   $('hFound').textContent=mode==='solo'?SAVE.found:(net.scores[net.myId]||0);
   pctT-=dt;if(pctT<=0){pctT=1;$('hDug').textContent=Math.round(dugPercent());}
   if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('banner').style.opacity=0;}
@@ -889,9 +1134,9 @@ const net={
     this.names[id]=name;if(this.scores[id]==null)this.scores[id]=0;renderPlayers();
   },
   removeOther(id){const o=this.others.get(id);if(!o)return;scene.remove(o.fig);this.others.delete(id);delete this.scores[id];renderPlayers();},
-  dig(p){
+  dig(p,r){
     if(mode==='solo')return;
-    const m={t:'dig',p:[+p.x.toFixed(3),+p.y.toFixed(3),+p.z.toFixed(3)]};
+    const m={t:'dig',p:[+p.x.toFixed(3),+p.y.toFixed(3),+p.z.toFixed(3)],r:+(r||DIG_R).toFixed(2)};
     if(mode==='host')this.broadcast(m);else this.sendHost(m);
   },
   found(){if(mode==='host')hostWin('host');else this.sendHost({t:'found',round});},
@@ -906,7 +1151,7 @@ function renderPlayers(){
   add(myName(),SAVE.color,net.scores[net.myId],true);
   for(const [id,o] of net.others)add(o.name,o.color,net.scores[id],false);
 }
-function startMpWorld(seed){roundOver=false;generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;rebuild();}
+function startMpWorld(seed){roundOver=false;clearMachines();generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;rebuild();}
 function hostRoom(){
   if(!needPeer())return;
   if(mode==='solo')saveWorld(true);
@@ -928,7 +1173,7 @@ function openHostPeer(){
   peer.on('disconnected',()=>setTimeout(()=>{try{if(net.peer===peer&&!peer.destroyed)peer.reconnect();}catch(_){}},1500));
   peer.on('connection',c=>{
     c.on('data',d=>hostMsg(c,d));
-    c.on('close',()=>{if(net.conns.get(c.peer)===c){net.conns.delete(c.peer);const n=net.names[c.peer];net.removeOther(c.peer);net.broadcast({t:'leave',id:c.peer});if(n)toast(n+' ist gegangen');}});
+    c.on('close',()=>{if(net.conns.get(c.peer)===c){net.conns.delete(c.peer);const n=net.names[c.peer];net.removeOther(c.peer);for(const m of machines.filter(x=>x.o===c.peer))removeMachine(m.id);net.broadcast({t:'leave',id:c.peer});if(n)toast(n+' ist gegangen');}});
     c.on('error',()=>{});
   });
 }
@@ -940,17 +1185,20 @@ function hostMsg(c,d){
     net.conns.set(id,c);net.addOther(id,name,color);
     const players=[{id:'host',name:net.names.host,color:SAVE.color}];
     for(const [oid,o] of net.others)if(oid!==id)players.push({id:oid,name:o.name,color:o.color});
-    c.send({t:'welcome',id,seed:worldSeed,grid:packGrid(),round,players,scores:net.scores,taken:roundOver});
+    c.send({t:'welcome',id,seed:worldSeed,grid:packGrid(),round,players,scores:net.scores,taken:roundOver,machines:machines.map(serMachine)});
     net.broadcast({t:'join',id,name,color},id);toast(name+' gräbt jetzt mit!');return;
   }
   if(!net.conns.has(id))return;
   if(d.t==='st'){applyState(id,d);net.broadcast(Object.assign({},d,{id}),id);}
   else if(d.t==='dig'){if(applyDig(d))net.broadcast(d,id);}
+  else if(d.t==='mach'&&d.m){const m=sanitizeMachine(d.m,id);if(m){addMachine(m);net.broadcast({t:'mach',m:serMachine(m)},id);}}
+  else if(d.t==='unmach'){const m=machines.find(x=>x.id===d.id&&x.o===id);if(m){removeMachine(m.id);net.broadcast({t:'unmach',id:m.id},id);}}
+  else if(d.t==='mpos'){const m=machines.find(x=>x.id===d.id&&x.o===id);if(m){m.prog=+d.prog||0;placeMachineMesh(m);net.broadcast(d,id);}}
   else if(d.t==='found'){if(d.round===round&&!roundOver)hostWin(id);}
 }
 function applyDig(d){
   if(!Array.isArray(d.p)||d.p.length!==3)return false;const p=d.p.map(Number);if(p.some(v=>!isFinite(v)))return false;
-  digAt(p[0],p[1],p[2],camera.position.distanceTo(_w.set(p[0],p[1],p[2]))<20);return true;
+  digAt(p[0],p[1],p[2],camera.position.distanceTo(_w.set(p[0],p[1],p[2]))<20,clamp(+d.r||DIG_R,.3,3.4));return true;
 }
 function hostWin(id){
   net.scores[id]=(net.scores[id]||0)+1;round++;
@@ -996,13 +1244,18 @@ function guestMsg(d,onJoin){
     case'welcome':
       net.myId=d.id;round=d.round|0;net.scores=d.scores||{};
       generateStack(d.seed|0);if(typeof d.grid==='string')unpackGrid(d.grid);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;roundOver=!!d.taken;
-      resetPlayer();rebuild();
+      resetPlayer();clearMachines();
+      for(const mm of (Array.isArray(d.machines)?d.machines:[])){const m=sanitizeMachine(mm,mm&&mm.o);if(m)addMachine(m);}
+      rebuild();
       for(const p of d.players||[])net.addOther(p.id,clean(p.name)||'Sucher',COLORS.includes(p.color)?p.color:COLORS[0]);
       onJoin();startPlay();showRoom('Verbunden');toast('Du bist im Raum! Wer findet zuerst die Nadel?',3000);break;
     case'join':net.addOther(d.id,clean(d.name)||'Sucher',COLORS.includes(d.color)?d.color:COLORS[0]);toast(clean(d.name)+' gräbt jetzt mit!');break;
-    case'leave':{const n=net.names[d.id];net.removeOther(d.id);if(n)toast(n+' ist gegangen');break;}
+    case'leave':{const n=net.names[d.id];net.removeOther(d.id);for(const m of machines.filter(x=>x.o===d.id))removeMachine(m.id);if(n)toast(n+' ist gegangen');break;}
     case'st':if(d.id!==net.myId)applyState(d.id,d);break;
     case'dig':applyDig(d);break;
+    case'mach':{const m=sanitizeMachine(d.m,d.m&&d.m.o);if(m&&!machines.some(x=>x.id===m.id))addMachine(m);break;}
+    case'unmach':removeMachine(d.id);break;
+    case'mpos':{const m=machines.find(x=>x.id===d.id);if(m){m.prog=+d.prog||0;placeMachineMesh(m);}break;}
     case'win':onWin(d);break;
   }
 }
@@ -1067,6 +1320,8 @@ function openMenu(){
   buildMenu();$('menu').classList.remove('hidden');$('touch').classList.add('hidden');
 }
 $('bMenuHud').onclick=openMenu;
+$('bShopHud').onclick=()=>openShop();
+$('shopX').onclick=()=>closeShop();
 $('bSolo').onclick=()=>{
   if(state==='paused'){startPlay();return;}
   mode='solo';
@@ -1075,7 +1330,7 @@ $('bSolo').onclick=()=>{
   startPlay();saveWorld(true);
 };
 $('bHost').onclick=()=>{
-  if(state==='paused'&&mode!=='solo'){net.destroy();mode='solo';$('roomBox').classList.add('hidden');if(!loadWorld())newWorld(Math.floor(Math.random()*1e9));toast('Raum verlassen');buildMenu();return;}
+  if(state==='paused'&&mode!=='solo'){net.destroy();mode='solo';net.myId='me';$('roomBox').classList.add('hidden');if(!loadWorld())newWorld(Math.floor(Math.random()*1e9));toast('Raum verlassen');buildMenu();return;}
   hostRoom();
 };
 $('bJoin').onclick=()=>joinRoom($('iCode').value);
@@ -1115,9 +1370,10 @@ function frame(){
     camera.rotation.set(P.pitch,P.yaw,0);
   }
   if(state==='play')interact(dt);
+  updateMachines(dt,T);
   if(dirty){rebuildCd-=dt;if(rebuildCd<=0){dirty=false;rebuildCd=.08;rebuild();}}
   const inside=state==='menu'?0:inHay();
-  lantern.intensity=lerp(lantern.intensity,inside*2.2+.15,Math.min(1,dt*4));
+  lantern.distance=[7,10,14][SAVE.up.lamp]||7;lantern.intensity=lerp(lantern.intensity,inside*([2.2,3.4,5][SAVE.up.lamp]||2.2)+.15+SAVE.up.lamp*.1,Math.min(1,dt*4));
   lantern.position.copy(camera.position).add(camDir().multiplyScalar(.35));lantern.position.y-=.15;
   sky.position.copy(camera.position);
   dust.rotation.y=T*.01;dust.position.y=Math.sin(T*.3)*.2;
@@ -1128,7 +1384,7 @@ function frame(){
   renderer.render(scene,camera);
 }
 frame();
-window.__nj={P,N,needle,get state(){return state;},digAt,dugPercent,grid,get needleCell(){return needleCell;},cellCenter,camDir,get saves(){return saves;},get roundOver(){return roundOver;}};
+window.__nj={camera,P,N,needle,interact,updateMachines,forceDig(){input.dig=true;digCd=0;interact(0);input.dig=false;},takeNeedle,placeMachine,machines,SAVE,openShop,closeShop,get state(){return state;},digAt,dugPercent,grid,get needleCell(){return needleCell;},cellCenter,camDir,get saves(){return saves;},get roundOver(){return roundOver;}};
 </script>
 </body>
 </html>
