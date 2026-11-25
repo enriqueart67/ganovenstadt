@@ -12,6 +12,6 @@ Spielen: https://enriqueart67.github.io/ganovenstadt/schach.html
 
 ## Nadeljagd
 
-Kletter-Spiel: Den Heuturm hochklettern, unterwegs Save-Spots setzen (Fortschritt bleibt gespeichert) und oben die Nadel im Heuhaufen finden – allein oder mit Freunden per Raum-Code/Link.
+Such die Nadel im riesigen 3D-Heuhaufen: graben, Metalldetektor nutzen, Save-Laternen aufstellen (Fortschritt bleibt gespeichert) – allein oder mit Freunden im selben Haufen per Raum-Code/Link.
 
 Spielen: https://enriqueart67.github.io/ganovenstadt/nadel.html
