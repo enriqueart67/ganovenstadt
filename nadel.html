@@ -93,6 +93,11 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
 #arrow{position:absolute;left:50%;top:50%;width:80px;height:80px;margin:-40px;pointer-events:none;opacity:0;transition:opacity .4s}
 #arrow div{position:absolute;left:50%;top:-34px;margin-left:-16px;font-size:32px;color:#7ff;text-shadow:0 0 12px #0ff}
 #arrow span{position:absolute;left:50%;top:94px;transform:translateX(-50%);white-space:nowrap;font-weight:800;color:#bff;text-shadow:0 2px 4px #000}
+#buildBar{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:13;display:flex;gap:8px}
+#buildBar button{border:2px solid rgba(255,255,255,.4);background:rgba(24,18,10,.75);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;font-size:14px}
+#buildBar button.ok{background:rgba(60,160,60,.85)}
+#buildHint{position:absolute;left:50%;top:calc(50% + 58px);transform:translateX(-50%);font-weight:800;font-size:15px;text-shadow:0 2px 4px #000;white-space:nowrap}
+#touch.build #bDig,#touch.build #bDet,#touch.build #bSave,#touch.build #bBack{display:none}
 #loading{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#2a1d10;color:var(--gold);font-size:20px;font-weight:700;text-align:center;padding:20px}
 @media (max-width:640px){
   .tl{font-size:12px;padding:6px 10px;line-height:1.45}
@@ -131,7 +136,9 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
       <b>PC:</b> <kbd>WASD</kbd> laufen · <kbd>Leertaste</kbd> springen · Maus umsehen (ins Bild klicken)<br>
       <b>Linke Maustaste halten</b> = graben / Nadel nehmen · <kbd>Q</kbd> Metalldetektor<br>
       <kbd>F</kbd> Save-Laterne abstellen · <kbd>R</kbd> zur Save-Laterne · <kbd>Esc</kbd> Menü<br>
-      <kbd>U</kbd> Werkstatt: mit gesammeltem 🌾 Heu Upgrades & Maschinen kaufen · <kbd>1</kbd> Bohrer <kbd>2</kbd> Sauger <kbd>3</kbd> Magnet aufstellen<br>
+      Heu kommt in deinen 🎒 Rucksack – am <b>Heu-Ankauf</b> gibt's 💰 Taler dafür.<br>
+      <kbd>U</kbd> Werkstatt: Upgrades & Maschinen · <kbd>1</kbd> Bohrer <kbd>2</kbd> Sauger <kbd>3</kbd> Magnet<br>
+      <kbd>4</kbd> Förderbänder bauen · <kbd>5</kbd> Greifarme bauen · <kbd>T</kbd> drehen · <kbd>X</kbd> abbauen – Bänder bringen Ballen zum Ankauf-Trichter.<br>
       <b>Handy:</b> links ziehen = laufen, rechts wischen = umsehen, Knöpfe rechts.<br>
       Gegrabene Tunnel, Save-Laternen und Zeit werden automatisch gespeichert.
     </div>
@@ -141,7 +148,8 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
 <div id="hud" class="hidden">
   <div class="tl">
     <div>⏱ <b id="hTime">0:00</b> · 🪡 <b id="hFound">0</b></div>
-    <div>🌾 <b id="hHay">0</b> Heu · <span id="hDug">0</span> % durchwühlt</div>
+    <div>🎒 <b id="hHay">0</b>/<span id="hCap">0</span> Heu · 💰 <b id="hCoins">0</b></div>
+    <div>🌾 <span id="hDug">0</span> % durchwühlt</div>
     <div>🏮 <span id="hSave">keine Save-Laterne</span></div>
   </div>
   <div class="tr">
@@ -156,11 +164,12 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
   <div id="cross"></div>
   <div id="ping"></div>
   <div id="gain"></div>
+  <div id="buildHint"></div>
   <div id="arrow"><div>➤</div><span></span></div>
   <div id="toast"></div>
   <div id="banner"></div>
   <div id="det"><span id="detTxt">📡 Detektor bereit</span><small id="detSub">Q drücken</small><div id="detBar"><div></div></div></div>
-  <div id="pcHelp">🖱 halten = graben · <kbd>Q</kbd> Detektor · <kbd>F</kbd> Laterne · <kbd>R</kbd> zurück · <kbd>U</kbd> Werkstatt · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Maschinen</div>
+  <div id="pcHelp">🖱 halten = graben · <kbd>Q</kbd> Detektor · <kbd>F</kbd> Laterne · <kbd>R</kbd> zurück · <kbd>U</kbd> Werkstatt · <kbd>1</kbd>–<kbd>3</kbd> Maschinen · <kbd>4</kbd> Förderband · <kbd>5</kbd> Greifarm</div>
 </div>
 
 <div id="touch" class="hidden">
@@ -172,8 +181,12 @@ kbd{background:#2c2418;border:1px solid #5a4a32;border-radius:4px;padding:0 5px;
   <button class="tb" id="bBack"><span>↩</span></button>
 </div>
 
+<div id="buildBar" class="hidden">
+  <button class="ok" id="bbPlace">✔ Bauen</button><button id="bbRot">⟳ Drehen</button><button id="bbDel">🗑 Abbauen</button><button id="bbDone">✕ Fertig</button>
+</div>
+
 <div id="shop" class="hidden"><div class="card shopcard">
-  <div class="shophead"><h2>🛠 Werkstatt</h2><div class="hayc">🌾 <span id="shopHay">0</span></div><button class="xbtn" id="shopX">✕</button></div>
+  <div class="shophead"><h2>🛠 Werkstatt</h2><div class="hayc">💰 <span id="shopHay">0</span></div><button class="xbtn" id="shopX">✕</button></div>
   <div id="shopList"></div>
 </div></div>
 
@@ -198,9 +211,10 @@ const IS_TOUCH='ontouchstart' in window&&matchMedia('(pointer:coarse)').matches;
 const SKEY='nadeljagd.v2';
 let SAVE={name:'',color:COLORS[1],found:0,best:null,world:null,hay:0,up:{},mach:{}};
 try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(s&&typeof s==='object')Object.assign(SAVE,s);}catch(_){}
-SAVE.up=Object.assign({tool:0,speed:0,det:0,boots:0,lamp:0},SAVE.up||{});
-SAVE.mach=Object.assign({drill:0,vac:0,mag:0},SAVE.mach||{});
-SAVE.hay=Math.max(0,+SAVE.hay||0);
+SAVE.up=Object.assign({tool:0,speed:0,det:0,boots:0,lamp:0,bag:0,arm:0,belt:0,price:0},SAVE.up||{});
+SAVE.mach=Object.assign({drill:0,vac:0,mag:0,arm:0},SAVE.mach||{});
+if(SAVE.coins==null){SAVE.coins=Math.max(0,+SAVE.hay||0);} // altes Heu wird zu Talern
+SAVE.coins=Math.max(0,+SAVE.coins||0);SAVE.bag=Math.max(0,+SAVE.bag||0);delete SAVE.hay;
 function persist(){try{localStorage.setItem(SKEY,JSON.stringify(SAVE));}catch(_){}}
 
 /* =====================================================================
@@ -299,6 +313,11 @@ function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t
 
 const ground=new THREE.Mesh(new THREE.CircleGeometry(260,64),new THREE.MeshStandardMaterial({map:grassTex,roughness:1}));
 ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+// festgetretener Erd-Hof innerhalb des Zauns (Bauplatz)
+const dirtTex=canvasTex(256,256,(g,w,h)=>{g.fillStyle='#9a7c55';g.fillRect(0,0,w,h);for(let i=0;i<4000;i++){g.fillStyle=['#8a6d48','#a88a62','#7d6242','#b39770','#6f573a'][i%5];const r=Math.random()*2.2;g.beginPath();g.arc(Math.random()*w,Math.random()*h,r,0,7);g.fill();}for(let i=0;i<40;i++){g.strokeStyle='rgba(60,40,20,.25)';g.lineWidth=6;g.beginPath();const y=Math.random()*h;g.moveTo(0,y);g.bezierCurveTo(w*.3,y+8,w*.6,y-8,w,y);g.stroke();}});
+dirtTex.repeat.set(9,9);
+const yard=new THREE.Mesh(new THREE.CircleGeometry(24.3,72),new THREE.MeshStandardMaterial({map:dirtTex,roughness:1}));
+yard.rotation.x=-Math.PI/2;yard.position.y=.005;yard.receiveShadow=true;scene.add(yard);
 const strewn=new THREE.Mesh(new THREE.CircleGeometry(10.5,48),new THREE.MeshStandardMaterial({map:hayTex,roughness:1,transparent:true,depthWrite:false,alphaMap:canvasTex(128,128,(g,w,h)=>{const r=g.createRadialGradient(64,64,30,64,64,64);r.addColorStop(0,'#fff');r.addColorStop(1,'#000');g.fillStyle=r;g.fillRect(0,0,w,h);},false)}));
 strewn.rotation.x=-Math.PI/2;strewn.position.y=.01;strewn.receiveShadow=true;scene.add(strewn);
 
@@ -323,7 +342,7 @@ const grassUniforms={uTime:{value:0}};
   const m=new THREE.InstancedMesh(geo,mat,N);m.frustumCulled=false;
   const R=rng(7),d=new THREE.Object3D(),c=new THREE.Color();
   for(let i=0;i<N;i++){
-    const a=R()*Math.PI*2,r=Math.sqrt(lerp(10.5*10.5,55*55,R()));
+    const a=R()*Math.PI*2,r=Math.sqrt(lerp(24.6*24.6,58*58,R()));
     d.position.set(Math.cos(a)*r,0,Math.sin(a)*r);d.rotation.set(0,R()*6.28,0);const s=.7+R()*.9;d.scale.set(s,s*(.7+R()*.8),s);d.updateMatrix();m.setMatrixAt(i,d.matrix);
     c.setHSL(.2+R()*.07,.5,.4+R()*.25);m.setColorAt(i,c);
   }
@@ -664,6 +683,7 @@ function aimNeedle(o,d,hitT){
 }
 let digCd=0,aimState='';
 function interact(dt){
+  if(build){updateGhost();if(aimState!==''){aimState='';$('cross').className='';}return;}
   const o=camera.position,d=camDir();
   const hit=rayVox(o,d,REACH);
   const onNeedle=aimNeedle(o,d,hit&&!hit.ground?hit.t:null);
@@ -728,21 +748,34 @@ const UPG={
   det:{name:'Metalldetektor',icon:'📡',levels:['Basis','Turbo','Mit Meterangabe','Mit Richtungspfeil'],val:[2.2,1.4,1.1,.8],cost:[100,350,800],info:(v,l)=>['Sagt kalt/warm/heiß','Lädt schneller','Zeigt die Entfernung in Metern','Pfeil zeigt die Richtung + Höhe'][l]},
   boots:{name:'Stiefel',icon:'👢',levels:['Gummistiefel','Laufstiefel','Sprungstiefel','Raketenstiefel'],val:[0,1,2,3],cost:[50,180,450],info:(v,l)=>['Normal','Schneller laufen','Schneller + höher springen','Superschnell + Riesensprung'][l]},
   lamp:{name:'Laterne',icon:'🔦',levels:['Funzel','Helle Lampe','Flutlicht'],val:[0,1,2],cost:[40,150],info:(v,l)=>['Etwas Licht im Heu','Heller und weiter','Macht Tunnel taghell'][l]},
+  bag:{name:'Rucksack',icon:'🎒',levels:['Beutel','Rucksack','Wanderrucksack','Riesensack','Heu-Container'],val:[150,400,1000,2500,6000],cost:[60,220,650,1800],info:v=>`trägt ${v} Heu`},
+  price:{name:'Händler-Bonus',icon:'🤝',levels:['Normalpreis','Stammkunde','Großhändler','Heu-Baron'],val:[1,1.25,1.5,2],cost:[300,900,2500],info:v=>`${v} 💰 pro Heu`},
+  arm:{name:'Greifarm-Motor',icon:'🦾',levels:['Gemütlich','Zügig','Schnell','Turbo'],val:[3,2.2,1.6,1.1],cost:[200,650,1600],info:v=>`ein Griff alle ${v} s`},
+  belt:{name:'Förderband-Motor',icon:'➰',levels:['Langsam','Normal','Schnell','Express'],val:[1.1,1.7,2.5,3.4],cost:[120,400,1100],info:v=>`${v} m/s`},
 };
 const upv=k=>UPG[k].val[SAVE.up[k]||0];
 const MDEF={
   drill:{name:'Heu-Bohrer',icon:'🚜',cost:150,key:'1',desc:'Bohrt automatisch einen Tunnel geradeaus durch den Haufen und bringt Heu. Kommt danach zurück.'},
   vac:{name:'Heu-Sauger',icon:'🌀',cost:400,key:'2',desc:'Saugt rundherum eine immer größere Höhle frei (bis 3 m). Kommt danach zurück.'},
   mag:{name:'Super-Magnet',icon:'🧲',cost:900,key:'3',desc:'Bleibt stehen und zieht die Nadel heraus, sobald sie näher als 3,5 m ist.'},
+  arm:{name:'Greifarm',icon:'🦾',cost:250,key:'5',build:true,desc:'Neben den Haufen bauen: greift sich selbst Heu und legt Ballen aufs Feld in Pfeilrichtung (z. B. auf ein Förderband).'},
+  belt:{name:'Förderband',icon:'➰',cost:8,key:'4',build:true,perTile:true,desc:'Feld für Feld bauen. Transportiert Heuballen – endet es im grünen Trichter am Heu-Ankauf, wird automatisch verkauft.'},
 };
 let gainAcc=0,gainT=0;
+let fullWarnT=0;
 function addHay(n){
-  if(!n)return;SAVE.hay+=n;gainAcc+=n;gainT=.9;
+  if(!n)return;
+  const space=Math.max(0,bagCap()-SAVE.bag),take=Math.min(space,n);
+  SAVE.bag+=take;
+  if(n>take){spawnBale(P.pos.x+(Math.random()-.5)*.6,P.pos.z+(Math.random()-.5)*.6,n-take,P.pos.y+.6);
+    if(fullWarnT<=0){toast('🎒 Rucksack voll! Heu fällt als Ballen runter – bring es zum Heu-Ankauf.',3000);fullWarnT=8;}}
+  gainAcc+=n;gainT=.9;
   const g=$('gain');g.textContent=`+${gainAcc} 🌾`;g.style.opacity=1;
 }
 let shopFrom='play';
 function openShop(){
   if(state!=='play')return;
+  if(build)setBuild(null);
   state='shop';if(document.pointerLockElement)document.exitPointerLock();
   for(const k in keys)keys[k]=false;input.x=input.y=0;input.dig=false;
   $('touch').classList.add('hidden');renderShop();$('shop').classList.remove('hidden');
@@ -750,7 +783,7 @@ function openShop(){
 function closeShop(){if(state!=='shop')return;$('shop').classList.add('hidden');state='play';$('touch').classList.toggle('hidden',!isTouch);}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
 function renderShop(){
-  $('shopHay').textContent=Math.floor(SAVE.hay);
+  $('shopHay').textContent=Math.floor(SAVE.coins);
   const L=$('shopList');L.textContent='';
   L.appendChild(el('div','sect','Upgrades'));
   for(const k in UPG){
@@ -761,9 +794,9 @@ function renderShop(){
     tx.appendChild(el('div',null,`${u.levels[l]} – ${u.info(u.val[l],l)}`));
     if(!max)tx.appendChild(el('div',null,`Nächste Stufe: ${u.levels[l+1]} – ${u.info(u.val[l+1],l+1)}`));
     it.appendChild(tx);
-    const btn=el('button','buy',max?'MAX':`🌾 ${u.cost[l]}`);
-    btn.disabled=max||SAVE.hay<u.cost[l];
-    btn.onclick=()=>{if(SAVE.hay<u.cost[l])return;SAVE.hay-=u.cost[l];SAVE.up[k]=l+1;persist();SFX.save();renderShop();};
+    const btn=el('button','buy',max?'MAX':`💰 ${u.cost[l]}`);
+    btn.disabled=max||SAVE.coins<u.cost[l];
+    btn.onclick=()=>{if(SAVE.coins<u.cost[l])return;SAVE.coins-=u.cost[l];SAVE.up[k]=l+1;persist();SFX.save();renderShop();};
     it.appendChild(btn);L.appendChild(it);
   }
   L.appendChild(el('div','sect','Maschinen'));
@@ -771,16 +804,19 @@ function renderShop(){
     const m=MDEF[k],own=SAVE.mach[k]||0,busy=machines.filter(x=>x.k===k&&x.o===net.myId).length;
     const it=el('div','item');it.appendChild(el('div','ic',m.icon));
     const tx=el('div','tx');tx.appendChild(el('b',null,m.name));tx.appendChild(el('div',null,m.desc));
-    tx.appendChild(el('div',null,`Besitz: ${own} · im Einsatz: ${busy}`+(isTouch?'':` · Taste ${m.key}`)));
+    tx.appendChild(el('div',null,(m.perTile?`${m.cost} 💰 pro Feld · gebaut: ${busy}`:`Besitz: ${own} · im Einsatz: ${busy}`)+(isTouch?'':` · Taste ${m.key}`)));
     it.appendChild(tx);
     const bs=el('div','btns');
-    const buy=el('button','buy',`🌾 ${m.cost}`);buy.disabled=SAVE.hay<m.cost;
-    buy.onclick=()=>{if(SAVE.hay<m.cost)return;SAVE.hay-=m.cost;SAVE.mach[k]=own+1;persist();SFX.save();renderShop();};
-    bs.appendChild(buy);
-    if(own>0){const pl=el('button','buy place','Aufstellen');pl.onclick=()=>{closeShop();placeMachine(k);};bs.appendChild(pl);}
+    if(!m.perTile){
+      const buy=el('button','buy',`💰 ${m.cost}`);buy.disabled=SAVE.coins<m.cost;
+      buy.onclick=()=>{if(SAVE.coins<m.cost)return;SAVE.coins-=m.cost;SAVE.mach[k]=own+1;persist();SFX.save();renderShop();};
+      bs.appendChild(buy);
+    }
+    if(m.build){if(own>0||m.perTile){const pl=el('button','buy place','Bauen');pl.onclick=()=>{closeShop();setBuild(k);};bs.appendChild(pl);}}
+    else if(own>0){const pl=el('button','buy place','Aufstellen');pl.onclick=()=>{closeShop();placeMachine(k);};bs.appendChild(pl);}
     it.appendChild(bs);L.appendChild(it);
   }
-  const tip=el('div','sect',`Tipp: Jeder gegrabene Heubrocken bringt 🌾. Upgrades & Maschinen behältst du auch für neue Heuhaufen.`);
+  const tip=el('div','sect',`Tipp: Heu am Heu-Ankauf verkaufen oder per Förderband in den grünen Trichter fahren lassen. Upgrades & Maschinen behältst du auch für neue Heuhaufen.`);
   tip.style.textTransform='none';tip.style.letterSpacing='0';L.appendChild(tip);
 }
 
@@ -797,6 +833,8 @@ const MM={
   glass:new THREE.MeshStandardMaterial({color:0x99ddff,transparent:true,opacity:.35,roughness:.1}),
 };
 function makeMachineMesh(k){
+  if(k==='belt'){const b=makeBeltMesh();scene.add(b);return b;}
+  if(k==='arm'){const a=makeArmMesh();scene.add(a);return a;}
   const g=new THREE.Group();const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;g.add(m);return m;};
   if(k==='drill'){
     add(new THREE.BoxGeometry(.7,.55,.9),MM.yellow,0,.5,-.1);
@@ -835,17 +873,24 @@ function serMachine(m){return{id:m.id,k:m.k,o:m.o,x:+m.x.toFixed(2),y:+m.y.toFix
 function sanitizeMachine(d,owner){
   if(!d||typeof d!=='object'||!MDEF[d.k])return null;
   const v=[d.x,d.y,d.z,d.dx,d.dz].map(Number);if(v.some(x=>!isFinite(x)))return null;
+  if(d.k==='belt'||d.k==='arm'){
+    const dir=DIRS.find(q=>q[0]===Math.round(v[3])&&q[1]===Math.round(v[4]));if(!dir)return null;
+    const i=Math.round(clamp(v[0],-23,22)),k=Math.round(clamp(v[2],-23,22));
+    if(tiles.has(tileKey(i,k)))return null;
+    return{id:String(d.id||'').slice(0,12)||Math.random().toString(36).slice(2,9),k:d.k,o:String(owner||d.o||''),x:i,y:0,z:k,dx:dir[0],dz:dir[1],prog:0,t:0};
+  }
   return{id:String(d.id||'').slice(0,12)||Math.random().toString(36).slice(2,9),k:d.k,o:String(owner||d.o||''),x:clamp(v[0],-30,30),y:clamp(v[1],0,12),z:clamp(v[2],-30,30),dx:v[3],dz:v[4],prog:clamp(+d.prog||0,0,40),t:0};
 }
 function placeMachineMesh(m){
   if(!m.mesh)return;
+  if(m.k==='belt'||m.k==='arm'){m.mesh.position.set(m.x+.5,0,m.z+.5);m.mesh.rotation.y=Math.atan2(m.dx,m.dz);return;}
   const off=m.k==='drill'?m.prog:0;
   m.mesh.position.set(m.x+m.dx*off,m.y,m.z+m.dz*off);
   m.mesh.rotation.y=Math.atan2(m.dx,m.dz);
 }
-function addMachine(m){m.mesh=makeMachineMesh(m.k);m.t=0;placeMachineMesh(m);machines.push(m);return m;}
-function removeMachine(id){const i=machines.findIndex(m=>m.id===id);if(i<0)return;scene.remove(machines[i].mesh);machines.splice(i,1);}
-function clearMachines(){for(const m of machines)scene.remove(m.mesh);machines.length=0;}
+function addMachine(m){m.mesh=makeMachineMesh(m.k);m.t=0;placeMachineMesh(m);machines.push(m);if(m.k==='belt'||m.k==='arm')tiles.set(tileKey(m.x,m.z),m);return m;}
+function removeMachine(id){const i=machines.findIndex(m=>m.id===id);if(i<0)return;const m=machines[i];scene.remove(m.mesh);machines.splice(i,1);if((m.k==='belt'||m.k==='arm')&&tiles.get(tileKey(m.x,m.z))===m)tiles.delete(tileKey(m.x,m.z));}
+function clearMachines(){for(const m of machines)scene.remove(m.mesh);machines.length=0;tiles.clear();}
 function placeMachine(k){
   if(state!=='play')return;
   const own=SAVE.mach[k]||0,mine=machines.filter(m=>m.k===k&&m.o===net.myId);
@@ -865,13 +910,16 @@ function removeMachineNet(id){removeMachine(id);netSend({t:'unmach',id});worldDi
 function netSend(m){if(mode==='host')net.broadcast(m);else if(mode==='guest')net.sendHost(m);}
 function machineDig(x,y,z,r,m){
   const n=digAt(x,y,z,camera.position.distanceTo(_w.set(x,y,z))<14,r);
-  if(n){addHay(n);net.dig(_w.set(x,y,z),r);
+  if(n){net.dig(_w.set(x,y,z),r);
+    if(m.k!=='mag'){const a=Math.random()*6.28,rr=m.k==='vac'?.9:.3;spawnBale(m.x+Math.cos(a)*rr-(m.k==='drill'?m.dx*.6:0),m.z+Math.sin(a)*rr-(m.k==='drill'?m.dz*.6:0),n,m.y+.9);}
     if(needle.visible&&N.state!=='taken'&&!m.found&&needle.position.distanceTo(_w.set(x,y,z))<r+.6){m.found=true;toast(`✨ Dein ${MDEF[m.k].name} hat etwas Glänzendes freigelegt!`,3500);}}
   return n;
 }
 function updateMachines(dt,t){
   for(const m of [...machines]){
     const mine=m.o===net.myId,g=m.mesh.userData;
+    if(m.k==='belt')continue;
+    if(m.k==='arm'){updateArm(m,dt,t);continue;}
     if(m.k==='drill'){
       if(g.spin)g.spin.rotation.z+=dt*(m.done?0:14);
       if(!mine||roundOver||state==='menu')continue;
@@ -911,6 +959,272 @@ function updateMachines(dt,t){
   }
 }
 
+/* =====================================================================
+   Fabrik: Heuballen, Förderbänder, Greifarme, Heu-Ankauf
+   ===================================================================== */
+const DIRS=[[0,-1],[1,0],[0,1],[-1,0]];
+const DIR_NAMES=['↑ zum Haufen','→ rechts','↓ weg vom Haufen','← links'];
+const tileKey=(i,k)=>i+','+k;
+const tiles=new Map();              // Feld -> Förderband / Greifarm
+const SELL={x:-5,z:12.5};           // Mitte des Trichters
+const HOPPER=new Set([tileKey(-6,12),tileKey(-5,12)]);
+const STATION=new Set([tileKey(-6,13),tileKey(-5,13),tileKey(-7,13),tileKey(-4,13),tileKey(-7,12),tileKey(-4,12)]);
+const BELT_COST=8,MAX_BELTS=300;
+const bagCap=()=>upv('bag');
+const price=()=>upv('price');
+
+// --- Förderband-Textur (läuft) ---
+const beltTex=canvasTex(64,128,(g,w,h)=>{
+  g.fillStyle='#2b2b2e';g.fillRect(0,0,w,h);
+  g.fillStyle='#3a3a3e';for(let y=0;y<h;y+=16)g.fillRect(0,y,w,8);
+  g.strokeStyle='#f2b705';g.lineWidth=6;g.lineCap='round';
+  for(const y of[30,94]){g.beginPath();g.moveTo(14,y+14);g.lineTo(32,y-4);g.lineTo(50,y+14);g.stroke();}
+});
+beltTex.wrapS=beltTex.wrapT=THREE.RepeatWrapping;
+const beltTopMat=new THREE.MeshStandardMaterial({map:beltTex,roughness:.8});
+const beltTopGeo=(()=>{const g=new THREE.PlaneGeometry(.78,1);g.rotateX(-Math.PI/2);g.rotateY(Math.PI);return g;})();
+const beltFrameGeo=new THREE.BoxGeometry(.92,.14,1);
+const beltRailGeo=new THREE.BoxGeometry(.06,.08,1);
+const beltLegGeo=new THREE.BoxGeometry(.08,.1,.08);
+const darkMetal=new THREE.MeshStandardMaterial({color:0x4a4f57,metalness:.7,roughness:.45});
+const railMat=new THREE.MeshStandardMaterial({color:0xf2b705,metalness:.3,roughness:.5});
+function makeBeltMesh(){
+  const g=new THREE.Group();
+  const f=new THREE.Mesh(beltFrameGeo,darkMetal);f.position.y=.12;f.receiveShadow=true;g.add(f);
+  const t=new THREE.Mesh(beltTopGeo,beltTopMat);t.position.y=.195;t.receiveShadow=true;g.add(t);
+  for(const x of[-.43,.43]){const r=new THREE.Mesh(beltRailGeo,railMat);r.position.set(x,.23,0);g.add(r);}
+  for(const x of[-.38,.38])for(const z of[-.4,.4]){const l=new THREE.Mesh(beltLegGeo,darkMetal);l.position.set(x,.03,z);g.add(l);}
+  return g;
+}
+function makeArmMesh(){
+  const g=new THREE.Group();const orange=new THREE.MeshStandardMaterial({color:0xe8661c,roughness:.45,metalness:.3});
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(.36,.42,.22,18),darkMetal);base.position.y=.11;base.castShadow=true;g.add(base);
+  const turret=new THREE.Group();turret.position.y=.22;g.add(turret);
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(.11,.14,.95,12),orange);post.position.y=.47;post.castShadow=true;turret.add(post);
+  const joint=new THREE.Mesh(new THREE.SphereGeometry(.15,12,10),darkMetal);joint.position.y=.98;turret.add(joint);
+  const boom=new THREE.Group();boom.position.y=.98;turret.add(boom);
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(.13,.13,1),orange);arm.position.z=.5;arm.castShadow=true;boom.add(arm);
+  const claw=new THREE.Group();claw.position.z=1;boom.add(claw);
+  const hand=new THREE.Mesh(new THREE.BoxGeometry(.26,.1,.14),darkMetal);hand.position.y=-.05;claw.add(hand);
+  for(const x of[-.11,.11]){const f=new THREE.Mesh(new THREE.BoxGeometry(.04,.26,.08),MM.steel);f.position.set(x,-.2,0);claw.add(f);}
+  const clump=new THREE.Mesh(blobGeo,blobMat);clump.scale.setScalar(.55);clump.position.y=-.3;clump.visible=false;claw.add(clump);
+  const lamp=new THREE.Mesh(new THREE.SphereGeometry(.05,8,6),new THREE.MeshBasicMaterial({color:0x4cff6a}));lamp.position.set(0,.2,0);base.add(lamp);
+  Object.assign(g.userData,{turret,boom,arm,claw,clump,lamp});
+  return g;
+}
+
+// --- Heu-Ankauf-Station ---
+(function station(){
+  const g=new THREE.Group();
+  const wood=new THREE.MeshStandardMaterial({color:0x9b6a3c,roughness:.85});
+  const woodD=new THREE.MeshStandardMaterial({color:0x6b4426,roughness:.9});
+  // Trichter über den beiden Eingangsfeldern
+  const hop=new THREE.Mesh(new THREE.CylinderGeometry(1.05,.55,.55,4,1,true),new THREE.MeshStandardMaterial({color:0x3c8a3c,metalness:.4,roughness:.5,side:THREE.DoubleSide}));
+  hop.rotation.y=Math.PI/4;hop.scale.set(1,1,.5);hop.position.set(SELL.x,.55,SELL.z);hop.castShadow=true;g.add(hop);
+  const hopIn=new THREE.Mesh(new THREE.PlaneGeometry(1.4,.6),new THREE.MeshBasicMaterial({color:0x111111}));hopIn.rotation.x=-Math.PI/2;hopIn.position.set(SELL.x,.3,SELL.z);g.add(hopIn);
+  // Theke
+  const counter=new THREE.Mesh(new THREE.BoxGeometry(3.2,1,.9),wood);counter.position.set(SELL.x,.5,SELL.z+1.3);counter.castShadow=counter.receiveShadow=true;g.add(counter);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(3.4,.08,1.05),woodD);top.position.set(SELL.x,1.04,SELL.z+1.3);g.add(top);
+  for(const x of[-1.6,1.6]){const p=new THREE.Mesh(new THREE.BoxGeometry(.14,2.6,.14),woodD);p.position.set(SELL.x+x,1.3,SELL.z+1.75);p.castShadow=true;g.add(p);}
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(3.8,.1,1.6),new THREE.MeshStandardMaterial({color:0x2e6b9e,roughness:.7}));roof.position.set(SELL.x,2.65,SELL.z+1.4);roof.rotation.x=-.15;roof.castShadow=true;g.add(roof);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(3,.7),new THREE.MeshStandardMaterial({map:canvasTex(512,120,(c,w,h)=>{c.fillStyle='#f4e6c4';c.fillRect(0,0,w,h);c.strokeStyle='#5a3510';c.lineWidth=8;c.strokeRect(4,4,w-8,h-8);c.fillStyle='#5a3510';c.font='bold 64px sans-serif';c.textAlign='center';c.fillText('HEU-ANKAUF 💰',w/2,84);}),roughness:.8}));
+  sign.position.set(SELL.x,2.15,SELL.z+.88);g.add(sign);
+  // Geldkiste
+  const box=new THREE.Mesh(new THREE.BoxGeometry(.5,.3,.35),new THREE.MeshStandardMaterial({color:0x7a5a2a}));box.position.set(SELL.x+1,1.2,SELL.z+1.3);g.add(box);
+  const coinM=new THREE.MeshStandardMaterial({color:0xffcc33,metalness:1,roughness:.3,envMap:envTex});
+  for(let i=0;i<6;i++){const c=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.02,14),coinM);c.position.set(SELL.x+.9+(i%3)*.08,1.36+Math.floor(i/3)*.02,SELL.z+1.28+(i%2)*.06);g.add(c);}
+  scene.add(g);
+})();
+
+// --- Heuballen ---
+const baleGeo=new THREE.BoxGeometry(.44,.28,.34);
+const baleMat=new THREE.MeshStandardMaterial({map:hayTex,roughness:.95});
+const baleStrGeo=new THREE.BoxGeometry(.45,.29,.03);
+const baleStrMat=new THREE.MeshStandardMaterial({color:0x6b3e1a,roughness:.8});
+const bales=[];
+function spawnBale(x,z,v,y){
+  v=Math.round(v);if(v<=0)return;
+  if(bales.length>=350){ // zu viele -> mit nächstem Ballen verschmelzen
+    let best=null,bd=1e9;for(const b of bales){const d=(b.x-x)**2+(b.z-z)**2;if(d<bd){bd=d;best=b;}}
+    if(best){best.v+=v;return;}
+  }
+  const m=new THREE.Mesh(baleGeo,baleMat);m.castShadow=true;
+  for(const o of[-.1,.1]){const s=new THREE.Mesh(baleStrGeo,baleStrMat);s.position.z=o;m.add(s);}
+  m.rotation.y=Math.random()*6;scene.add(m);
+  const b={m,x,z,y:y==null?.6:y,vy:0,v};
+  b.m.position.set(x,b.y,z);bales.push(b);return b;
+}
+function clearBales(){for(const b of bales)scene.remove(b.m);bales.length=0;}
+function removeBale(i){scene.remove(bales[i].m);bales.splice(i,1);}
+let saleAcc=0,saleT=0;
+function sellHay(v,where){
+  const c=Math.round(v*price());SAVE.coins+=c;saleAcc+=c;saleT=1.2;
+  const g=$('gain');g.textContent=`+${saleAcc} 💰`;g.style.opacity=1;gainT=1.2;gainAcc=0;
+  if(where==='player'||Math.random()<.35)beep(1300,.12,'square',.05,1800);
+}
+function groundY(x,z){ // höchste freie Oberfläche (Heu) unter einem Punkt, sonst Boden
+  const i=Math.floor((x-OX)/CS),k=Math.floor((z-OZ)/CS);
+  for(let j=Math.min(NY-1,8);j>=0;j--)if(solid(i,j,k))return(j+1)*CS+OY;
+  return 0;
+}
+function updateBales(dt){
+  const spd=upv('belt');
+  const cap=bagCap();
+  for(let n=bales.length-1;n>=0;n--){
+    const b=bales[n];
+    const i=Math.floor(b.x),k=Math.floor(b.z),key=tileKey(i,k);
+    if(HOPPER.has(key)&&b.y<.7){sellHay(b.v,'belt');removeBale(n);continue;}
+    const t=tiles.get(key),belt=t&&t.k==='belt'?t:null;
+    const floor=belt?.34:groundY(b.x,b.z)+.14;
+    if(b.y>floor+.001){b.vy-=14*dt;b.y=Math.max(floor,b.y+b.vy*dt);if(b.y===floor)b.vy=0;}
+    else{b.y=floor;b.vy=0;}
+    if(belt&&b.y<=floor+.02){
+      const dx=belt.dx,dz=belt.dz;
+      let blocked=false;
+      for(const c of bales){if(c===b)continue;const rx=c.x-b.x,rz=c.z-b.z;if(rx*rx+rz*rz<.2&&rx*dx+rz*dz>.05&&Math.abs(c.y-b.y)<.3){blocked=true;break;}}
+      if(!blocked){b.x+=dx*spd*dt;b.z+=dz*spd*dt;}
+      if(dx)b.z+=((k+.5)-b.z)*Math.min(1,dt*6);else b.x+=((i+.5)-b.x)*Math.min(1,dt*6);
+      let da=Math.atan2(dx,dz)-b.m.rotation.y;da=Math.atan2(Math.sin(da),Math.cos(da));b.m.rotation.y+=da*Math.min(1,dt*8);
+    }else if(state==='play'){
+      // Spieler sammelt Ballen ein
+      const px=b.x-P.pos.x,pz=b.z-P.pos.z;
+      if(px*px+pz*pz<.8&&Math.abs(b.y-P.pos.y)<1.3&&SAVE.bag<cap){
+        const take=Math.min(b.v,cap-SAVE.bag);SAVE.bag+=take;b.v-=take;beep(700,.06,'triangle',.04);
+        if(b.v<=0){removeBale(n);continue;}
+      }
+    }
+    b.m.position.set(b.x,b.y,b.z);
+  }
+  if(saleT>0){saleT-=dt;if(saleT<=0)saleAcc=0;}
+  // Am Tresen verkaufen
+  if(state==='play'&&SAVE.bag>0&&Math.hypot(P.pos.x-SELL.x,P.pos.z-(SELL.z+.4))<2.4&&P.pos.y<1){
+    const v=SAVE.bag;SAVE.bag=0;sellHay(v,'player');SFX.save();
+    toast(`💰 ${Math.round(v*price())} Taler für ${v} Heu!`,2200);
+  }
+}
+
+// --- Greifarm-Logik ---
+function findHayTarget(cx,cy,cz,R){
+  const i0=Math.floor((cx-R-OX)/CS),i1=Math.floor((cx+R-OX)/CS),j1=Math.min(NY-1,Math.floor((cy+R-OY)/CS));
+  const k0=Math.floor((cz-R-OZ)/CS),k1=Math.floor((cz+R-OZ)/CS);
+  let best=-1,bd=R*R;
+  for(let j=0;j<=j1;j++)for(let k=Math.max(0,k0);k<=Math.min(NZ-1,k1);k++)for(let i=Math.max(0,i0);i<=Math.min(NX-1,i1);i++){
+    const c=idx(i,j,k);if(!grid[c]||depth[c]!==1)continue;
+    const x=OX+(i+.5)*CS-cx,y=OY+(j+.5)*CS-cy,z=OZ+(k+.5)*CS-cz;const d=x*x+y*y*.6+z*z;
+    if(d<bd){bd=d;best=c;}
+  }
+  return best<0?null:cellCenter(best,new V3());
+}
+function updateArm(m,dt,t){
+  const u=m.mesh.userData,cx=m.x+.5,cz=m.z+.5;
+  const outYaw=Math.atan2(m.dx,m.dz);
+  const lerpA=(a,b,f)=>{let d=b-a;d=Math.atan2(Math.sin(d),Math.cos(d));return a+d*f;};
+  if(m.o!==net.myId||state==='menu'){ // fremde Arme: nur Leerlauf-Animation
+    u.turret.rotation.y=outYaw+Math.sin(t*.8+m.x)*.6;return;
+  }
+  const T=upv('arm');
+  m.t+=dt;
+  if(!m.busy){
+    if(m.t<.6)return;
+    m.t=0;
+    const tg=roundOver?null:findHayTarget(cx,.9,cz,3.3);
+    u.lamp.material.color.set(tg?0x4cff6a:0xff4040);
+    if(!tg){u.turret.rotation.y+=dt*2;m.idleT=(m.idleT||0)+1;return;}
+    m.busy=true;m.tgt=tg;m.grabbed=false;m.dropped=false;m.carry=0;m.yaw0=u.turret.rotation.y;
+  }
+  const f=m.t/T,tg=m.tgt;
+  const tYaw=Math.atan2(tg.x-cx,tg.z-cz),hd=Math.hypot(tg.x-cx,tg.z-cz),tPitch=Math.atan2(tg.y-1.2,hd);
+  if(f<.4){const e=f/.4;u.turret.rotation.y=lerpA(m.yaw0,tYaw,e);u.boom.rotation.x=-tPitch*e;u.boom.scale.z=lerp(1,Math.max(.6,hd/Math.cos(tPitch)),e);}
+  else if(!m.grabbed){
+    m.grabbed=true;
+    const n=digAt(tg.x,tg.y,tg.z,camera.position.distanceTo(tg)<16,.55);
+    if(n){net.dig(tg,.55);m.carry=n;u.clump.visible=true;
+      if(needle.visible&&N.state!=='taken'&&needle.position.distanceTo(tg)<1.2&&!m.found){m.found=true;toast('✨ Ein Greifarm hat etwas Glänzendes freigelegt!',3500);}}
+  }else if(f<.85){const e=(f-.4)/.45;u.turret.rotation.y=lerpA(tYaw,outYaw,e);u.boom.rotation.x=lerp(-tPitch,.35,e);u.boom.scale.z=lerp(Math.max(.6,hd/Math.cos(tPitch)),1,e);}
+  else if(!m.dropped){
+    m.dropped=true;u.clump.visible=false;
+    if(m.carry)spawnBale(cx+m.dx,cz+m.dz,m.carry,.9);
+  }
+  if(m.t>=T){m.busy=false;m.t=0;m.yaw0=u.turret.rotation.y;worldDirty=true;}
+}
+
+// --- Baumodus ---
+let build=null;   // {kind:'belt'|'arm', dir}
+const ghost=new THREE.Group();
+const ghostMat=new THREE.MeshBasicMaterial({color:0x44ff66,transparent:true,opacity:.35,depthWrite:false});
+const ghostBox=new THREE.Mesh(new THREE.BoxGeometry(1,.3,1),ghostMat);ghostBox.position.y=.15;ghost.add(ghostBox);
+const ghostArrow=new THREE.Mesh(new THREE.ConeGeometry(.22,.45,4),ghostMat);ghostArrow.rotation.x=Math.PI/2;ghostArrow.position.set(0,.45,.25);ghost.add(ghostArrow);
+ghost.visible=false;scene.add(ghost);
+const buildGrid=new THREE.GridHelper(44,44,0xffd36b,0xffffff);buildGrid.material.transparent=true;buildGrid.material.opacity=.18;buildGrid.position.y=.02;buildGrid.visible=false;scene.add(buildGrid);
+function setBuild(kind){
+  if(kind&&build&&build.kind===kind)kind=null;
+  if(kind==='arm'&&!(SAVE.mach.arm>0)){toast('Du hast noch keinen Greifarm. Kauf einen in der Werkstatt (🛠).',3000);kind=null;}
+  build=kind?{kind,dir:build?build.dir:0}:null;
+  ghost.visible=buildGrid.visible=!!build;
+  $('buildBar').classList.toggle('hidden',!build||!isTouch);
+  $('touch').classList.toggle('build',!!build);
+  updateBuildHint();
+}
+function updateBuildHint(){
+  if(!build){$('buildHint').textContent='';return;}
+  const nm=build.kind==='belt'?`Förderband (${BELT_COST} 💰)`:`Greifarm (${Math.max(0,(SAVE.mach.arm||0)-machines.filter(m=>m.k==='arm'&&m.o===net.myId).length)} frei)`;
+  $('buildHint').textContent=`🔧 ${nm} · Richtung ${DIR_NAMES[build.dir]}`+(isTouch?'':' · Klick bauen · T drehen · X abbauen · Esc fertig');
+}
+function buildTarget(){
+  const o=camera.position,d=camDir();
+  if(d.y>-.03)return null;
+  const t=(.0-o.y)/d.y;if(t>10)return null;
+  const x=o.x+d.x*t,z=o.z+d.z*t;
+  return{i:Math.floor(x),k:Math.floor(z)};
+}
+function tileBlocked(i,k){
+  const key=tileKey(i,k);
+  if(tiles.has(key)||HOPPER.has(key)||STATION.has(key))return 'belegt';
+  if(Math.hypot(i+.5,k+.5)>22)return 'zu weit draußen';
+  for(const [a,b] of[[.25,.25],[.75,.25],[.25,.75],[.75,.75]]){
+    const ci=Math.floor((i+a-OX)/CS),ck=Math.floor((k+b-OZ)/CS);
+    if(solid(ci,0,ck)||solid(ci,1,ck))return 'da ist noch Heu';
+  }
+  return null;
+}
+function updateGhost(){
+  if(!build)return;
+  const t=buildTarget();
+  if(!t){ghost.visible=false;return;}
+  ghost.visible=true;
+  const bad=tileBlocked(t.i,t.k);
+  ghostMat.color.set(bad?0xff4444:0x44ff66);
+  ghost.position.set(t.i+.5,0,t.k+.5);
+  const [dx,dz]=DIRS[build.dir];ghost.rotation.y=Math.atan2(dx,dz);
+  ghostBox.scale.y=build.kind==='arm'?4:1;ghostBox.position.y=build.kind==='arm'?.6:.15;
+}
+function buildPlace(){
+  if(!build||state!=='play')return;
+  const t=buildTarget();if(!t){toast('Schau auf den Boden, um zu bauen.');return;}
+  const bad=tileBlocked(t.i,t.k);if(bad){toast('Hier nicht – '+bad+'.');return;}
+  const [dx,dz]=DIRS[build.dir];
+  if(build.kind==='belt'){
+    if(machines.filter(m=>m.k==='belt').length>=MAX_BELTS){toast('Maximal '+MAX_BELTS+' Förderbänder.');return;}
+    if(SAVE.coins<BELT_COST){toast(`Ein Förderband kostet ${BELT_COST} 💰 – verkauf erst Heu.`);return;}
+    SAVE.coins-=BELT_COST;
+  }else{
+    const free=(SAVE.mach.arm||0)-machines.filter(m=>m.k==='arm'&&m.o===net.myId).length;
+    if(free<=0){toast('Alle deine Greifarme stehen schon. Kauf mehr in der Werkstatt.');return;}
+  }
+  const m=addMachine({id:Math.random().toString(36).slice(2,9),k:build.kind,o:net.myId,x:t.i,y:0,z:t.k,dx,dz,prog:0});
+  netSend({t:'mach',m:serMachine(m)});worldDirty=true;
+  beep(420,.08,'square',.05,620);updateBuildHint();
+}
+function buildRemove(){
+  if(state!=='play')return;
+  const t=buildTarget();if(!t)return;
+  const m=tiles.get(tileKey(t.i,t.k));
+  if(!m){toast('Da steht nichts.');return;}
+  if(m.o!==net.myId){toast('Das gehört einem anderen Spieler.');return;}
+  if(m.k==='belt')SAVE.coins+=BELT_COST;
+  removeMachineNet(m.id);beep(300,.1,'square',.05,180);updateBuildHint();
+}
+function buildRotate(){if(!build)return;build.dir=(build.dir+1)%4;updateBuildHint();}
 /* ---------- Welt speichern / laden ---------- */
 function packGrid(){
   const b=new Uint8Array(Math.ceil(NCELL/8));
@@ -925,12 +1239,12 @@ let worldDirty=false,gameTime=0;
 function saveWorld(force){
   if(mode!=='solo'||roundOver)return;
   if(!force&&!worldDirty)return;
-  SAVE.world={seed:worldSeed,grid:packGrid(),pos:[+P.pos.x.toFixed(2),+P.pos.y.toFixed(2),+P.pos.z.toFixed(2),+P.yaw.toFixed(2)],saves,time:Math.round(gameTime),machines:machines.filter(m=>m.o===net.myId).map(serMachine)};
+  SAVE.world={seed:worldSeed,grid:packGrid(),pos:[+P.pos.x.toFixed(2),+P.pos.y.toFixed(2),+P.pos.z.toFixed(2),+P.yaw.toFixed(2)],saves,time:Math.round(gameTime),machines:machines.filter(m=>m.o===net.myId).map(serMachine),bales:bales.slice(0,300).map(b=>[+b.x.toFixed(2),+b.y.toFixed(2),+b.z.toFixed(2),b.v])};
   worldDirty=false;persist();
 }
 function resetPlayer(){P.pos.set((Math.random()-.5)*4,0,11+Math.random());P.yaw=0;P.pitch=.12;P.vel.set(0,0,0);P.eyeY=null;}
 function newWorld(seed){
-  roundOver=false;clearMachines();generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;resetPlayer();rebuild();
+  roundOver=false;clearMachines();clearBales();generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;resetPlayer();rebuild();
 }
 function loadWorld(){
   const w=SAVE.world;
@@ -941,6 +1255,7 @@ function loadWorld(){
   saves=Array.isArray(w.saves)?w.saves.slice(0,3):[];syncSaveMeshes();saveCycle=saves.length-1;
   gameTime=w.time||0;
   clearMachines();for(const mm of (Array.isArray(w.machines)?w.machines:[])){const m=sanitizeMachine(mm,net.myId);if(m)addMachine(m);}
+  clearBales();for(const b of (Array.isArray(w.bales)?w.bales:[]).slice(0,300)){if(Array.isArray(b)&&b.every(v=>isFinite(+v)))spawnBale(+b[0],+b[2],+b[3],+b[1]);}
   if(Array.isArray(w.pos)){P.pos.set(+w.pos[0]||0,+w.pos[1]||0,+w.pos[2]||11);P.yaw=+w.pos[3]||0;}else resetPlayer();
   P.vel.set(0,0,0);P.eyeY=null;
   rebuild();return true;
@@ -1021,6 +1336,7 @@ addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   setTouch(false);keys[e.code]=true;
   if(state==='shop'&&(e.code==='Escape'||e.code==='KeyU')){closeShop();return;}
+  if(state==='play'&&build&&e.code==='Escape'){setBuild(null);return;}
   if(state!=='play')return;
   if(e.code==='Space'){input.jump=true;e.preventDefault();}
   if(e.code==='KeyF'&&!e.repeat)placeSave();
@@ -1030,6 +1346,10 @@ addEventListener('keydown',e=>{
   if(e.code==='Digit1'&&!e.repeat)placeMachine('drill');
   if(e.code==='Digit2'&&!e.repeat)placeMachine('vac');
   if(e.code==='Digit3'&&!e.repeat)placeMachine('mag');
+  if(e.code==='Digit4'&&!e.repeat)setBuild('belt');
+  if(e.code==='Digit5'&&!e.repeat)setBuild('arm');
+  if(e.code==='KeyT'&&!e.repeat)buildRotate();
+  if(e.code==='KeyX'&&!e.repeat&&build)buildRemove();
   if(e.code==='Escape')openMenu();
 });
 addEventListener('keyup',e=>{keys[e.code]=false;});
@@ -1044,8 +1364,10 @@ const cv=renderer.domElement;
 cv.addEventListener('mousedown',e=>{
   if(state!=='play'||isTouch)return;
   if(document.pointerLockElement!==cv){cv.requestPointerLock&&cv.requestPointerLock();return;}
+  if(build){if(e.button===0)buildPlace();else if(e.button===2)buildRemove();return;}
   if(e.button===0)input.dig=true;
 });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mouseup',e=>{if(e.button===0)input.dig=false;});
 addEventListener('mousemove',e=>{if(document.pointerLockElement!==cv)return;P.yaw-=e.movementX*.0024;P.pitch=clamp(P.pitch-e.movementY*.0024,-1.45,1.45);});
 const stickEl=$('stick'),knob=$('knob');
@@ -1053,7 +1375,7 @@ let stickId=null,stickO={x:0,y:0},lookId=null,lookP={x:0,y:0};
 addEventListener('touchstart',e=>{
   setTouch(true);if(state!=='play')return;
   for(const t of e.changedTouches){
-    if(t.target.closest&&t.target.closest('.tb,.pill,#roomBox,#modal,#shop'))continue;
+    if(t.target.closest&&t.target.closest('.tb,.pill,#roomBox,#modal,#shop,#buildBar'))continue;
     if(t.clientX<innerWidth*.42&&stickId===null){stickId=t.identifier;stickO={x:t.clientX,y:t.clientY};stickEl.style.left=(t.clientX-65)+'px';stickEl.style.top=(t.clientY-65)+'px';stickEl.style.bottom='auto';}
     else if(lookId===null){lookId=t.identifier;lookP={x:t.clientX,y:t.clientY};}
   }
@@ -1077,6 +1399,7 @@ holdBtn($('bJump'),()=>{input.jump=true;});
 holdBtn($('bDet'),useDetector);
 holdBtn($('bSave'),placeSave);
 holdBtn($('bBack'),gotoSave);
+holdBtn($('bbPlace'),buildPlace);holdBtn($('bbRot'),buildRotate);holdBtn($('bbDel'),buildRemove);holdBtn($('bbDone'),()=>setBuild(null));
 
 /* =====================================================================
    HUD / Menü-Hilfen
@@ -1088,7 +1411,8 @@ function banner(t,s){const b=$('banner');b.textContent=t;b.style.opacity=1;banne
 let pctT=0;
 function hud(dt){
   $('hTime').textContent=fmtTime(gameTime);
-  $('hHay').textContent=Math.floor(SAVE.hay);
+  $('hHay').textContent=Math.floor(SAVE.bag);$('hCap').textContent=bagCap();$('hCoins').textContent=Math.floor(SAVE.coins);
+  if(fullWarnT>0)fullWarnT-=dt;
   if(gainT>0){gainT-=dt;if(gainT<=0){$('gain').style.opacity=0;gainAcc=0;}}
   $('hFound').textContent=mode==='solo'?SAVE.found:(net.scores[net.myId]||0);
   pctT-=dt;if(pctT<=0){pctT=1;$('hDug').textContent=Math.round(dugPercent());}
@@ -1151,7 +1475,7 @@ function renderPlayers(){
   add(myName(),SAVE.color,net.scores[net.myId],true);
   for(const [id,o] of net.others)add(o.name,o.color,net.scores[id],false);
 }
-function startMpWorld(seed){roundOver=false;clearMachines();generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;rebuild();}
+function startMpWorld(seed){roundOver=false;clearMachines();clearBales();generateStack(seed);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;rebuild();}
 function hostRoom(){
   if(!needPeer())return;
   if(mode==='solo')saveWorld(true);
@@ -1244,7 +1568,7 @@ function guestMsg(d,onJoin){
     case'welcome':
       net.myId=d.id;round=d.round|0;net.scores=d.scores||{};
       generateStack(d.seed|0);if(typeof d.grid==='string')unpackGrid(d.grid);placeNeedle();saves=[];syncSaveMeshes();gameTime=0;roundOver=!!d.taken;
-      resetPlayer();clearMachines();
+      resetPlayer();clearMachines();clearBales();
       for(const mm of (Array.isArray(d.machines)?d.machines:[])){const m=sanitizeMachine(mm,mm&&mm.o);if(m)addMachine(m);}
       rebuild();
       for(const p of d.players||[])net.addOther(p.id,clean(p.name)||'Sucher',COLORS.includes(p.color)?p.color:COLORS[0]);
@@ -1314,6 +1638,7 @@ function startPlay(){
 }
 function openMenu(){
   if(state!=='play')return;
+  if(build)setBuild(null);
   saveWorld(true);state='paused';
   if(document.pointerLockElement)document.exitPointerLock();
   for(const k in keys)keys[k]=false;input.x=input.y=0;input.dig=false;
@@ -1325,7 +1650,8 @@ $('shopX').onclick=()=>closeShop();
 $('bSolo').onclick=()=>{
   if(state==='paused'){startPlay();return;}
   mode='solo';
-  if(!loadWorld()){newWorld(Math.floor(Math.random()*1e9));toast(isTouch?'Finde die Nadel! ✋ halten = graben, 📡 = Detektor':'Finde die Nadel! Maustaste halten = graben, Q = Detektor',4500);}
+  if(!loadWorld()){newWorld(Math.floor(Math.random()*1e9));toast(isTouch?'Finde die Nadel! ✋ halten = graben, 📡 = Detektor':'Finde die Nadel! Maustaste halten = graben, Q = Detektor',4500);
+    setTimeout(()=>toast('💰 Verkauf dein Heu am Heu-Ankauf (links hinter dir) und kauf dir Maschinen & Förderbänder!',5000),4800);}
   else toast('Weiter geht’s – dein Fortschritt ist geladen.',3000);
   startPlay();saveWorld(true);
 };
@@ -1371,6 +1697,7 @@ function frame(){
   }
   if(state==='play')interact(dt);
   updateMachines(dt,T);
+  updateBales(dt);beltTex.offset.y-=upv('belt')*dt;
   if(dirty){rebuildCd-=dt;if(rebuildCd<=0){dirty=false;rebuildCd=.08;rebuild();}}
   const inside=state==='menu'?0:inHay();
   lantern.distance=[7,10,14][SAVE.up.lamp]||7;lantern.intensity=lerp(lantern.intensity,inside*([2.2,3.4,5][SAVE.up.lamp]||2.2)+.15+SAVE.up.lamp*.1,Math.min(1,dt*4));
@@ -1384,7 +1711,7 @@ function frame(){
   renderer.render(scene,camera);
 }
 frame();
-window.__nj={camera,P,N,needle,interact,updateMachines,forceDig(){input.dig=true;digCd=0;interact(0);input.dig=false;},takeNeedle,placeMachine,machines,SAVE,openShop,closeShop,get state(){return state;},digAt,dugPercent,grid,get needleCell(){return needleCell;},cellCenter,camDir,get saves(){return saves;},get roundOver(){return roundOver;}};
+window.__nj={bales,tiles,tileBlocked,addMachine,setBuild,buildPlace,buildRotate,buildRemove,updateBales,spawnBale,get build(){return build;},camera,P,N,needle,interact,updateMachines,forceDig(){input.dig=true;digCd=0;interact(0);input.dig=false;},takeNeedle,placeMachine,machines,SAVE,openShop,closeShop,get state(){return state;},digAt,dugPercent,grid,get needleCell(){return needleCell;},cellCenter,camDir,get saves(){return saves;},get roundOver(){return roundOver;}};
 </script>
 </body>
 </html>
